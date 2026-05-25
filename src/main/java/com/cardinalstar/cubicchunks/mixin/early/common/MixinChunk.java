@@ -90,7 +90,7 @@ import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 // TODO: redirect isChunkLoaded where needed
 @ParametersAreNonnullByDefault
 @Mixin(value = Chunk.class, priority = 999)
-public abstract class MixinChunk_Cubes implements IColumn, IColumnInternal {
+public abstract class MixinChunk implements IColumn, IColumnInternal {
 
     @Shadow
     @Final

@@ -97,8 +97,8 @@ public enum Mixins implements IMixins {
             .setApplyIf(() -> true)),
 
     // CHUNK
-    MIXIN_CHUNK_CUBES(new MixinBuilder("Mixin to make it so that chunk methods are redirected to cubes.")
-        .addCommonMixins("common.MixinChunk_Cubes")
+    MIXIN_CHUNK(new MixinBuilder("Various modifications to inject cubes, height map patches, etc into Chunks.")
+        .addCommonMixins("common.MixinChunk")
         .setPhase(Phase.EARLY)
         .setApplyIf(() -> true)),
     MIXIN_CHUNK_CACHE_HEIGHT_LIMITS(new MixinBuilder("Mixin to fix height limits in ChunkCache")
