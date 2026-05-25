@@ -40,6 +40,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import com.cardinalstar.cubicchunks.api.IColumn;
 import com.cardinalstar.cubicchunks.api.ICube;
 import com.cardinalstar.cubicchunks.mixin.early.common.MixinChunk_Column;
+import com.cardinalstar.cubicchunks.world.column.CubeMap;
 import com.cardinalstar.cubicchunks.world.cube.BlankCube;
 import com.cardinalstar.cubicchunks.world.cube.Cube;
 
@@ -74,7 +75,7 @@ public abstract class MixinEmptyChunk extends MixinChunk_Column {
     }
 
     public ExtendedBlockStorage[] chunk$getTickableStorages() {
-        return new ExtendedBlockStorage[0];
+        return CubeMap.ZERO_LEN_EBS_ARRAY;
     }
 
     public Iterable<ICube> chunk$getLoadedCubes(int startY, int endY) {

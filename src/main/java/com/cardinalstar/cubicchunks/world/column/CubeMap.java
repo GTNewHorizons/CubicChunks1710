@@ -43,10 +43,12 @@ import com.google.common.collect.Lists;
 @ParametersAreNonnullByDefault
 public class CubeMap implements Iterable<Cube> {
 
+    public static final ExtendedBlockStorage[] ZERO_LEN_EBS_ARRAY = new ExtendedBlockStorage[0];
+
     @Nonnull
     private final List<Cube> cubes = new ArrayList<>();
 
-    private ExtendedBlockStorage[] tickableEBSes = new ExtendedBlockStorage[0];
+    private ExtendedBlockStorage[] tickableEBSes = ZERO_LEN_EBS_ARRAY;
 
     /**
      * Removes the cube at {@code cubeY}
@@ -176,17 +178,20 @@ public class CubeMap implements Iterable<Cube> {
             }
         }
 
-        if (!needsUpdate) return tickableEBSes;
+        if (!needsUpdate && count == tickableEBSes.length) return tickableEBSes;
 
-        tickableEBSes = new ExtendedBlockStorage[count];
+        if (count == 0) {
+            tickableEBSes = ZERO_LEN_EBS_ARRAY;
+        } else {
+            tickableEBSes = new ExtendedBlockStorage[count];
 
-        if (count > 0) {
-            count = 0;
+            int count2 = 0;
+
             for (int i = 0, cubesSize = cubes.size(); i < cubesSize; i++) {
                 Cube cube = cubes.get(i);
 
                 if (cube.shouldTick()) {
-                    tickableEBSes[count++] = cube.getStorage();
+                    tickableEBSes[count2++] = cube.getStorage();
                 }
             }
         }
