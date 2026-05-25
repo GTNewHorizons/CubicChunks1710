@@ -21,8 +21,6 @@
 package com.cardinalstar.cubicchunks.network;
 
 import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Comparator;
 import java.util.List;
 
 import javax.annotation.ParametersAreNonnullByDefault;
@@ -34,21 +32,20 @@ import net.minecraft.world.World;
 import com.cardinalstar.cubicchunks.CubicChunks;
 import com.cardinalstar.cubicchunks.client.CubeProviderClient;
 import com.cardinalstar.cubicchunks.modcompat.angelica.AngelicaInterop;
+import com.cardinalstar.cubicchunks.network.PacketEncoderCubes.PacketCube;
 import com.cardinalstar.cubicchunks.util.CubePos;
 import com.cardinalstar.cubicchunks.util.CubeStatusVisualizer;
 import com.cardinalstar.cubicchunks.util.CubeStatusVisualizer.CubeStatus;
 import com.cardinalstar.cubicchunks.world.cube.Cube;
 import com.github.bsideup.jabel.Desugar;
-
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 
 @ParametersAreNonnullByDefault
-public class PacketEncoderCubes extends CCPacketEncoder<PacketEncoderCubes.PacketCubes> {
+public class PacketEncoderCubes extends CCPacketEncoder<PacketCube> {
 
     @Desugar
-    public record PacketCubes(CubePos[] cubePos, byte[] data, List<List<NBTTagCompound>> tileEntityTags)
-        implements CCPacket {
+    public record PacketCube(CubePos cubePos, byte[] data, List<NBTTagCompound> tileEntityTags) implements CCPacket {
 
         @Override
         public byte getPacketID() {
@@ -58,51 +55,28 @@ public class PacketEncoderCubes extends CCPacketEncoder<PacketEncoderCubes.Packe
 
     public PacketEncoderCubes() {}
 
-    public static PacketCubes createPacket(List<Cube> cubes) {
-        cubes.sort(
-            Comparator.comparingInt(Cube::getY)
-                .thenComparingInt(Cube::getX)
-                .thenComparingInt(Cube::getZ));
-
-        CubePos[] cubePos = new CubePos[cubes.size()];
-        for (int i = 0; i < cubes.size(); i++) {
-            cubePos[i] = cubes.get(i)
-                .getCoords();
-            CubeStatusVisualizer.put(
-                cubes.get(i)
-                    .getCoords(),
-                CubeStatus.Synced);
-        }
+    public static PacketCube createPacket(Cube cube) {
+        CubeStatusVisualizer.put(cube.getCoords(), CubeStatus.Synced);
 
         ByteBuf cubeData = Unpooled.buffer();
 
-        WorldEncoder.encodeCubes(new CCPacketBuffer(cubeData), cubes);
+        WorldEncoder.encodeCube(new CCPacketBuffer(cubeData), cube);
 
         byte[] data = new byte[cubeData.writerIndex()];
 
         cubeData.readBytes(data);
 
-        List<List<NBTTagCompound>> tileEntityTags = new ArrayList<>();
+        List<NBTTagCompound> tileEntityTags = new ArrayList<>();
 
-        for (Cube cube : cubes) {
-            if (cube.getTileEntityMap()
-                .isEmpty()) {
-                tileEntityTags.add(Collections.emptyList());
-            } else {
-                List<NBTTagCompound> list = new ArrayList<>();
-
-                for (TileEntity tileEntity : cube.getTileEntityMap()
-                    .values()) {
-                    NBTTagCompound tag = new NBTTagCompound();
-                    tileEntity.writeToNBT(tag);
-                    list.add(tag);
-                }
-
-                tileEntityTags.add(list);
+        if (!cube.getTileEntityMap().isEmpty()) {
+            for (TileEntity tileEntity : cube.getTileEntityMap().values()) {
+                NBTTagCompound tag = new NBTTagCompound();
+                tileEntity.writeToNBT(tag);
+                tileEntityTags.add(tag);
             }
         }
 
-        return new PacketCubes(cubePos, data, tileEntityTags);
+        return new PacketCube(cube.getCoords(), data, tileEntityTags);
     }
 
     @Override
@@ -111,66 +85,57 @@ public class PacketEncoderCubes extends CCPacketEncoder<PacketEncoderCubes.Packe
     }
 
     @Override
-    public void writePacket(CCPacketBuffer buffer, PacketCubes packet) {
-        buffer.writeArray(packet.cubePos, CCPacketBuffer::writeCubePos);
+    public void writePacket(CCPacketBuffer buffer, PacketCube packet) {
+        buffer.writeCubePos(packet.cubePos);
 
         buffer.writeByteArray(packet.data);
 
-        buffer.writeList(packet.tileEntityTags, (buf2, list) -> buf2.writeList(list, CCPacketBuffer::writeCompoundTag));
+        buffer.writeList(packet.tileEntityTags, CCPacketBuffer::writeCompoundTag);
     }
 
     @Override
-    public PacketCubes readPacket(CCPacketBuffer buf) {
-        CubePos[] cubePos = buf.readArray(new CubePos[0], CCPacketBuffer::readCubePos);
+    public PacketCube readPacket(CCPacketBuffer buf) {
+        CubePos pos = buf.readCubePos();
 
         byte[] data = buf.readByteArray();
 
-        List<List<NBTTagCompound>> tileEntityTags = buf
-            .readList(buf2 -> buf2.readList(CCPacketBuffer::readCompoundTag));
+        List<NBTTagCompound> tileEntityTags = buf.readList(CCPacketBuffer::readCompoundTag);
 
-        return new PacketCubes(cubePos, data, tileEntityTags);
+        return new PacketCube(pos, data, tileEntityTags);
     }
 
     @Override
-    public void process(World world, PacketCubes packet) {
+    public void process(World world, PacketCube packet) {
         CubeProviderClient cubeCache = (CubeProviderClient) world.getChunkProvider();
 
-        List<Cube> cubes = new ArrayList<>();
+        CubePos pos = packet.cubePos;
 
-        for (CubePos pos : packet.cubePos) {
-            Cube cube = cubeCache.loadCube(pos); // new cube
-            // isEmpty actually checks if the column is a BlankColumn
-            if (cube == null) {
-                CubicChunks.LOGGER.error("Out of order cube received! No column for cube at {} exists!", pos);
-            }
-            cubes.add(cube);
+        Cube cube = cubeCache.loadCube(pos); // new cube
+        // isEmpty actually checks if the column is a BlankColumn
+        if (cube == null) {
+            CubicChunks.LOGGER.error("Out of order cube received! No column for cube at {} exists!", pos);
+            return;
         }
 
-        ByteBuf buf = Unpooled.wrappedBuffer(packet.data);
-        WorldEncoder.decodeCube(new CCPacketBuffer(buf), cubes, world);
+        cube.setClientCube();
 
-        for (Cube cube : cubes) {
-            if (cube != null) {
-                cube.markForRenderUpdate();
+        WorldEncoder.decodeCube(new CCPacketBuffer(Unpooled.wrappedBuffer(packet.data)), cube, world);
 
-                if (AngelicaInterop.hasDelegate()) {
-                    AngelicaInterop.getDelegate()
-                        .onCubeLoaded(cube.getX(), cube.getY(), cube.getZ());
-                }
-            }
+        cube.markForRenderUpdate();
+
+        if (AngelicaInterop.hasDelegate()) {
+            AngelicaInterop.getDelegate().onCubeLoaded(cube.getX(), cube.getY(), cube.getZ());
         }
 
-        packet.tileEntityTags.forEach(list -> {
-            list.forEach(tag -> {
-                int blockX = tag.getInteger("x");
-                int blockY = tag.getInteger("y");
-                int blockZ = tag.getInteger("z");
-                TileEntity tileEntity = world.getTileEntity(blockX, blockY, blockZ);
+        for (var tag : packet.tileEntityTags) {
+            int blockX = tag.getInteger("x");
+            int blockY = tag.getInteger("y");
+            int blockZ = tag.getInteger("z");
+            TileEntity tileEntity = world.getTileEntity(blockX, blockY, blockZ);
 
-                if (tileEntity != null) {
-                    tileEntity.readFromNBT(tag);
-                }
-            });
-        });
+            if (tileEntity != null) {
+                tileEntity.readFromNBT(tag);
+            }
+        }
     }
 }

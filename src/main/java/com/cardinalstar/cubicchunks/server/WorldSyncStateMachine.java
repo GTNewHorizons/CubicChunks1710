@@ -23,7 +23,6 @@ import com.cardinalstar.cubicchunks.util.BooleanArray2D;
 import com.cardinalstar.cubicchunks.util.ChunkMap;
 import com.cardinalstar.cubicchunks.util.CubePos;
 import com.cardinalstar.cubicchunks.world.cube.Cube;
-
 import it.unimi.dsi.fastutil.shorts.ShortArrayList;
 
 public class WorldSyncStateMachine {
@@ -98,12 +97,10 @@ public class WorldSyncStateMachine {
                 syncedCubes.add(pos);
 
                 if (player.isWatchingCube(pos.getX(), pos.getY(), pos.getZ())) {
-                    queueCube(cube);
+                    PacketEncoderCubes.createPacket(cube).sendToPlayer(player.player);
                 }
             }
         }
-
-        flushCubes();
 
         for (var e : dirtyBlocks.fastEntryIterable()) {
             if (!syncedCubes.contains(e.getBlockX(), e.getBlockY(), e.getBlockZ())) {
@@ -146,22 +143,6 @@ public class WorldSyncStateMachine {
         dirtyCubes.clear();
         dirtyBlocks.clear();
         dirtyHeightCols.clear();
-    }
-
-    public void queueCube(Cube cube) {
-        cubeSendQueue.add(cube);
-
-        if (cubeSendQueue.size() >= 20) {
-            flushCubes();
-        }
-    }
-
-    public void flushCubes() {
-        if (!cubeSendQueue.isEmpty()) {
-            PacketEncoderCubes.createPacket(cubeSendQueue)
-                .sendToPlayer(player.player);
-            cubeSendQueue.clear();
-        }
     }
 
     public void onCubeStatusChanged(int x, int y, int z) {
