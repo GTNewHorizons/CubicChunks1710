@@ -20,8 +20,6 @@
  */
 package com.cardinalstar.cubicchunks.mixin.early.common;
 
-import java.util.Collection;
-
 import javax.annotation.ParametersAreNonnullByDefault;
 
 import net.minecraft.world.World;
@@ -31,16 +29,11 @@ import net.minecraft.world.chunk.storage.ExtendedBlockStorage;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Implements;
 import org.spongepowered.asm.mixin.Interface;
-import org.spongepowered.asm.mixin.Intrinsic;
 import org.spongepowered.asm.mixin.Mixin;
-import org.spongepowered.asm.mixin.Overwrite;
 import org.spongepowered.asm.mixin.Shadow;
-import org.spongepowered.asm.mixin.Unique;
 
 import com.cardinalstar.cubicchunks.api.IColumn;
-import com.cardinalstar.cubicchunks.api.ICube;
 import com.cardinalstar.cubicchunks.api.IHeightMap;
-import com.cardinalstar.cubicchunks.mixin.api.ICubicWorldInternal;
 import com.cardinalstar.cubicchunks.world.column.CubeMap;
 import com.cardinalstar.cubicchunks.world.core.IColumnInternal;
 import com.cardinalstar.cubicchunks.world.core.StagingHeightMap;
@@ -90,132 +83,4 @@ public abstract class MixinChunk_Column {
     @Shadow
     public abstract ExtendedBlockStorage[] getBlockStorageArray();
 
-    public ICube chunk$getLoadedCube(int cubeY) {
-        if (cachedCube != null && cachedCube.getY() == cubeY) {
-            return cachedCube;
-        }
-        return getCubicWorld().getCubeCache()
-            .getLoadedCube(xPosition, cubeY, zPosition);
-    }
-
-    public ICube chunk$getCube(int cubeY) {
-        if (cachedCube != null && cachedCube.getY() == cubeY) {
-            return cachedCube;
-        }
-        return getCubicWorld().getCubeCache()
-            .getCube(xPosition, cubeY, zPosition);
-    }
-
-    public void chunk$addCube(ICube cube) {
-        this.cubeMap.put((Cube) cube);
-
-        ((Cube) cube).putEBSInChunk();
-    }
-
-    public ICube chunk$removeCube(int cubeY) {
-        if (cachedCube != null && cachedCube.getY() == cubeY) {
-            cubicChunks$invalidateCachedCube();
-        }
-        ICube removed = this.cubeMap.remove(cubeY);
-
-        ExtendedBlockStorage[] storage = this.getBlockStorageArray();
-        if (cubeY >= 0 && cubeY < storage.length) {
-            storage[cubeY] = null;
-        }
-
-        return removed;
-    }
-
-    public void chunk_internal$removeFromStagingHeightmap(ICube cube) {
-        stagingHeightMap.removeStagedCube(cube);
-    }
-
-    public void chunk_internal$addToStagingHeightmap(ICube cube) {
-        stagingHeightMap.addStagedCube(cube);
-    }
-
-    public void chunk_internal$recalculateStagingHeightmap() {
-        stagingHeightMap.recalculate();
-    }
-
-    public int chunk_internal$getTopYWithStaging(int localX, int localZ) {
-        if (!isColumn) {
-            return heightMap[localZ << 4 | localX] - 1;
-        }
-        return Math.max(opacityIndex.getTopBlockY(localX, localZ), stagingHeightMap.getTopBlockY(localX, localZ));
-    }
-
-    @Unique
-    private void cubicChunks$invalidateCachedCube() {
-        cachedCube = null;
-    }
-
-    public boolean chunk$hasLoadedCubes() {
-        return !cubeMap.isEmpty();
-    }
-
-    @Unique
-    @SuppressWarnings({ "unchecked", "AddedMixinMembersNamePattern" })
-    public <T extends World & ICubicWorldInternal> T getCubicWorld() {
-        return (T) this.worldObj;
-    }
-
-    public boolean chunk$shouldTick() {
-        for (Cube cube : cubeMap) {
-            if (cube.getTickets()
-                .shouldTick()) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    public IHeightMap chunk$getOpacityIndex() {
-        return this.opacityIndex;
-    }
-
-    public Collection<? extends ICube> chunk$getLoadedCubes() {
-        return this.cubeMap.all();
-    }
-
-    public ExtendedBlockStorage[] chunk$getTickableStorages() {
-        return this.cubeMap.getTickableStorages();
-    }
-
-    public Iterable<? extends ICube> chunk$getLoadedCubes(int startY, int endY) {
-        return this.cubeMap.cubes(startY, endY);
-    }
-
-    public void chunk$preCacheCube(ICube cube) {
-        this.cachedCube = (Cube) cube;
-    }
-
-    @Intrinsic
-    public int chunk$getX() {
-        return xPosition;
-    }
-
-    @Intrinsic
-    public int chunk$getZ() {
-        return zPosition;
-    }
-
-    public int chunk$getHeightValue(int localX, int blockY, int localZ) {
-        return chunk_internal$getTopYWithStaging(localX, localZ) + 1;
-    }
-
-    /**
-     * @author Barteks2x
-     * @reason go through staging heightmap
-     */
-    @SuppressWarnings("deprecation")
-    @Overwrite
-    public int getHeightValue(int localX, int localZ) {
-        return chunk_internal$getTopYWithStaging(localX, localZ) + 1;
-    }
-
-    @Intrinsic
-    public int chunk$getHeightValue(int localX, int localZ) {
-        return chunk_internal$getTopYWithStaging(localX, localZ) + 1;
-    }
 }

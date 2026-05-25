@@ -24,6 +24,7 @@ import static com.cardinalstar.cubicchunks.util.Coords.blockToCube;
 import static com.cardinalstar.cubicchunks.util.Coords.blockToLocal;
 
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 
@@ -44,8 +45,7 @@ import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.world.ChunkEvent.Load;
 
 import org.spongepowered.asm.mixin.Final;
-import org.spongepowered.asm.mixin.Implements;
-import org.spongepowered.asm.mixin.Interface;
+import org.spongepowered.asm.mixin.Intrinsic;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Mutable;
 import org.spongepowered.asm.mixin.Overwrite;
@@ -90,12 +90,7 @@ import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 // TODO: redirect isChunkLoaded where needed
 @ParametersAreNonnullByDefault
 @Mixin(value = Chunk.class, priority = 999)
-// soft implements for IColumn and IColumnInternal
-// we can't implement them directly as that causes FG6+ to reobfuscate IColumn#getHeightValue(int, int)
-// into vanilla SRG name, which breaks API and mixins
-@Implements({ @Interface(iface = IColumn.class, prefix = "chunk$"),
-    @Interface(iface = IColumnInternal.class, prefix = "chunk_internal$") })
-public abstract class MixinChunk_Cubes {
+public abstract class MixinChunk_Cubes implements IColumn, IColumnInternal {
 
     @Shadow
     @Final
@@ -153,15 +148,14 @@ public abstract class MixinChunk_Cubes {
     @Shadow
     public abstract byte[] getBiomeArray();
 
-    @SuppressWarnings({ "deprecation", "RedundantSuppression" })
-    @Shadow
-    public abstract int getHeightValue(int x, int z);
-
     @Shadow
     public abstract int getSavedLightValue(EnumSkyBlock p_76614_1_, int p_76614_2_, int p_76614_3_, int p_76614_4_);
 
     @Shadow
     public boolean isTerrainPopulated;
+
+    @Shadow
+    public abstract ExtendedBlockStorage[] getBlockStorageArray();
 
     @Unique
     @SuppressWarnings({ "unchecked", "AddedMixinMembersNamePattern" })
@@ -304,17 +298,17 @@ public abstract class MixinChunk_Cubes {
         return _16;
     }
 
-    public void chunk_internal$setColumn(boolean isColumn) {
+    public void setColumn(boolean isColumn) {
         this.isColumn = isColumn;
     }
 
-    public Block[] chunk_internal$takeCompatGenerationBlockArray() {
+    public Block[] takeCompatGenerationBlockArray() {
         Block[] array = compatGenerationBlockArray;
         compatGenerationBlockArray = null;
         return array;
     }
 
-    public byte[] chunk_internal$takeCompatGenerationByteArray() {
+    public byte[] takeCompatGenerationByteArray() {
         byte[] array = compatGenerationByteArray;
         compatGenerationByteArray = null;
         return array;
@@ -1142,5 +1136,128 @@ public abstract class MixinChunk_Cubes {
             && (!worldObj.isRemote || CubicChunksConfig.doClientLightFixes)) {
             cubeMap.enqueueRelightChecks();
         }
+    }
+
+    public ICube getLoadedCube(int cubeY) {
+        if (cachedCube != null && cachedCube.getY() == cubeY) {
+            return cachedCube;
+        }
+        return getCubicWorld().getCubeCache()
+            .getLoadedCube(xPosition, cubeY, zPosition);
+    }
+
+    public ICube getCube(int cubeY) {
+        if (cachedCube != null && cachedCube.getY() == cubeY) {
+            return cachedCube;
+        }
+        return getCubicWorld().getCubeCache()
+            .getCube(xPosition, cubeY, zPosition);
+    }
+
+    public void addCube(ICube cube) {
+        this.cubeMap.put((Cube) cube);
+
+        ((Cube) cube).putEBSInChunk();
+    }
+
+    public ICube removeCube(int cubeY) {
+        if (cachedCube != null && cachedCube.getY() == cubeY) {
+            cubicChunks$invalidateCachedCube();
+        }
+        ICube removed = this.cubeMap.remove(cubeY);
+
+        ExtendedBlockStorage[] storage = this.getBlockStorageArray();
+        if (cubeY >= 0 && cubeY < storage.length) {
+            storage[cubeY] = null;
+        }
+
+        return removed;
+    }
+
+    public void removeFromStagingHeightmap(ICube cube) {
+        stagingHeightMap.removeStagedCube(cube);
+    }
+
+    public void addToStagingHeightmap(ICube cube) {
+        stagingHeightMap.addStagedCube(cube);
+    }
+
+    public void recalculateStagingHeightmap() {
+        stagingHeightMap.recalculate();
+    }
+
+    public int getTopYWithStaging(int localX, int localZ) {
+        if (!isColumn) {
+            return heightMap[localZ << 4 | localX] - 1;
+        }
+        return Math.max(opacityIndex.getTopBlockY(localX, localZ), stagingHeightMap.getTopBlockY(localX, localZ));
+    }
+
+    @Unique
+    private void cubicChunks$invalidateCachedCube() {
+        cachedCube = null;
+    }
+
+    public boolean hasLoadedCubes() {
+        return !cubeMap.isEmpty();
+    }
+
+    @Unique
+    @SuppressWarnings({ "unchecked", "AddedMixinMembersNamePattern" })
+    public <T extends World & ICubicWorldInternal> T getCubicWorld() {
+        return (T) this.worldObj;
+    }
+
+    public boolean shouldTick() {
+        for (Cube cube : cubeMap) {
+            if (cube.getTickets()
+                .shouldTick()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public IHeightMap getOpacityIndex() {
+        return this.opacityIndex;
+    }
+
+    public Collection<? extends ICube> getLoadedCubes() {
+        return this.cubeMap.all();
+    }
+
+    public ExtendedBlockStorage[] getTickableStorages() {
+        return this.cubeMap.getTickableStorages();
+    }
+
+    public Iterable<? extends ICube> getLoadedCubes(int startY, int endY) {
+        return this.cubeMap.cubes(startY, endY);
+    }
+
+    public void preCacheCube(ICube cube) {
+        this.cachedCube = (Cube) cube;
+    }
+
+    @Intrinsic
+    public int getX() {
+        return xPosition;
+    }
+
+    @Intrinsic
+    public int getZ() {
+        return zPosition;
+    }
+
+    public int getHeightValue(int localX, int blockY, int localZ) {
+        return getTopYWithStaging(localX, localZ) + 1;
+    }
+
+    /**
+     * @author Barteks2x
+     * @reason go through staging heightmap
+     */
+    @Overwrite
+    public int getHeightValue(int localX, int localZ) {
+        return getTopYWithStaging(localX, localZ) + 1;
     }
 }
