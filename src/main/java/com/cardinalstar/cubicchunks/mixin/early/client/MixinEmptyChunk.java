@@ -30,55 +30,52 @@ import net.minecraft.world.chunk.Chunk;
 import net.minecraft.world.chunk.EmptyChunk;
 import net.minecraft.world.chunk.storage.ExtendedBlockStorage;
 
-import org.spongepowered.asm.mixin.Implements;
-import org.spongepowered.asm.mixin.Interface;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-import com.cardinalstar.cubicchunks.api.IColumn;
 import com.cardinalstar.cubicchunks.api.ICube;
-import com.cardinalstar.cubicchunks.mixin.early.common.MixinChunk_Column;
 import com.cardinalstar.cubicchunks.world.column.CubeMap;
 import com.cardinalstar.cubicchunks.world.cube.BlankCube;
 import com.cardinalstar.cubicchunks.world.cube.Cube;
 
 @ParametersAreNonnullByDefault
 @Mixin(EmptyChunk.class)
-// soft implements for IColumn
-// we can't implement them directly as that causes FG6+ to reobfuscate IColumn#getHeightValue(int, int)
-// into vanilla SRG name, which breaks API and mixins
-@Implements(@Interface(iface = IColumn.class, prefix = "chunk$"))
-public abstract class MixinEmptyChunk extends MixinChunk_Column {
+public abstract class MixinEmptyChunk extends MixinChunk_Cubes {
 
     private Cube blankCube;
 
     @Inject(method = "<init>", at = @At(value = "RETURN"))
     private void cubicChunkColumn_construct(World worldIn, int x, int z, CallbackInfo cbi) {
         blankCube = new BlankCube((Chunk) (Object) this);
-
     }
 
-    public ICube chunk$getCube(int cubeY) {
+    @Override
+    public ICube getCube(int cubeY) {
         return blankCube;
     }
 
-    public ICube chunk$removeCube(int cubeY) {
+    @Override
+    public ICube removeCube(int cubeY) {
         return blankCube;
     }
 
-    public void chunk$addCube(ICube cube) {}
+    @Override
+    public void addCube(ICube cube) {}
 
-    public Collection<ICube> chunk$getLoadedCubes() {
+    @Override
+    public Collection<ICube> getLoadedCubes() {
         return Collections.emptySet();
     }
 
-    public ExtendedBlockStorage[] chunk$getTickableStorages() {
+    @Override
+    public ExtendedBlockStorage[] getTickableStorages() {
         return CubeMap.ZERO_LEN_EBS_ARRAY;
     }
 
-    public Iterable<ICube> chunk$getLoadedCubes(int startY, int endY) {
+    @Override
+    public Iterable<ICube> getLoadedCubes(int startY, int endY) {
         return Collections.emptySet();
     }
 }

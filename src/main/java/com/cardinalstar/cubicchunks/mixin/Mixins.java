@@ -97,10 +97,6 @@ public enum Mixins implements IMixins {
             .setApplyIf(() -> true)),
 
     // CHUNK
-    MIXIN_CHUNK_COLUMN(
-        new MixinBuilder("Mixin for making chunks into columns.").addCommonMixins("common.MixinChunk_Column")
-            .setPhase(Phase.EARLY)
-            .setApplyIf(() -> true)),
     MIXIN_CHUNK_CUBES(new MixinBuilder("Mixin to make it so that chunk methods are redirected to cubes.")
         .addCommonMixins("common.MixinChunk_Cubes")
         .setPhase(Phase.EARLY)
