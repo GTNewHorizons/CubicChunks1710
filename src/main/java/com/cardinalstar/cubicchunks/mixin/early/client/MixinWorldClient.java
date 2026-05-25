@@ -24,17 +24,24 @@ import javax.annotation.ParametersAreNonnullByDefault;
 
 import net.minecraft.client.multiplayer.ChunkProviderClient;
 import net.minecraft.client.multiplayer.WorldClient;
+import net.minecraft.client.network.NetHandlerPlayClient;
+import net.minecraft.profiler.Profiler;
+import net.minecraft.world.EnumDifficulty;
 import net.minecraft.world.World;
+import net.minecraft.world.WorldSettings;
 
 import org.spongepowered.asm.mixin.Implements;
 import org.spongepowered.asm.mixin.Interface;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.Redirect;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 import com.cardinalstar.cubicchunks.api.IntRange;
 import com.cardinalstar.cubicchunks.client.CubeProviderClient;
+import com.cardinalstar.cubicchunks.lighting.LightingManager;
 import com.cardinalstar.cubicchunks.mixin.api.ICubicWorldInternal;
 import com.cardinalstar.cubicchunks.mixin.early.common.MixinWorld;
 import com.llamalad7.mixinextras.expression.Definition;
@@ -49,6 +56,14 @@ public abstract class MixinWorldClient extends MixinWorld implements ICubicWorld
 
     @Shadow
     private ChunkProviderClient clientChunkProvider;
+
+    @Inject(method = "<init>", at = @At("TAIL"))
+    public void onInit(
+        NetHandlerPlayClient p_i45063_1_, WorldSettings p_i45063_2_, int p_i45063_3_, EnumDifficulty p_i45063_4_,
+        Profiler p_i45063_5_, CallbackInfo ci
+    ) {
+        this.lightingManager = new LightingManager((World) (Object) this);
+    }
 
     @Override
     public void initCubicWorldClient(IntRange heightRange, IntRange generationRange) {

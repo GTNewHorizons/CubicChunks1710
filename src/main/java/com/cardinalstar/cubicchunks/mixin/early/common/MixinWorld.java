@@ -262,6 +262,8 @@ public abstract class MixinWorld implements ICubicWorldInternal {
         CubicChunksSavedData savedData = CubicChunksSavedData.get(worldServer);
 
         this.initCubicWorld(new IntRange(savedData.minHeight, savedData.maxHeight), generationRange);
+
+        this.lightingManager = new LightingManager((World) (Object) this);
     }
 
     protected void initCubicWorld(IntRange heightRange, IntRange generationRange) {
@@ -272,8 +274,6 @@ public abstract class MixinWorld implements ICubicWorldInternal {
 
         this.minGenerationHeight = generationRange.getMin();
         this.maxGenerationHeight = generationRange.getMax();
-
-        this.lightingManager = new LightingManager((World) (Object) this);
     }
 
     @Override
