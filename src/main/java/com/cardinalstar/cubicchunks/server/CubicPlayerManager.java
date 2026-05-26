@@ -53,7 +53,6 @@ import com.cardinalstar.cubicchunks.visibility.WorldVisibilityChange;
 import com.cardinalstar.cubicchunks.world.api.ICubeProviderServer.Requirement;
 import com.cardinalstar.cubicchunks.world.cube.Cube;
 
-import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
 import lombok.Getter;
 
 /**
@@ -64,13 +63,7 @@ import lombok.Getter;
 @ParametersAreNonnullByDefault
 public class CubicPlayerManager extends PlayerManager implements CubeLoaderCallback {
 
-    /**
-     * Mapping of entityId to PlayerCubeMap.PlayerWrapper objects.
-     */
-    private final Int2ObjectOpenHashMap<WatchingPlayer> players = new Int2ObjectOpenHashMap<>();
-
-    private static final WatchingPlayer[] EMPTY_PLAYER_ARRAY = new WatchingPlayer[0];
-    private WatchingPlayer[] playerArray = EMPTY_PLAYER_ARRAY;
+    private final PlayerMap players = new PlayerMap();
 
     private final CubeProviderServer provider;
 
@@ -136,7 +129,7 @@ public class CubicPlayerManager extends PlayerManager implements CubeLoaderCallb
 
         this.lastWorldTime = now;
 
-        for (var player : players.values()) {
+        for (var player : players.getPlayerArray()) {
             CubeProviderServer cubeCache = ((Server) getWorldServer()).getCubeCache();
 
             var pos = player.getManagedCubePos();
@@ -186,7 +179,7 @@ public class CubicPlayerManager extends PlayerManager implements CubeLoaderCallb
                 CubicChunks.LOGGER.error("Replaced cube {} with cube {}", old, cube);
             }
 
-            for (var player : playerArray) {
+            for (var player : players.getPlayerArray()) {
                 player.sync.onCubeMarkedDirty(cube.getX(), cube.getY(), cube.getZ());
             }
 
@@ -209,7 +202,7 @@ public class CubicPlayerManager extends PlayerManager implements CubeLoaderCallb
     public void onCubeUnloaded(Cube cube) {
         loadedCubes.remove(cube);
 
-        for (var player : playerArray) {
+        for (var player : players.getPlayerArray()) {
             player.sync.onCubeMarkedDirty(cube.getX(), cube.getY(), cube.getZ());
         }
 
@@ -228,7 +221,7 @@ public class CubicPlayerManager extends PlayerManager implements CubeLoaderCallb
         Cube cube = provider.getLoadedCube(x >> 4, y >> 4, z >> 4);
 
         if (cube != null) {
-            for (var player : playerArray) {
+            for (var player : players.getPlayerArray()) {
                 player.sync.onBlockMarkedDirty(x, y, z);
             }
         }
@@ -239,7 +232,7 @@ public class CubicPlayerManager extends PlayerManager implements CubeLoaderCallb
         Chunk column = provider.getLoadedColumn(x >> 4, z >> 4);
 
         if (column != null) {
-            for (var player : playerArray) {
+            for (var player : players.getPlayerArray()) {
                 player.sync.onColumnHeightMarkedDirty(x, z);
             }
         }
@@ -265,10 +258,7 @@ public class CubicPlayerManager extends PlayerManager implements CubeLoaderCallb
         WatchingPlayer watchingPlayer = new WatchingPlayer(player);
         watchingPlayer.updateManagedPos();
 
-        this.players.put(player.getEntityId(), watchingPlayer);
-
-        playerArray = players.values()
-            .toArray(EMPTY_PLAYER_ARRAY);
+        this.players.addPlayer(watchingPlayer);
 
         CuboidalCubeSelector.INSTANCE.forAllVisibleCubes(
             watchingPlayer.getManagedCubePos(),
@@ -282,7 +272,7 @@ public class CubicPlayerManager extends PlayerManager implements CubeLoaderCallb
     // CHECKED: 1.10.2-12.18.1.2092
     @Override
     public void removePlayer(EntityPlayerMP player) {
-        WatchingPlayer watchingPlayer = this.players.remove(player.getEntityId());
+        WatchingPlayer watchingPlayer = this.players.removePlayer(player.getEntityId());
 
         if (watchingPlayer == null) {
             return;
@@ -297,9 +287,6 @@ public class CubicPlayerManager extends PlayerManager implements CubeLoaderCallb
             horizontalViewDistance,
             verticalViewDistance,
             pos -> onPlayerStoppedViewingCube(watchingPlayer, pos));
-
-        playerArray = players.values()
-            .toArray(EMPTY_PLAYER_ARRAY);
 
         watchingPlayer.sync.flush();
     }
@@ -390,7 +377,7 @@ public class CubicPlayerManager extends PlayerManager implements CubeLoaderCallb
     }
 
     public boolean isColumnWatched(int columnX, int columnZ) {
-        for (var player : playerArray) {
+        for (var player : players.getPlayerArray()) {
             if (player.isWatchingColumn(columnX, columnZ)) {
                 return true;
             }
@@ -406,7 +393,7 @@ public class CubicPlayerManager extends PlayerManager implements CubeLoaderCallb
     }
 
     public boolean isCubeWatched(int cubeX, int cubeY, int cubeZ) {
-        for (var player : playerArray) {
+        for (var player : players.getPlayerArray()) {
             if (player.isWatchingCube(cubeX, cubeY, cubeZ)) {
                 return true;
             }
@@ -461,8 +448,7 @@ public class CubicPlayerManager extends PlayerManager implements CubeLoaderCallb
         int oldHorizontalViewDistance = this.horizontalViewDistance;
         int oldVerticalViewDistance = this.verticalViewDistance;
 
-        for (WatchingPlayer player : this.players.values()) {
-
+        for (WatchingPlayer player : this.players.getPlayerArray()) {
             CubePos playerPos = player.getManagedCubePos();
 
             var delta = CuboidalCubeSelector.INSTANCE.findChanged(
