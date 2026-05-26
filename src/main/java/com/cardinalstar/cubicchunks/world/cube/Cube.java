@@ -169,18 +169,6 @@ public class Cube implements ICube {
     private boolean isSurfaceTracked = false;
     private boolean ticked = false;
 
-    /**
-     * This is used as an optimization to avoid putting all the cubes to tick in a set (which turns out to be very slow
-     * because of huge amount of cubes), or iterating over all loaded cubes, which can also be very expensive in case of
-     * very big render distance, where not many cubes are actually ticked, but hundreds of thousands of them can be
-     * loaded.
-     * <p>
-     * Instead, cubes for players are added into a simple arraylist, and forced cubes are iterated separately, and
-     * double-ticking is avoided by checking this lastTicked field instead of deduplication by putting them all into a
-     * Set.
-     */
-    private long lastTicked = Long.MIN_VALUE;
-
     // private final CapabilityDispatcher capabilities;
 
     /**
@@ -610,18 +598,6 @@ public class Cube implements ICube {
 
     public List<Entity> getEntityContainer() {
         return this.entities;
-    }
-
-    /**
-     * Returns true if the cube still needs to be ticked this tick.
-     *
-     * @param totalTime world time
-     * @return true if cube still needs to be ticked at this world time
-     */
-    public boolean checkAndUpdateTick(long totalTime) {
-        boolean ret = totalTime != this.lastTicked;
-        this.lastTicked = totalTime;
-        return ret;
     }
 
     /**
