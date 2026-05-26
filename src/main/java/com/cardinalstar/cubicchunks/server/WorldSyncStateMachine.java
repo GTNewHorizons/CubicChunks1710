@@ -1,6 +1,5 @@
 package com.cardinalstar.cubicchunks.server;
 
-import java.util.ArrayList;
 import java.util.Iterator;
 
 import net.minecraft.world.ChunkCoordIntPair;
@@ -23,8 +22,7 @@ import com.cardinalstar.cubicchunks.util.BooleanArray2D;
 import com.cardinalstar.cubicchunks.util.ChunkMap;
 import com.cardinalstar.cubicchunks.util.CubePos;
 import com.cardinalstar.cubicchunks.world.cube.Cube;
-
-import it.unimi.dsi.fastutil.shorts.ShortArrayList;
+import it.unimi.dsi.fastutil.shorts.ShortOpenHashSet;
 
 public class WorldSyncStateMachine {
 
@@ -41,10 +39,8 @@ public class WorldSyncStateMachine {
     private final BlockPosSet syncedCubes = new BlockPosSet();
 
     private final BlockPosSet dirtyCubes = new BlockPosSet();
-    private final BlockPosMap<ShortArrayList> dirtyBlocks = new BlockPosMap<>();
+    private final BlockPosMap<ShortOpenHashSet> dirtyBlocks = new BlockPosMap<>();
     private final ChunkMap<BooleanArray2D> dirtyHeightCols = new ChunkMap<>();
-
-    private final ArrayList<Cube> cubeSendQueue = new ArrayList<>(20);
 
     public WorldSyncStateMachine(CubeProviderServer provider, WatchingPlayer player) {
         this.provider = provider;
@@ -114,8 +110,10 @@ public class WorldSyncStateMachine {
             if (player.isWatchingCube(e.getBlockX(), e.getBlockY(), e.getBlockZ())) {
                 Cube cube = provider.getLoadedCube(e.getBlockX(), e.getBlockY(), e.getBlockZ());
 
-                PacketEncoderCubeBlockChange.createPacket(cube, e.getValue())
-                    .sendToPlayer(player.player);
+                if (cube != null) {
+                    PacketEncoderCubeBlockChange.createPacket(cube, e.getValue())
+                        .sendToPlayer(player.player);
+                }
             }
         }
 
@@ -153,7 +151,7 @@ public class WorldSyncStateMachine {
     }
 
     public void onBlockChanged(int x, int y, int z) {
-        dirtyBlocks.computeIfAbsent(x >> 4, y >> 4, z >> 4, (x1, y1, z1) -> new ShortArrayList())
+        dirtyBlocks.computeIfAbsent(x >> 4, y >> 4, z >> 4, (x1, y1, z1) -> new ShortOpenHashSet())
             .add((short) AddressTools.getLocalAddress(x, y, z));
     }
 }

@@ -44,13 +44,12 @@ import com.cardinalstar.cubicchunks.world.cube.BlankCube;
 import com.cardinalstar.cubicchunks.world.cube.Cube;
 import com.falsepattern.chunk.internal.DataRegistryImpl;
 import com.github.bsideup.jabel.Desugar;
-
 import cpw.mods.fml.relauncher.Side;
 import cpw.mods.fml.relauncher.SideOnly;
 import gnu.trove.iterator.TIntIterator;
 import gnu.trove.set.TIntSet;
 import gnu.trove.set.hash.TIntHashSet;
-import it.unimi.dsi.fastutil.shorts.ShortArrayList;
+import it.unimi.dsi.fastutil.shorts.ShortCollection;
 
 @ParametersAreNonnullByDefault
 public class PacketEncoderCubeBlockChange extends CCPacketEncoder<PacketEncoderCubeBlockChange.PacketCubeBlockChange> {
@@ -68,14 +67,16 @@ public class PacketEncoderCubeBlockChange extends CCPacketEncoder<PacketEncoderC
     public PacketEncoderCubeBlockChange() {}
 
     @SuppressWarnings("DataFlowIssue")
-    public static PacketCubeBlockChange createPacket(Cube cube, ShortArrayList localAddresses) {
+    public static PacketCubeBlockChange createPacket(Cube cube, ShortCollection localAddresses) {
         CubePos cubePos = cube.getCoords();
 
         List<S23PacketBlockChange> updates = new ArrayList<>(localAddresses.size());
         TIntSet xzAddresses = new TIntHashSet();
 
-        for (int i = 0, localAddressesLength = localAddresses.size(); i < localAddressesLength; i++) {
-            short localAddress = localAddresses.getShort(i);
+        var addrIter= localAddresses.iterator();
+
+        while (addrIter.hasNext()) {
+            short localAddress = addrIter.nextShort();
 
             int x = AddressTools.getLocalX(localAddress);
             int y = AddressTools.getLocalY(localAddress);
