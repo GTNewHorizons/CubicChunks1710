@@ -109,7 +109,12 @@ public class CubicPlayerManager extends PlayerManager implements CubeLoaderCallb
     // CHECKED: 1.10.2-12.18.1.2092
     @Override
     public void updatePlayerInstances() {
-        getWorldServer().theProfiler.startSection("playerCubeMapUpdatePlayerInstances");
+        getWorldServer().theProfiler.startSection("Process light updates");
+
+        ((ICubicWorldInternal) getWorldServer()).getLightingManager()
+            .onSendCubes();
+
+        getWorldServer().theProfiler.endStartSection("playerCubeMapUpdatePlayerInstances");
 
         getWorldServer().theProfiler.startSection("addPendingPlayers");
 
