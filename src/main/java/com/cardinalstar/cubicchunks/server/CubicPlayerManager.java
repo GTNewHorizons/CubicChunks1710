@@ -281,8 +281,8 @@ public class CubicPlayerManager extends PlayerManager implements CubeLoaderCallb
         CuboidalCubeSelector.INSTANCE.forAllVisibleCubes(
             playerCubePos,
             horizontalViewDistance,
-            verticalViewDistance,
-            this::onPlayerStoppedViewingCube);
+            verticalViewDistance, pos -> onPlayerStoppedViewingCube(watchingPlayer, pos)
+        );
 
         playerArray = players.values()
             .toArray(EMPTY_PLAYER_ARRAY);
@@ -363,17 +363,10 @@ public class CubicPlayerManager extends PlayerManager implements CubeLoaderCallb
         }
     }
 
-    private void onPlayerStoppedViewingCube(CubePos pos) {
-        boolean watched = false;
+    private void onPlayerStoppedViewingCube(WatchingPlayer player, CubePos pos) {
+        player.sync.onCubeMarkedDirty(pos.getX(), pos.getY(), pos.getZ());
 
-        for (var player : playerArray) {
-            if (player.isWatchingCube(pos.getX(), pos.getY(), pos.getZ())) {
-                watched = true;
-                break;
-            }
-        }
-
-        if (!watched) {
+        if (!isCubeWatched(pos.getX(), pos.getY(), pos.getZ())) {
             var request = cubeLoadRequests.remove(pos);
 
             if (request != null) {
@@ -475,7 +468,7 @@ public class CubicPlayerManager extends PlayerManager implements CubeLoaderCallb
 
     private void applyWorldVisibilityChanges(WatchingPlayer player, WorldVisibilityChange delta) {
         delta.cubesToLoad.forEach(pos -> onPlayerStartedViewingCube(player, pos));
-        delta.cubesToUnload.forEach(this::onPlayerStoppedViewingCube);
+        delta.cubesToUnload.forEach(pos -> onPlayerStoppedViewingCube(player, pos));
     }
 
     public class WatchingPlayer {
