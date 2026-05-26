@@ -74,7 +74,8 @@ public class CubeMap implements Iterable<Cube> {
     @Nullable
     public Cube get(int cubeY) {
         int index = binarySearch(cubeY);
-        return index < cubes.size() && cubes.get(index).getY() == cubeY ? cubes.get(index) : null;
+        return index < cubes.size() && cubes.get(index)
+            .getY() == cubeY ? cubes.get(index) : null;
     }
 
     /**

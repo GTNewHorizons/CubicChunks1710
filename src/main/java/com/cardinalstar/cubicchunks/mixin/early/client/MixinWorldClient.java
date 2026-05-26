@@ -58,10 +58,8 @@ public abstract class MixinWorldClient extends MixinWorld implements ICubicWorld
     private ChunkProviderClient clientChunkProvider;
 
     @Inject(method = "<init>", at = @At("TAIL"))
-    public void onInit(
-        NetHandlerPlayClient p_i45063_1_, WorldSettings p_i45063_2_, int p_i45063_3_, EnumDifficulty p_i45063_4_,
-        Profiler p_i45063_5_, CallbackInfo ci
-    ) {
+    public void onInit(NetHandlerPlayClient p_i45063_1_, WorldSettings p_i45063_2_, int p_i45063_3_,
+        EnumDifficulty p_i45063_4_, Profiler p_i45063_5_, CallbackInfo ci) {
         this.lightingManager = new LightingManager((World) (Object) this);
     }
 

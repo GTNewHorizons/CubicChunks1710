@@ -23,6 +23,7 @@ import com.cardinalstar.cubicchunks.util.BooleanArray2D;
 import com.cardinalstar.cubicchunks.util.ChunkMap;
 import com.cardinalstar.cubicchunks.util.CubePos;
 import com.cardinalstar.cubicchunks.world.cube.Cube;
+
 import it.unimi.dsi.fastutil.shorts.ShortArrayList;
 
 public class WorldSyncStateMachine {
@@ -93,7 +94,8 @@ public class WorldSyncStateMachine {
                     columnData.syncedCubeCount++;
                     syncedCubes.add(pos);
 
-                    PacketEncoderCubes.createPacket(cube).sendToPlayer(player.player);
+                    PacketEncoderCubes.createPacket(cube)
+                        .sendToPlayer(player.player);
                 }
             }
         }

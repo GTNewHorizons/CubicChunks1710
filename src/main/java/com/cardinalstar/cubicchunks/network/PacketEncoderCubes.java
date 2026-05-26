@@ -38,6 +38,7 @@ import com.cardinalstar.cubicchunks.util.CubeStatusVisualizer;
 import com.cardinalstar.cubicchunks.util.CubeStatusVisualizer.CubeStatus;
 import com.cardinalstar.cubicchunks.world.cube.Cube;
 import com.github.bsideup.jabel.Desugar;
+
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 
@@ -68,8 +69,10 @@ public class PacketEncoderCubes extends CCPacketEncoder<PacketCube> {
 
         List<NBTTagCompound> tileEntityTags = new ArrayList<>();
 
-        if (!cube.getTileEntityMap().isEmpty()) {
-            for (TileEntity tileEntity : cube.getTileEntityMap().values()) {
+        if (!cube.getTileEntityMap()
+            .isEmpty()) {
+            for (TileEntity tileEntity : cube.getTileEntityMap()
+                .values()) {
                 NBTTagCompound tag = new NBTTagCompound();
                 tileEntity.writeToNBT(tag);
                 tileEntityTags.add(tag);
@@ -124,7 +127,8 @@ public class PacketEncoderCubes extends CCPacketEncoder<PacketCube> {
         cube.markForRenderUpdate();
 
         if (AngelicaInterop.hasDelegate()) {
-            AngelicaInterop.getDelegate().onCubeLoaded(cube.getX(), cube.getY(), cube.getZ());
+            AngelicaInterop.getDelegate()
+                .onCubeLoaded(cube.getX(), cube.getY(), cube.getZ());
         }
 
         for (var tag : packet.tileEntityTags) {

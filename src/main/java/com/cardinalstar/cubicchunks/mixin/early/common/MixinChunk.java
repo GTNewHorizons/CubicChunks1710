@@ -45,6 +45,7 @@ import net.minecraft.world.chunk.storage.ExtendedBlockStorage;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.world.ChunkEvent;
 import net.minecraftforge.event.world.ChunkEvent.Load;
+
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Intrinsic;
 import org.spongepowered.asm.mixin.Mixin;
@@ -154,7 +155,8 @@ public abstract class MixinChunk implements IColumn, IColumnInternal {
         if (cachedCube != null && cachedCube.getY() == index) {
             return cachedCube.getStorage();
         }
-        Cube cube = getWorldObj().getCubeCache().getCube(this.xPosition, index, this.zPosition);
+        Cube cube = getWorldObj().getCubeCache()
+            .getCube(this.xPosition, index, this.zPosition);
         if (!(cube instanceof BlankCube)) {
             cachedCube = cube;
         }
@@ -197,7 +199,7 @@ public abstract class MixinChunk implements IColumn, IColumnInternal {
 
     @Inject(method = "<init>(Lnet/minecraft/world/World;II)V", at = @At(value = "RETURN"))
     private void cubicChunkColumn_construct(World world, int x, int z, CallbackInfo cbi) {
-        //noinspection ConstantValue
+        // noinspection ConstantValue
         if (world == null) {
             // Some mods construct chunks with null world, ignore them
             return;
@@ -322,16 +324,20 @@ public abstract class MixinChunk implements IColumn, IColumnInternal {
 
     @Inject(
         method = "func_150807_a",
-        at = @At(value = "INVOKE", target = "Lnet/minecraft/world/chunk/Chunk;relightBlock(III)V")
-    )
+        at = @At(value = "INVOKE", target = "Lnet/minecraft/world/chunk/Chunk;relightBlock(III)V"))
     private void setBlockState_CubicChunks_relightBlockReplace(int localX, int localY, int localZ, Block p_150807_4_,
-        int newMeta, CallbackInfoReturnable<Boolean> cir, @Local(name = "j1") int oldHeightValue
-    ) {
-        if (isColumn && this.getCube(blockToCube(localY)).isInitialLightingDone()) {
+        int newMeta, CallbackInfoReturnable<Boolean> cir, @Local(name = "j1") int oldHeightValue) {
+        if (isColumn && this.getCube(blockToCube(localY))
+            .isInitialLightingDone()) {
             // oldHeightValue is the previous block Y above the top block, so this is the "removing a block" case
             if (oldHeightValue == localY + 1) {
                 getWorldObj().getLightingManager()
-                    .doOnBlockSetLightUpdates((Chunk) (Object) this, localX, getHeightValue(localX, localZ), localY, localZ);
+                    .doOnBlockSetLightUpdates(
+                        (Chunk) (Object) this,
+                        localX,
+                        getHeightValue(localX, localZ),
+                        localY,
+                        localZ);
             } else {
                 getWorldObj().getLightingManager()
                     .doOnBlockSetLightUpdates((Chunk) (Object) this, localX, oldHeightValue, localY + 1, localZ);
@@ -385,7 +391,8 @@ public abstract class MixinChunk implements IColumn, IColumnInternal {
         this.isModified = true;
 
         if (isColumn) {
-            this.getCube(cubeY).markDirty();
+            this.getCube(cubeY)
+                .markDirty();
         }
     }
 
@@ -517,7 +524,8 @@ public abstract class MixinChunk implements IColumn, IColumnInternal {
 
         if (cube.isSurfaceTracked()) {
             opacityIndex.onOpacityChange(blockToLocal(x), y, blockToLocal(z), block.getLightOpacity());
-            getWorldObj().getLightingManager().onHeightUpdate(x + 16 * this.xPosition, y, z + 16 * this.zPosition);
+            getWorldObj().getLightingManager()
+                .onHeightUpdate(x + 16 * this.xPosition, y, z + 16 * this.zPosition);
         } else {
             stagingHeightMap.onOpacityChange(blockToLocal(x), y, blockToLocal(z), block.getLightOpacity());
         }
@@ -556,7 +564,8 @@ public abstract class MixinChunk implements IColumn, IColumnInternal {
                 .onGetLight(type, x, y, z);
         }
 
-        return this.getCube(blockToCube(y)).getCachedLightFor(type, x, y, z);
+        return this.getCube(blockToCube(y))
+            .getCachedLightFor(type, x, y, z);
     }
 
     @Nullable
@@ -1013,7 +1022,8 @@ public abstract class MixinChunk implements IColumn, IColumnInternal {
         if (loaded != null) return loaded;
 
         // No loaded cube, try to load or generate one
-        return getCubicWorld().getCubeCache().getCube(xPosition, cubeY, zPosition);
+        return getCubicWorld().getCubeCache()
+            .getCube(xPosition, cubeY, zPosition);
     }
 
     @Override
@@ -1075,7 +1085,8 @@ public abstract class MixinChunk implements IColumn, IColumnInternal {
     @Override
     public boolean shouldTick() {
         for (Cube cube : cubeMap) {
-            if (cube.getTickets().shouldTick()) {
+            if (cube.getTickets()
+                .shouldTick()) {
                 return true;
             }
         }

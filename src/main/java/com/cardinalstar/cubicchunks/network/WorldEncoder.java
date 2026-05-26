@@ -35,7 +35,6 @@ import com.cardinalstar.cubicchunks.mixin.api.ICubicWorldInternal;
 import com.cardinalstar.cubicchunks.util.AddressTools;
 import com.cardinalstar.cubicchunks.util.Coords;
 import com.cardinalstar.cubicchunks.util.Mods;
-import com.cardinalstar.cubicchunks.util.biome3d.DynamicBiomeArray;
 import com.cardinalstar.cubicchunks.world.core.ClientHeightMap;
 import com.cardinalstar.cubicchunks.world.core.IColumnInternal;
 import com.cardinalstar.cubicchunks.world.cube.Cube;
@@ -162,9 +161,7 @@ class WorldEncoder {
         ExtendedBlockStorage storage = null;
 
         if (!empty) {
-            storage = new ExtendedBlockStorage(
-                Coords.cubeToMinBlock(cube.getY()),
-                !cube.getWorld().provider.hasNoSky);
+            storage = new ExtendedBlockStorage(Coords.cubeToMinBlock(cube.getY()), !cube.getWorld().provider.hasNoSky);
         }
 
         cube.setStorageFromSave(storage);
