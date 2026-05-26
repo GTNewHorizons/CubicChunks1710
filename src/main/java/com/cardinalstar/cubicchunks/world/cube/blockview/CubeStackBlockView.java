@@ -6,18 +6,34 @@ import net.minecraft.world.chunk.Chunk;
 
 import org.jetbrains.annotations.NotNull;
 
+import com.cardinalstar.cubicchunks.api.IColumn;
 import com.cardinalstar.cubicchunks.world.cube.Cube;
-
 import it.unimi.dsi.fastutil.ints.Int2ObjectRBTreeMap;
 
 public class CubeStackBlockView implements IMutableBlockView {
 
     public final Int2ObjectRBTreeMap<Cube> cubes = new Int2ObjectRBTreeMap<>();
 
-    public CubeStackBlockView(Chunk chunk, int cubeYStart, int cubeYEnd) {
+    public static CubeStackBlockView getExistingCubes(Chunk column, int cubeYStart, int cubeYEnd) {
+        CubeStackBlockView view = new CubeStackBlockView();
+
         for (int i = Math.min(cubeYStart, cubeYEnd); i <= Math.max(cubeYStart, cubeYEnd); i++) {
-            cubes.put(i, new Cube(chunk, i));
+            Cube cube = ((IColumn) column).getLoadedCube(i);
+
+            if (cube != null) view.cubes.put(i, cube);
         }
+
+        return view;
+    }
+
+    public static CubeStackBlockView createNewCubes(Chunk column, int cubeYStart, int cubeYEnd) {
+        CubeStackBlockView view = new CubeStackBlockView();
+
+        for (int i = Math.min(cubeYStart, cubeYEnd); i <= Math.max(cubeYStart, cubeYEnd); i++) {
+            view.cubes.put(i, new Cube(column, i));
+        }
+
+        return view;
     }
 
     @Override
