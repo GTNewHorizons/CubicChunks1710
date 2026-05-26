@@ -28,6 +28,7 @@ import static com.cardinalstar.cubicchunks.util.Coords.localToBlock;
 import static net.minecraftforge.common.MinecraftForge.EVENT_BUS;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
@@ -571,7 +572,7 @@ public class Cube implements ICube {
             column.getBlockStorageArray()[getY()] = null;
 
             // Do the same with the entity list
-            column.entityLists[getY()] = null;
+            column.entityLists[getY()] = Collections.emptyList();
         }
     }
 
