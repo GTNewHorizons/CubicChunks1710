@@ -66,13 +66,13 @@ public class CuboidalCubeSelector implements CubeSelector {
     }
 
     @Override
-    public WorldVisibilityChange findChanged(CubePos oldPos, CubePos newPos, int oldHorizonalView, int oldVerticalView,
+    public WorldVisibilityChange findChanged(CubePos oldPos, CubePos newPos, int oldHorizontalView, int oldVerticalView,
         int newHorizontalView, int newVerticalView) {
         HashSet<CubePos> visCubesOld = new HashSet<>();
-        forAllVisibleCubes(oldPos, oldHorizonalView, oldVerticalView, visCubesOld::add);
+        forAllVisibleCubes(oldPos, oldHorizontalView, oldVerticalView, visCubesOld::add);
 
         HashSet<ChunkCoordIntPair> visColsOld = new HashSet<>();
-        forAllVisibleColumns(oldPos, oldHorizonalView, oldVerticalView, visColsOld::add);
+        forAllVisibleColumns(oldPos, oldHorizontalView, oldVerticalView, visColsOld::add);
 
         HashSet<CubePos> visCubesNew = new HashSet<>();
         forAllVisibleCubes(newPos, newHorizontalView, newVerticalView, visCubesNew::add);
