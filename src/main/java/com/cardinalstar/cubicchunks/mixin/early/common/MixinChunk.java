@@ -224,26 +224,6 @@ public abstract class MixinChunk implements IColumn, IColumnInternal {
         }
     }
 
-    @Redirect(
-        method = "<init>(Lnet/minecraft/world/World;[Lnet/minecraft/block/Block;II)V",
-        at = @At(
-            value = "FIELD",
-            args = "array=get",
-            target = "Lnet/minecraft/world/chunk/Chunk;storageArrays:[Lnet/minecraft/world/chunk/storage/ExtendedBlockStorage;"))
-    private ExtendedBlockStorage init_getStorage(ExtendedBlockStorage[] ebs, int y) {
-        return ebs[y];
-    }
-
-    @Redirect(
-        method = "<init>(Lnet/minecraft/world/World;[Lnet/minecraft/block/Block;II)V",
-        at = @At(
-            value = "FIELD",
-            args = "array=set",
-            target = "Lnet/minecraft/world/chunk/Chunk;storageArrays:[Lnet/minecraft/world/chunk/storage/ExtendedBlockStorage;"))
-    private void init_getMaxHeight(ExtendedBlockStorage[] ebs, int y, ExtendedBlockStorage val) {
-        ebs[y] = val;
-    }
-
     @ModifyConstant(
         method = "<init>(Lnet/minecraft/world/World;[Lnet/minecraft/block/Block;[BII)V",
         constant = @Constant(intValue = 16, ordinal = 0),
@@ -318,17 +298,6 @@ public abstract class MixinChunk implements IColumn, IColumnInternal {
             // TODO: update skylight in cubes marked for update
             cbi.cancel();
         }
-    }
-
-    @Nullable
-    @Redirect(
-        method = "generateSkylightMap",
-        at = @At(
-            value = "FIELD",
-            target = "Lnet/minecraft/world/chunk/Chunk;storageArrays:[Lnet/minecraft/world/chunk/storage/ExtendedBlockStorage;",
-            args = "array=get"))
-    private ExtendedBlockStorage generateSkylightMapRedirectEBSAccess(ExtendedBlockStorage[] array, int index) {
-        return getEBS_CubicChunks(index);
     }
 
     // ==============================================
