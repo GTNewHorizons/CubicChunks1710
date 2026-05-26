@@ -383,21 +383,19 @@ public class CubicPlayerManager extends PlayerManager implements CubeLoaderCallb
     }
 
     public boolean isColumnWatched(int columnX, int columnZ) {
-        Chunk column = provider.getLoadedColumn(columnX, columnZ);
-
-        return isColumnWatched(column);
-    }
-
-    public boolean isColumnWatched(@Nullable Chunk column) {
-        if (column == null) return false;
-
         for (var player : playerArray) {
-            if (player.isWatchingColumn(column.xPosition, column.zPosition)) {
+            if (player.isWatchingColumn(columnX, columnZ)) {
                 return true;
             }
         }
 
         return false;
+    }
+
+    public boolean isColumnWatched(@Nullable Chunk column) {
+        if (column == null) return false;
+
+        return isColumnWatched(column.xPosition, column.zPosition);
     }
 
     public boolean isCubeWatched(int cubeX, int cubeY, int cubeZ) {
@@ -413,13 +411,7 @@ public class CubicPlayerManager extends PlayerManager implements CubeLoaderCallb
     public boolean isCubeWatched(@Nullable Cube cube) {
         if (cube == null) return false;
 
-        for (var player : playerArray) {
-            if (player.isWatchingCube(cube.getX(), cube.getY(), cube.getZ())) {
-                return true;
-            }
-        }
-
-        return false;
+        return isCubeWatched(cube.getX(), cube.getY(), cube.getZ());
     }
 
     // CHECKED: 1.10.2-12.18.1.2092
