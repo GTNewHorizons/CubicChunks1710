@@ -94,11 +94,11 @@ public class WorldSyncStateMachine {
                     columnData = new ColumnData();
                     syncedColumns.put(pos.getX(), pos.getZ(), columnData);
 
-                        PacketEncoderColumn.createPacket(cube.getColumn())
-                            .sendToPlayer(player.player);
+                    PacketEncoderColumn.createPacket(cube.getColumn())
+                        .sendToPlayer(player.player);
 
-                        MinecraftForge.EVENT_BUS.post(
-                            new ChunkWatchEvent.Watch(new ChunkCoordIntPair(pos.getX(), pos.getZ()), player.player));
+                    MinecraftForge.EVENT_BUS.post(
+                        new ChunkWatchEvent.Watch(new ChunkCoordIntPair(pos.getX(), pos.getZ()), player.player));
                 }
 
                 columnData.syncedCubeCount++;
@@ -147,8 +147,8 @@ public class WorldSyncStateMachine {
                 Chunk column = provider.getLoadedColumn(e.getChunkX(), e.getChunkZ());
 
                 if (column != null) {
-                PacketEncoderHeightMapUpdate.createPacket(e.getValue(), column)
-                    .sendToPlayer(player.player);
+                    PacketEncoderHeightMapUpdate.createPacket(e.getValue(), column)
+                        .sendToPlayer(player.player);
                 }
             }
         }
