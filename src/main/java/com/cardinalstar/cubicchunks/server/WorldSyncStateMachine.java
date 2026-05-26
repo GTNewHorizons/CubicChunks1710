@@ -61,10 +61,8 @@ public class WorldSyncStateMachine {
             boolean wasCubeSynced = syncedCubes.contains(pos);
 
             if ((cube == null || !cube.isInitializedToLevel(CubeInitLevel.Lit)) && wasCubeSynced) {
-                if (player.isWatchingCube(pos.getX(), pos.getY(), pos.getZ())) {
-                    PacketEncoderUnloadCube.createPacket(new CubePos(pos))
-                        .sendToPlayer(player.player);
-                }
+                PacketEncoderUnloadCube.createPacket(new CubePos(pos))
+                    .sendToPlayer(player.player);
 
                 syncedCubes.remove(pos);
 
@@ -75,28 +73,26 @@ public class WorldSyncStateMachine {
                 if (columnData.syncedCubeCount <= 0) {
                     syncedColumns.remove(pos.getX(), pos.getZ());
 
-                    if (player.isWatchingColumn(pos.getX(), pos.getZ())) {
-                        PacketEncoderUnloadColumn.createPacket(pos.getX(), pos.getZ())
-                            .sendToPlayer(player.player);
-                    }
+                    PacketEncoderUnloadColumn.createPacket(pos.getX(), pos.getZ())
+                        .sendToPlayer(player.player);
                 }
             } else if (cube != null && cube.isInitializedToLevel(CubeInitLevel.Lit) && !wasCubeSynced) {
-                ColumnData columnData = syncedColumns.get(pos.getX(), pos.getZ());
-
-                if (columnData == null) {
-                    columnData = new ColumnData();
-                    syncedColumns.put(pos.getX(), pos.getZ(), columnData);
-
-                    if (player.isWatchingColumn(pos.getX(), pos.getZ())) {
-                        PacketEncoderColumn.createPacket(cube.getColumn())
-                            .sendToPlayer(player.player);
-                    }
-                }
-
-                columnData.syncedCubeCount++;
-                syncedCubes.add(pos);
-
                 if (player.isWatchingCube(pos.getX(), pos.getY(), pos.getZ())) {
+                    ColumnData columnData = syncedColumns.get(pos.getX(), pos.getZ());
+
+                    if (columnData == null) {
+                        columnData = new ColumnData();
+                        syncedColumns.put(pos.getX(), pos.getZ(), columnData);
+
+                        if (player.isWatchingColumn(pos.getX(), pos.getZ())) {
+                            PacketEncoderColumn.createPacket(cube.getColumn())
+                                .sendToPlayer(player.player);
+                        }
+                    }
+
+                    columnData.syncedCubeCount++;
+                    syncedCubes.add(pos);
+
                     PacketEncoderCubes.createPacket(cube).sendToPlayer(player.player);
                 }
             }
