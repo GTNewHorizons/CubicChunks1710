@@ -76,7 +76,7 @@ public class StagingHeightMap implements IHeightMap {
         }
     }
 
-    private int index(int localX, int localZ) {
+    private static int index(int localX, int localZ) {
         return (localZ << 4) | localX;
     }
 

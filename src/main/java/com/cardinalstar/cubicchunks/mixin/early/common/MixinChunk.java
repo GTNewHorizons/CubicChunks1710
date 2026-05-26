@@ -43,8 +43,8 @@ import net.minecraft.world.World;
 import net.minecraft.world.chunk.Chunk;
 import net.minecraft.world.chunk.storage.ExtendedBlockStorage;
 import net.minecraftforge.common.MinecraftForge;
+import net.minecraftforge.event.world.ChunkEvent;
 import net.minecraftforge.event.world.ChunkEvent.Load;
-
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Intrinsic;
 import org.spongepowered.asm.mixin.Mixin;
@@ -142,9 +142,6 @@ public abstract class MixinChunk implements IColumn, IColumnInternal {
     @Shadow
     public boolean isTerrainPopulated;
 
-    @Shadow
-    public abstract ExtendedBlockStorage[] getBlockStorageArray();
-
     @Unique
     @SuppressWarnings({ "unchecked", "AddedMixinMembersNamePattern" })
     public <T extends World & ICubicWorldInternal> T getWorldObj() {
@@ -203,30 +200,9 @@ public abstract class MixinChunk implements IColumn, IColumnInternal {
         }
     }
 
-    // modify vanilla:
-
-    // @ModifyConstant(
-    // method = "<init>(Lnet/minecraft/world/World;II)V",
-    // constant = @Constant(intValue = 16),
-    // slice = @Slice(
-    // to = @At(
-    // value = "FIELD",
-    // target =
-    // "Lnet/minecraft/world/chunk/Chunk;storageArrays:[Lnet/minecraft/world/chunk/storage/ExtendedBlockStorage;",
-    // opcode = Opcodes.PUTFIELD)),
-    // allow = 1,
-    // require = 1)
-    // private int modifySectionArrayLength(int sixteen, World worldIn, int x, int z) {
-    // if (worldIn == null) {
-    // // Some mods construct chunks with null world, ignore them
-    // return sixteen;
-    // }
-    // IMinMaxHeight y = (IMinMaxHeight) worldIn;
-    // return Coords.blockToCube(y.getMaxHeight()) - Coords.blockToCube(y.getMinHeight());
-    // }
-
     @Inject(method = "<init>(Lnet/minecraft/world/World;II)V", at = @At(value = "RETURN"))
     private void cubicChunkColumn_construct(World world, int x, int z, CallbackInfo cbi) {
+        //noinspection ConstantValue
         if (world == null) {
             // Some mods construct chunks with null world, ignore them
             return;
@@ -652,6 +628,7 @@ public abstract class MixinChunk implements IColumn, IColumnInternal {
         if (!isColumn) {
             return;
         }
+
         if (getWorldObj().getLightingManager() != null) {
             getWorldObj().getLightingManager()
                 .onGetLightSubtracted(x, y, z);
@@ -859,7 +836,8 @@ public abstract class MixinChunk implements IColumn, IColumnInternal {
         for (Cube cube : cubeMap) {
             cube.onCubeUnload();
         }
-        MinecraftForge.EVENT_BUS.post(new net.minecraftforge.event.world.ChunkEvent.Unload((Chunk) (Object) this));
+
+        MinecraftForge.EVENT_BUS.post(new ChunkEvent.Unload((Chunk) (Object) this));
     }
 
     // ==============================================
@@ -990,8 +968,8 @@ public abstract class MixinChunk implements IColumn, IColumnInternal {
             endY = getWorldObj().getMaxHeight() - 1;
         }
 
-        for (int i = startY; i <= endY; i += Cube.SIZE) {
-            ExtendedBlockStorage extendedblockstorage = getEBS_CubicChunks(blockToCube(i));
+        for (int i = blockToCube(startY); i <= blockToCube(endY); i++) {
+            ExtendedBlockStorage extendedblockstorage = getEBS_CubicChunks(i);
 
             if (extendedblockstorage != null && !extendedblockstorage.isEmpty()) {
                 return false;
@@ -1053,9 +1031,10 @@ public abstract class MixinChunk implements IColumn, IColumnInternal {
     private void enqueueRelightChecks_CubicChunks(CallbackInfo cbi) {
         if (!isColumn) {
             return;
-
         }
+
         cbi.cancel();
+
         if (CubicChunksConfig.relightChecksPerTickPerColumn > 0
             && (!worldObj.isRemote || CubicChunksConfig.doClientLightFixes)) {
             cubeMap.enqueueRelightChecks();
@@ -1159,11 +1138,11 @@ public abstract class MixinChunk implements IColumn, IColumnInternal {
     @Override
     public boolean shouldTick() {
         for (Cube cube : cubeMap) {
-            if (cube.getTickets()
-                .shouldTick()) {
+            if (cube.getTickets().shouldTick()) {
                 return true;
             }
         }
+
         return false;
     }
 
