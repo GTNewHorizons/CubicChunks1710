@@ -59,9 +59,11 @@ public class WorldSyncStateMachine {
 
             Cube cube = provider.getLoadedCube(pos.getX(), pos.getY(), pos.getZ());
 
-            boolean wasCubeSynced = syncedCubes.contains(pos);
+            boolean isWatched = syncedCubes.contains(pos);
 
-            if ((cube == null || !cube.isInitializedToLevel(CubeInitLevel.Lit)) && wasCubeSynced) {
+            boolean watchable = cube != null && cube.isInitializedToLevel(CubeInitLevel.Lit) && player.isWatchingCube(pos.getX(), pos.getY(), pos.getZ());
+
+            if (isWatched && !watchable) {
                 CubePos cubePos = new CubePos(pos);
 
                 PacketEncoderUnloadCube.createPacket(cubePos)
@@ -84,33 +86,31 @@ public class WorldSyncStateMachine {
                     MinecraftForge.EVENT_BUS.post(
                         new ChunkWatchEvent.UnWatch(new ChunkCoordIntPair(pos.getX(), pos.getZ()), player.player));
                 }
-            } else if (cube != null && cube.isInitializedToLevel(CubeInitLevel.Lit) && !wasCubeSynced) {
-                if (player.isWatchingCube(pos.getX(), pos.getY(), pos.getZ())) {
-                    ColumnData columnData = syncedColumns.get(pos.getX(), pos.getZ());
+            } else if (!isWatched && watchable) {
+                ColumnData columnData = syncedColumns.get(pos.getX(), pos.getZ());
 
-                    if (columnData == null) {
-                        columnData = new ColumnData();
-                        syncedColumns.put(pos.getX(), pos.getZ(), columnData);
+                if (columnData == null) {
+                    columnData = new ColumnData();
+                    syncedColumns.put(pos.getX(), pos.getZ(), columnData);
 
-                        if (player.isWatchingColumn(pos.getX(), pos.getZ())) {
-                            PacketEncoderColumn.createPacket(cube.getColumn())
-                                .sendToPlayer(player.player);
+                    if (player.isWatchingColumn(pos.getX(), pos.getZ())) {
+                        PacketEncoderColumn.createPacket(cube.getColumn())
+                            .sendToPlayer(player.player);
 
-                            MinecraftForge.EVENT_BUS.post(
-                                new ChunkWatchEvent.Watch(
-                                    new ChunkCoordIntPair(pos.getX(), pos.getZ()),
-                                    player.player));
-                        }
+                        MinecraftForge.EVENT_BUS.post(
+                            new ChunkWatchEvent.Watch(
+                                new ChunkCoordIntPair(pos.getX(), pos.getZ()),
+                                player.player));
                     }
-
-                    columnData.syncedCubeCount++;
-                    syncedCubes.add(pos);
-
-                    PacketEncoderCubes.createPacket(cube)
-                        .sendToPlayer(player.player);
-
-                    MinecraftForge.EVENT_BUS.post(new CubeEvent.Watch(provider.worldObj, cube, player.player));
                 }
+
+                columnData.syncedCubeCount++;
+                syncedCubes.add(pos);
+
+                PacketEncoderCubes.createPacket(cube)
+                    .sendToPlayer(player.player);
+
+                MinecraftForge.EVENT_BUS.post(new CubeEvent.Watch(provider.worldObj, cube, player.player));
             }
         }
 
