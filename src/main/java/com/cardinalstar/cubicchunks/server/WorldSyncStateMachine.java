@@ -94,13 +94,11 @@ public class WorldSyncStateMachine {
                     columnData = new ColumnData();
                     syncedColumns.put(pos.getX(), pos.getZ(), columnData);
 
-                    if (player.isWatchingColumn(pos.getX(), pos.getZ())) {
                         PacketEncoderColumn.createPacket(cube.getColumn())
                             .sendToPlayer(player.player);
 
                         MinecraftForge.EVENT_BUS.post(
                             new ChunkWatchEvent.Watch(new ChunkCoordIntPair(pos.getX(), pos.getZ()), player.player));
-                    }
                 }
 
                 columnData.syncedCubeCount++;
