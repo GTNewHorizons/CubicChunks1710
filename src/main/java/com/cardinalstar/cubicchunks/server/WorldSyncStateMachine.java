@@ -138,7 +138,7 @@ public class WorldSyncStateMachine {
                 CubicChunks.LOGGER.trace(
                     "Tried to sync {} height map updates to a column at {} which was not synced",
                     e.getValue()
-                        .size(),
+                        .cardinality(),
                     new ChunkCoordIntPair(e.getChunkX(), e.getChunkZ()));
 
                 continue;
