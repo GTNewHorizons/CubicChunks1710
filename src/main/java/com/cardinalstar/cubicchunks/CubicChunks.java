@@ -20,8 +20,6 @@
  */
 package com.cardinalstar.cubicchunks;
 
-import static com.cardinalstar.cubicchunks.util.ReflectionUtil.cast;
-
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.Map;
@@ -30,6 +28,7 @@ import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import javax.annotation.ParametersAreNonnullByDefault;
 
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.World;
 import net.minecraft.world.WorldServer;
 import net.minecraft.world.storage.ISaveHandler;
@@ -45,9 +44,8 @@ import com.cardinalstar.cubicchunks.api.worldtype.VanillaCubicWorldType;
 import com.cardinalstar.cubicchunks.async.TaskPool;
 import com.cardinalstar.cubicchunks.event.handlers.ClientEventHandler;
 import com.cardinalstar.cubicchunks.event.handlers.CommonEventHandler;
-import com.cardinalstar.cubicchunks.mixin.api.ICubicWorldSettings;
-import com.cardinalstar.cubicchunks.mixin.early.common.IIntegratedServer;
 import com.cardinalstar.cubicchunks.network.NetworkChannel;
+import com.cardinalstar.cubicchunks.server.ICubicChunksServer;
 import com.cardinalstar.cubicchunks.server.chunkio.RegionCubeStorage;
 import com.cardinalstar.cubicchunks.util.CompatHandler;
 import com.cardinalstar.cubicchunks.util.Mods;
@@ -66,7 +64,6 @@ import cpw.mods.fml.common.event.FMLInitializationEvent;
 import cpw.mods.fml.common.event.FMLPostInitializationEvent;
 import cpw.mods.fml.common.event.FMLPreInitializationEvent;
 import cpw.mods.fml.common.event.FMLServerAboutToStartEvent;
-import cpw.mods.fml.common.event.FMLServerStartingEvent;
 import cpw.mods.fml.common.network.NetworkCheckHandler;
 import cpw.mods.fml.common.network.NetworkRegistry;
 import cpw.mods.fml.common.network.internal.NetworkModHolder;
@@ -163,6 +160,12 @@ public class CubicChunks {
 
     @Mod.EventHandler
     public void init(FMLInitializationEvent event) {
+        try {
+            CubicChunksConfig.init();
+        } catch (ConfigException ex) {
+            throw new RuntimeException(ex);
+        }
+
         CommonEventHandler eventHandler = new CommonEventHandler();
         MinecraftForge.EVENT_BUS.register(eventHandler);
         FMLCommonHandler.instance()
@@ -188,17 +191,11 @@ public class CubicChunks {
     }
 
     @Mod.EventHandler
-    public void serverStarting(FMLServerStartingEvent evt) {
-        CubicChunksConfig.registerCommands(evt);
-    }
-
-    @Mod.EventHandler
     public void onServerAboutToStart(FMLServerAboutToStartEvent event) {
         SideUtils.runForSide(() -> () -> {
-            IIntegratedServer integratedServer = cast(event.getServer());
-            ICubicWorldSettings settings = cast(integratedServer.getWorldSettings());
-            event.getServer()
-                .setBuildLimit(CubicChunks.MAX_SUPPORTED_BLOCK_Y);
+            MinecraftServer server = event.getServer();
+            server.setBuildLimit(CubicChunks.MAX_SUPPORTED_BLOCK_Y);
+            ((ICubicChunksServer) server).setBuildMinimum(CubicChunks.MIN_SUPPORTED_BLOCK_Y);
         }, () -> () -> {
             // no-op, done by mixin
         });
@@ -212,10 +209,7 @@ public class CubicChunks {
     public static boolean checkCanConnectWithMods(Map<String, String> modVersions, Side remoteSide) {
         String remoteFullVersion = modVersions.get(MODID);
         if (remoteFullVersion == null) {
-            if (remoteSide.isClient()) {
-                return CubicChunksConfig.allowVanillaClients; // don't allow client without CC to connect
-            }
-            return true; // allow connecting to server without CC
+            return !remoteSide.isClient(); // don't allow client without CC to connect
         }
         if (!checkVersionFormat(MOD_VERSION, remoteSide.isClient() ? Side.SERVER : Side.CLIENT)) {
             return true;

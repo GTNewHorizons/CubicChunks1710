@@ -622,15 +622,6 @@ public class Cube implements ICube {
             .onCubeLoad(this);
         CompatHandler.onCubeLoad(new ChunkEvent.Load(getColumn()));
         EVENT_BUS.post(new CubeEvent.Load(world, this));
-
-        ICubicWorldInternal world = this.getWorld();
-
-        int min = this.getY() << 4;
-        int max = (this.getY() + 1) << 4;
-
-        if (min < world.getMinHeight() || max > world.getMaxHeight()) {
-            world.setHeightBounds(Math.min(min, world.getMinHeight()), Math.max(max, world.getMaxHeight()));
-        }
     }
 
     @SuppressWarnings("deprecation")

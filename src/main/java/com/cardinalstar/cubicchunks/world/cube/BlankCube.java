@@ -55,51 +55,9 @@ public class BlankCube extends Cube {
         return true;
     }
 
-    // @Override
-    // public boolean containsBlockPos(BlockPos blockPos) {
-    // return false;
-    // }
-    //
-    // @Override
-    // public IBlockState getBlockState(BlockPos pos) {
-    // return Blocks.AIR.getDefaultState();
-    // }
-    //
-    // @Override
-    // public IBlockState getBlockState(int blockX, int localOrBlockY, int blockZ) {
-    // return Blocks.AIR.getDefaultState();
-    // }
-    //
-    // @Nullable @Override
-    // public TileEntity getTileEntity(BlockPos pos, Chunk.EnumCreateEntityType creationType) {
-    // return null;
-    // }
-    //
     @Override
     public void onCubeLoad() {}
 
     @Override
     public void onCubeUnload() {}
-    //
-    // @Override
-    // public boolean needsSaving() {
-    // return false;
-    // }
-    //
-    // @Override
-    // public void markSaved() {
-    // }
-    //
-    // @Override
-    // public int getLightFor(EnumSkyBlock lightType, BlockPos pos) {
-    // return lightType.defaultLightValue;
-    // }
-    //
-    // @Override
-    // public void setLightFor(EnumSkyBlock lightType, BlockPos pos, int light) {
-    // }
-    //
-    // @Override
-    // public void markForRenderUpdate() {
-    // }
 }

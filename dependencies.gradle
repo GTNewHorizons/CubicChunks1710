@@ -44,8 +44,8 @@ dependencies {
 
     // ========================= Compat Deps ========================= //
 
-    compileOnly("com.falsepattern:chunkapi-mc1.7.10:0.8.0:dev")
-    compileOnly("com.falsepattern:endlessids-mc1.7.10:1.7.0:dev")
+    compileOnly("com.falsepattern:chunkapi-mc1.7.10:0.8.1:dev")
+    compileOnly("com.falsepattern:endlessids-mc1.7.10:1.7.1:dev")
     compileOnly("ganymedes01.etfuturum:Et-Futurum-Requiem:2.6.2.21-GTNH-daily:dev")
 
     // ========================= Test Deps ========================= //

@@ -20,39 +20,76 @@
  */
 package com.cardinalstar.cubicchunks.world;
 
+import net.minecraft.block.Block;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.world.World;
 import net.minecraft.world.WorldSavedData;
 
+import com.cardinalstar.cubicchunks.CubicChunksConfig;
+import com.cardinalstar.cubicchunks.worldgen.FillerInfo;
+import com.cardinalstar.cubicchunks.worldgen.HeightInfo;
+import com.gtnewhorizon.gtnhlib.util.data.BlockMeta;
+import com.gtnewhorizon.gtnhlib.util.data.ImmutableBlockMeta;
+
 public class CubicChunksSavedData extends WorldSavedData {
 
     public int minHeight = 0, maxHeight = 256;
+    private FillerInfo fillerInfo;
+    private World world;
 
     public CubicChunksSavedData(String name) {
         super(name);
     }
 
-    public CubicChunksSavedData(int minHeight, int maxHeight) {
+    public CubicChunksSavedData(int dimensionId, World world) {
         this("cubicChunksData");
 
-        this.minHeight = minHeight;
-        this.maxHeight = maxHeight;
+        HeightInfo heightInfo = CubicChunksConfig.configuredDimensionalHeightMap.get(dimensionId);
+        if (heightInfo != null) {
+            this.minHeight = heightInfo.minHeight;
+            this.maxHeight = heightInfo.maxHeight;
+        } else {
+            this.minHeight = CubicChunksConfig.defaultMinHeight;
+            this.maxHeight = CubicChunksConfig.defaultMaxHeight;
+        }
+
+        this.fillerInfo = CubicChunksConfig.configuredDimensionalFillerMap.get(dimensionId);
+        if (this.fillerInfo == null) {
+            fillerInfo = new FillerInfo();
+        }
     }
 
     public static CubicChunksSavedData get(World world) {
-        var data = (CubicChunksSavedData) world.mapStorage.loadData(CubicChunksSavedData.class, "cubicChunksData");
-
+        var data = (CubicChunksSavedData) world.perWorldStorage.loadData(CubicChunksSavedData.class, "cubicChunksData");
         if (data == null) {
-            int maxY = ((ICubicWorldProvider) world.provider).getOriginalActualHeight();
-
-            data = new CubicChunksSavedData(0, maxY);
+            data = new CubicChunksSavedData(world.provider.dimensionId, world);
             data.markDirty();
 
-            world.mapStorage.setData(data.mapName, data);
-            world.mapStorage.saveAllData();
+            world.perWorldStorage.setData(data.mapName, data);
+            world.perWorldStorage.saveAllData();
         }
-
+        data.world = world;
         return data;
+    }
+
+    public FillerInfo getFillerInfo() {
+        return fillerInfo;
+    }
+
+    public void setBottomFiller(ImmutableBlockMeta block) {
+        fillerInfo.bottomFiller = block;
+        this.markDirty();
+
+        world.perWorldStorage.setData(this.mapName, this);
+        world.perWorldStorage.saveAllData();
+    }
+
+    public void setTopFiller(ImmutableBlockMeta block) {
+        fillerInfo.topFiller = block;
+        this.markDirty();
+
+        world.perWorldStorage.setData(this.mapName, this);
+        world.perWorldStorage.saveAllData();
     }
 
     @Override
@@ -60,11 +97,44 @@ public class CubicChunksSavedData extends WorldSavedData {
         // set 4 least significant bits to zero to ensure they are always multiples of 16
         minHeight = nbt.getInteger("minHeight") & ~0xF;
         maxHeight = nbt.getInteger("maxHeight") & ~0xF;
+
+        if (fillerInfo == null) {
+            fillerInfo = new FillerInfo();
+        }
+
+        NBTTagCompound fillerCompound = nbt.getCompoundTag("fillerBlocks");
+
+        if (fillerCompound.hasKey("topId")) {
+            int topBlock = fillerCompound.getInteger("topId");
+            short topMeta = fillerCompound.getShort("topMeta");
+            fillerInfo.topFiller = new BlockMeta(Block.getBlockById(topBlock), topMeta);
+        }
+
+        if (fillerCompound.hasKey("bottomId")) {
+            int bottomBlock = fillerCompound.getInteger("bottomId");
+            short bottomMeta = fillerCompound.getShort("bottomMeta");
+            fillerInfo.bottomFiller = new BlockMeta(Block.getBlockById(bottomBlock), bottomMeta);
+        }
+
     }
 
     @Override
     public void writeToNBT(NBTTagCompound compound) {
         compound.setInteger("minHeight", minHeight);
         compound.setInteger("maxHeight", maxHeight);
+
+        NBTTagCompound filler = new NBTTagCompound();
+
+        if (fillerInfo.bottomFiller != null) {
+            filler.setInteger("bottomId", Block.getIdFromBlock(fillerInfo.bottomFiller.getBlock()));
+            filler.setShort("bottomMeta", (short) fillerInfo.bottomFiller.getBlockMeta());
+        }
+
+        if (fillerInfo.topFiller != null) {
+            filler.setInteger("topId", Block.getIdFromBlock(fillerInfo.topFiller.getBlock()));
+            filler.setShort("topMeta", (short) fillerInfo.topFiller.getBlockMeta());
+        }
+
+        compound.setTag("fillerBlocks", filler);
     }
 }

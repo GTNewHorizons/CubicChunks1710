@@ -22,71 +22,59 @@
 package com.cardinalstar.cubicchunks;
 
 import java.lang.management.ManagementFactory;
-import java.lang.reflect.Field;
-import java.lang.reflect.ParameterizedType;
-import java.lang.reflect.Type;
-import java.util.Arrays;
-import java.util.Collection;
 import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Locale;
 import java.util.Map;
-import java.util.Set;
-import java.util.function.Predicate;
-import java.util.regex.Pattern;
 
-import javax.annotation.Nullable;
 import javax.annotation.ParametersAreNonnullByDefault;
 
-import net.minecraft.client.resources.I18n;
-import net.minecraft.command.CommandException;
-import net.minecraft.command.ICommandSender;
-import net.minecraft.command.WrongUsageException;
-import net.minecraft.util.ChatComponentTranslation;
+import net.minecraft.block.Block;
 
-import com.cardinalstar.cubicchunks.command.CubicCommandBase;
-import com.cardinalstar.cubicchunks.command.SubCommandBase;
-import com.google.common.collect.BoundType;
-import com.google.common.collect.Range;
-import com.google.common.collect.TreeRangeSet;
+import com.cardinalstar.cubicchunks.worldgen.FillerInfo;
+import com.cardinalstar.cubicchunks.worldgen.HeightInfo;
 import com.gtnewhorizon.gtnhlib.config.Config;
+import com.gtnewhorizon.gtnhlib.config.ConfigException;
 import com.gtnewhorizon.gtnhlib.config.ConfigurationManager;
+import com.gtnewhorizon.gtnhlib.util.data.BlockMeta;
 
-import cpw.mods.fml.client.event.ConfigChangedEvent;
-import cpw.mods.fml.common.event.FMLServerStartingEvent;
-import cpw.mods.fml.common.eventhandler.SubscribeEvent;
+import cpw.mods.fml.common.registry.GameRegistry;
 
 @ParametersAreNonnullByDefault
 @Config(modid = CubicChunks.MODID, category = "general")
 public class CubicChunksConfig {
 
-    @Config.Comment("Chunk garbage collector update interval. Lower value will increase CPU usage, but can reduce memory usage.")
-    @Config.LangKey("cubicchunks.config.chunk_gc_interval")
-    public static int chunkGCInterval = 20 * 10;
+    @Config.Ignore
+    public static Map<Integer, FillerInfo> configuredDimensionalFillerMap = new HashMap<>();
 
-    @Config.LangKey("cubicchunks.config.force_cc")
-    @Config.Comment("""
-        Determines when a cubic chunks world should be created for non-cubic-chunks world types.
-        DEFAULT - only when cubic chunks world type
-        LOAD_NOT_EXCLUDED - load all worlds as cubic chunks, except excluded dimensions
-        ALWAYS - load everything as cubic chunks. Overrides forceDimensionExcludes""")
-    public static ForceCCMode forceLoadCubicChunks = ForceCCMode.DEFAULT;
+    @Config.LangKey("cubicchunks.config.filler_blocks")
+    @Config.Comment("Determines the filler block for dimensions. Default will attempt to be auto generated based on bottom layer blocks.\n"
+        + "Specifications are done as follows: 'dimensionId:direction:resourceLocation:meta'.\n"
+        + "Valid directions are 'top', 'bottom', and 'both' "
+        + "Meta is defaulted to 0.\n"
+        + "Example:\n"
+        + "     S:defaultFillerBlocks <\n"
+        + "         0:bottom:minecraft:stone:3,\n"
+        + "         0:top:minecraft:air,\n"
+        + "         -1:both:minecraft:netherrack\n"
+        + "     >\n"
+        + "Spaces and tabs are not necessary. NEI is a good tool for this if you don't know the meta and resource location of blocks. (f3 + H)\n"
+        + "It's highly recommend to define these, as block are chosen before population is done on chunks, meaning that if bottom layers are normally\n"
+        + "populated to some block it might be missed.")
+    public static String[] default_filler_blocks = { "0:bottom:minecraft:stone", "0:top:minecraft:air",
+        "-1:both:minecraft:netherrack", "1:both:minecraft:air" };
 
-    @Config.LangKey("cubicchunks.config.cubegen_per_tick")
-    @Config.Comment("The maximum number of cubic chunks to generate per tick.")
-    public static int maxGeneratedCubesPerTick = 49 * 16;
+    @Config.Ignore
+    public static Map<Integer, HeightInfo> configuredDimensionalHeightMap = new HashMap<>();
 
-    @Config.LangKey("cubicchunks.config.max_cube_generation_time_millis")
-    @Config.Comment("Maximum amount of time spent on generating chunks per dimension.")
-    public static int maxCubeGenerationTimeMillis = 50;
-
-    @Config.LangKey("cubicchunks.config.use_vanilla_world_generators")
-    @Config.Comment("Enabling this option will force cubic chunks to use world generators designed for two dimensional chunks, which are often used "
-        + "for custom ore generators added by mods. To do so cubic chunks will pregenerate cubes in a range of height from 0 to 255. This is "
-        + "very likely to break a lot of mods, cause the game to hang, and make the world generation depend on the order in which things are "
-        + "generated. Use at your own risk.")
-    public static boolean useVanillaChunkWorldGenerators = false;
+    @Config.LangKey("cubicchunks.config.dimensional_height_limits")
+    @Config.Comment("Set the height limits for dimensions specifically. Note that this will override the default max and min heights. \n"
+        + "Format is dimensionId:top/bottom:height.\n"
+        + "Note that these heights must be multiples of 16. If not multiples of 16 they will be rounded towards 0 on the nearest multiple of 16.\n"
+        + "Example:\n"
+        + "     S:dimensional_height_overrides <\n"
+        + "         0:bottom:-128, \n"
+        + "         0:top:1024 \n"
+        + "     >\n")
+    public static String[] dimensional_height_overrides = {};
 
     @Config.LangKey("cubicchunks.config.vert_view_distance")
     @Config.Comment("Similar to Minecraft's view distance, only for vertical chunks. Automatically adjusted by vertical view distance slider on the"
@@ -96,25 +84,6 @@ public class CubicChunksConfig {
     @Config.LangKey("cubicchunks.config.enable_chunk_debugging")
     @Config.Comment("Displays coloured boxes over cubes at Y=8 for debugging purposes.")
     public static boolean enableChunkStatusDebugging = false;
-
-    @Config.LangKey("cubicchunks.config.dimension_blacklist")
-    @Config.Comment("The specified dimension ID ranges won't be created as cubic chunks world for new worlds, and worlds created before this option"
-        + " has been added, unless forceDimensionExcludes is set to true. IDs can be specified either as range in format min:max, or as single "
-        + "numbers.\n"
-        + "Example:\n"
-        + "    S:excludedDimensions <\n"
-        + "        1\n"
-        + "        10:100\n"
-        + "        101:200\n"
-        + "        -5\n"
-        + "     >\n"
-        + "The ranges specified can overlap, and the bounds can be specified in reversed order.")
-    public static String[] excludedDimensions = { "1" };
-
-    @Config.LangKey("cubicchunks.config.force_dimension_blacklist")
-    @Config.Comment("If this is set to true, cubic chunks will respect excluded dimensions even for already existing worlds. If this results in a "
-        + "existing dimension switching between cubic chunks and vanilla, the contents of that dimension won't be converted.")
-    public static boolean forceDimensionExcludes = false;
 
     @Config.LangKey("cubicchunks.config.relight_checks_per_tick_per_column")
     @Config.Comment("In an attempt to fix lighting glitches over time, cubic chunks will keep updating light in specified amount of blocks per "
@@ -126,18 +95,6 @@ public class CubicChunksConfig {
     @Config.Comment("By default cubic chunks will attempt to go over all the blocks over time to fix lighting only on server. Enable this to also "
         + "fix lighting on the clientside.")
     public static boolean doClientLightFixes = false;
-
-    @Config.LangKey("cubicchunks.config.biome_temperature_center_y")
-    @Config.Comment("Heights below this value will have normal, unmodified biome temperature")
-    public static int biomeTemperatureCenterY = 64;
-
-    @Config.LangKey("cubicchunks.config.biome_temperature_y_factor")
-    @Config.Comment("How much should biome temperature increase with height (negative values decrease temperature)")
-    public static float biomeTemperatureHeightFactor = -0.05F / 30.0F;
-
-    @Config.LangKey("cubicchunks.config.biome_temperature_scale_max_y")
-    @Config.Comment("Above this height, biome temperature will no longer change")
-    public static int biomeTemperatureScaleMaxY = 256;
 
     @Config.LangKey("cubicchunks.config.storage_format")
     @Config.Comment("The storage format. Note: this will be used for all newly created worlds. Existing worlds will continue to use the format they were created with.\n"
@@ -175,51 +132,19 @@ public class CubicChunksConfig {
         + "crash.")
     public static int worldgenWatchdogTimeLimit = 10000;
 
-    @Config.LangKey("cubicchunks.config.allow_vanilla_clients")
-    @Config.Comment("Allows clients without cubic chunks to join. " + "THIS IS INTENDED FOR VANILLA CLIENTS. "
-        + "This is VERY likely to break when used with other mods")
-    public static boolean allowVanillaClients = false;
-
-    @Config.LangKey("cubicchunks.config.cubes_to_send_per_tick")
-    @Config.Comment("Max amount of cubes sent to client per tick to players")
-    public static int cubesToSendPerTick = 81 * 8 + 1;
-
-    @Config.LangKey("cubicchunks.config.vanilla_clients")
-    @Config.Comment("Options relating to support for vanilla clients.")
-    public static VanillaClients vanillaClients = new VanillaClients();
-
     @Config.LangKey("cubicchunks.config.use_shadow_paging_io")
     @Config.Comment("Whether cubic chunks save format IO should use shadow paging. This may be slightly slower and use "
         + "a bit more storage but should significantly improve reliability in case of improper shutdown.")
     @Config.RequiresWorldRestart
     public static boolean useShadowPagingIO = true;
 
-    @Config.LangKey("cubicchunks.config.ignore_corrupted_chunks")
-    @Config.Comment("Ignores and regenerates corrupted chunks instead of crashing the server")
-    public static boolean ignoreCorruptedChunks = false;
-
     @Config.LangKey("cubicchunks.config.disable_lighting")
     @Config.Comment("Disables all light propagation")
     public static boolean disableLighting = false;
 
-    public static final class VanillaClients {
-
-        @Config.LangKey("cubicchunks.config.vanilla_clients.horizontal_slices")
-        @Config.Comment("Enables horizontal slices for vanilla clients. "
-            + "This will cause coordinates to wrap around on the X and Z axes in the same way as on Y.")
-        public boolean horizontalSlices = true;
-
-        @Config.LangKey("cubicchunks.config.vanilla_clients.horizontal_slices_bedrock_only")
-        @Config.Comment("If horizontal slices is enabled, restricts horizontal slices to Bedrock edition clients.\n"
-            + "Note that Bedrock clients are not supported directly, but only when connecting through a proxy such as Geyser.")
-        public boolean horizontalSlicesBedrockOnly = true;
-        @Config.LangKey("cubicchunks.config.vanilla_clients.horizontal_slice_size")
-        @Config.Comment("The size (radius) of a horizontal slice.")
-        public int horizontalSliceSize = 65536;
-    }
-
     @Config.Ignore
     public static int defaultMaxCubesPerChunkloadingTicket = 25 * 16;
+
     @Config.Ignore
     public static Map<String, Integer> modMaxCubesPerChunkloadingTicket = new HashMap<>();
 
@@ -239,30 +164,13 @@ public class CubicChunksConfig {
     static {
         modMaxCubesPerChunkloadingTicket.put("cubicchunks", defaultMaxCubesPerChunkloadingTicket);
     }
-    @Config.Ignore
-    private static TreeRangeSet<Integer> excludedDimensionsRanges = null;
 
-    // TODO: Watch this carefully.
-    public static void sync() {
-        ConfigurationManager.save(CubicChunksConfig.class);
-        initDimensionRanges();
+    public static void init() throws ConfigException {
         validateConfigValues();
-        ConfigurationManager.save(CubicChunksConfig.class);
+        initDimensionalConfiguration();
     }
 
     private static void validateConfigValues() {
-        // if (!VanillaCompatibilityGeneratorProviderBase.REGISTRY.containsKey(new
-        // ResourceLocation(compatibilityGeneratorType))) {
-        // CubicChunks.LOGGER.error("CubicChunksConfig: Compatibility generator type {} doesn't exist, resetting config
-        // to default", compatibilityGeneratorType);
-        // compatibilityGeneratorType = VanillaCompatibilityGeneratorProviderBase.DEFAULT.toString();
-        // }
-        // if (!storageFormat.isEmpty() && !StorageFormatProviderBase.REGISTRY.containsKey(new
-        // ResourceLocation(storageFormat))) {
-        // CubicChunks.LOGGER.error("CubicChunksConfig: Storage format {} doesn't exist, resetting config to default",
-        // storageFormat);
-        // storageFormat = "";
-        // }
         if ((defaultMinHeight & 0xF) != 0) {
             CubicChunks.LOGGER.error(
                 "CubicChunksConfig: defaultMinHeight not a multiple of 16, got {}, setting to {}",
@@ -279,393 +187,101 @@ public class CubicChunksConfig {
         }
     }
 
-    private static void initDimensionRanges() {
-        if (excludedDimensionsRanges == null) {
-            excludedDimensionsRanges = TreeRangeSet.create();
-        }
-        excludedDimensionsRanges.clear();
-
-        final Predicate<String> NUMBER_PATTERN = Pattern.compile("^-?\\d+$")
-            .asPredicate();
-        final Predicate<String> NUMBER_RANGE_PATTERN = Pattern.compile("^-?\\d+:-?\\d+$")
-            .asPredicate();
-
-        for (String str : excludedDimensions) {
-            try {
-                parseRange(NUMBER_PATTERN, NUMBER_RANGE_PATTERN, str);
-            } catch (NumberFormatException ex) {
-                CubicChunks.LOGGER
-                    .error("Error parsing excluded dimension ranges: " + str + " is not a valid range, ignoring");
+    private static void initDimensionalConfiguration() throws ConfigException {
+        // Height Limit Configs
+        int i = 1;
+        for (String config : dimensional_height_overrides) {
+            String[] entries = config.split(":");
+            if (entries.length != 3) {
+                throw new ConfigException("Dimensional Height Overrides configuration is malformed for entry: " + i);
             }
-        }
-        Set<Range<Integer>> ranges = excludedDimensionsRanges.asRanges();
-        excludedDimensions = new String[ranges.size()];
-        int i = 0;
-        for (Range<Integer> range : ranges) {
-            int min = range.lowerBoundType() == BoundType.CLOSED ? range.lowerEndpoint() : range.lowerEndpoint() + 1;
-            int max = range.upperBoundType() == BoundType.CLOSED ? range.upperEndpoint() : range.upperEndpoint() - 1;
-            excludedDimensions[i] = min == max ? String.valueOf(min) : (min + ":" + max);
+
+            try {
+                int dimension = Integer.parseInt(entries[0]);
+                int height = Integer.parseInt(entries[2]);
+                if ((height & 0xF) != 0) {
+                    CubicChunks.LOGGER.error(
+                        "CubicChunksConfig: dimensional height configured to a non multiple of 16, got {}, setting to {}",
+                        height,
+                        height & ~0xF);
+                    height &= ~0xF;
+                }
+
+                HeightInfo info = configuredDimensionalHeightMap.getOrDefault(dimension, new HeightInfo());
+
+                String direction = entries[1];
+                if (direction.equals("bottom")) {
+                    info.minHeight = height;
+                    if (info.maxHeight == null) {
+                        info.maxHeight = defaultMaxHeight;
+                    }
+                } else if (direction.equals("top")) {
+                    info.maxHeight = height;
+                    if (info.minHeight == null) {
+                        info.minHeight = defaultMinHeight;
+                    }
+                } else {
+                    throw new ConfigException(
+                        "Directional argument for height limits is invalid for entry: " + i
+                            + ". Invalid:"
+                            + direction
+                            + " Valid directions bottom and top.");
+                }
+
+                configuredDimensionalHeightMap.put(dimension, info);
+            } catch (NumberFormatException e) {
+                throw new ConfigException("Dimensional Height Overrides configuration is malformed for entry: " + i);
+            }
             i++;
         }
-    }
 
-    private static void parseRange(Predicate<String> NUMBER_PATTERN, Predicate<String> NUMBER_RANGE_PATTERN,
-        String str) {
-        // add ranges as open where possible to allow merging
-        if (NUMBER_PATTERN.test(str)) {
-            int value = Integer.parseInt(str);
-            if (value == Integer.MIN_VALUE || value == Integer.MAX_VALUE) {
-                excludedDimensionsRanges.add(Range.singleton(value));
-            } else {
-                excludedDimensionsRanges.add(Range.open(value - 1, value + 1));
+        i = 1;
+        // Filler Configs
+        for (String config : default_filler_blocks) {
+            String[] entries = config.split(":");
+            if (entries.length != 4 && entries.length != 5) {
+                throw new ConfigException("Dimensional Filler block configuration is malformed for entry: " + i);
             }
-        } else if (NUMBER_RANGE_PATTERN.test(str)) {
-            String[] parts = str.split(":");
-            int lower = Integer.parseInt(parts[0]);
-            int upper = Integer.parseInt(parts[1]);
-            if (lower == upper) {
-                if (lower == Integer.MIN_VALUE || lower == Integer.MAX_VALUE) {
-                    excludedDimensionsRanges.add(Range.singleton(lower));
-                } else {
-                    excludedDimensionsRanges.add(Range.open(lower - 1, lower + 2));
+            try {
+                int dimension = Integer.parseInt(entries[0]);
+                Block fillerBlock = GameRegistry.findBlock(entries[2], entries[3]);
+                if (fillerBlock == null) {
+                    throw new ConfigException(
+                        "Dimensional Height Overrides configuration is malformed for entry: " + i
+                            + ". Block not found for resource location "
+                            + entries[2]
+                            + ":"
+                            + entries[3]);
                 }
-            } else {
-                if (lower == Integer.MIN_VALUE && upper == Integer.MAX_VALUE) {
-                    excludedDimensionsRanges.add(Range.closed(lower, upper));
-                } else if (lower == Integer.MIN_VALUE) {
-                    excludedDimensionsRanges.add(Range.closedOpen(lower, upper + 1));
-                } else if (upper == Integer.MAX_VALUE) {
-                    excludedDimensionsRanges.add(Range.openClosed(lower - 1, upper));
+                int meta = entries.length == 4 ? 0 : Integer.parseInt(entries[4]);
+
+                FillerInfo info = configuredDimensionalFillerMap.getOrDefault(dimension, new FillerInfo());
+
+                String direction = entries[1];
+                if (direction.equals("bottom")) {
+                    info.bottomFiller = new BlockMeta(fillerBlock, meta);
+                } else if (direction.equals("top")) {
+                    info.topFiller = new BlockMeta(fillerBlock, meta);
+                } else if (direction.equals("both")) {
+                    info.bottomFiller = new BlockMeta(fillerBlock, meta);
+                    info.topFiller = new BlockMeta(fillerBlock, meta);
                 } else {
-                    excludedDimensionsRanges.add(Range.open(lower - 1, upper + 1));
+                    throw new ConfigException(
+                        "Directional argument for filler blocks is invalid for entry: " + i
+                            + ". Invalid:"
+                            + direction
+                            + " Valid directions are both, bottom, and top.");
                 }
+
+                configuredDimensionalFillerMap.put(dimension, info);
+            } catch (NumberFormatException e) {
+                throw new ConfigException("Dimensional filler default configuration is malformed for entry: " + i);
             }
-        } else {
-            CubicChunks.LOGGER
-                .error("Error parsing excluded dimension ranges: " + str + " is not a valid range, ignoring");
         }
-    }
-
-    @SubscribeEvent
-    public static void onConfigChanged(ConfigChangedEvent.OnConfigChangedEvent event) {
-        if (event.modID.equals(CubicChunks.MODID)) {
-            sync();
-        }
-    }
-
-    @SubscribeEvent
-    public static void registerCommands(FMLServerStartingEvent evt) {
-        evt.registerServerCommand(new BaseCubicChunksCommand());
     }
 
     public static void setVerticalViewDistance(int value) {
         verticalCubeLoadDistance = value;
-        sync();
-    }
-
-    public static boolean isDimensionExcluded(int dimension) {
-        if (excludedDimensionsRanges == null) {
-            initDimensionRanges();
-        }
-        return excludedDimensionsRanges.contains(dimension);
-    }
-
-    public enum ForceCCMode {
-        /// only when cubic chunks world type
-        DEFAULT,
-        /// load all worlds as cubic chunks, except excluded dimensions
-        LOAD_NOT_EXCLUDED,
-        /// load everything as cubic chunks. Overrides forceDimensionExcludes
-        ALWAYS
-    }
-
-    static class BaseCubicChunksCommand extends SubCommandBase {
-
-        public BaseCubicChunksCommand() {
-            super(CubicCommandBase.PermissionLevel.OP);
-            addSubcommand(new ConfigCommand(CubicCommandBase.PermissionLevel.OP));
-        }
-
-        @Override
-        public String getCommandName() {
-            return "cubicchunks";
-        }
-
-        @Override
-        public String getCommandUsage(ICommandSender sender) {
-            return "cubicchunks.command.usage.cubicchunks";
-        }
-
-    }
-
-    static class ConfigCommand extends SubCommandBase {
-
-        public ConfigCommand(PermissionLevel permissionLevel) {
-            super(permissionLevel);
-            addSubcommand(new ReloadConfig(permissionLevel));
-            addSubcommand(new SetConfigBase(permissionLevel));
-        }
-
-        @Override
-        public String getCommandName() {
-            return "config";
-        }
-
-        @Override
-        public String getCommandUsage(ICommandSender sender) {
-            return "cubicchunks.command.usage.config";
-        }
-    }
-
-    static class SetConfigBase extends SubCommandBase {
-
-        public SetConfigBase(CubicCommandBase.PermissionLevel permissionLevelRequired) {
-            super(permissionLevelRequired);
-            Field[] fields = CubicChunksConfig.class.getFields();
-            try {
-                registerConfigCommandsFor(null, fields, "");
-            } catch (ReflectiveOperationException e) {
-                throw new IllegalStateException(e);
-            }
-        }
-
-        private void registerConfigCommandsFor(@Nullable Object object, Field[] fields, String prefix)
-            throws ReflectiveOperationException {
-            for (Field field : fields) {
-                if (field.getAnnotationsByType(Config.Ignore.class).length != 0) {
-                    continue;
-                }
-                boolean requiresWorldRestart = field.getAnnotationsByType(Config.RequiresWorldRestart.class).length
-                    != 0;
-                String name = prefix + field.getName();
-                Class<?> type = field.getType();
-                boolean isSimpleType = type.isPrimitive() || type == String.class;
-                boolean isCollection = type.isArray() || Map.class.isAssignableFrom(type)
-                    || List.class.isAssignableFrom(type);
-                boolean isEnum = type.isEnum();
-                if (!isSimpleType && !isCollection && !isEnum) {
-                    registerConfigCommandsFor(field.get(object), type.getFields(), name + ".");
-                    continue;
-                }
-                addSubcommand(
-                    new SetConfig(name, object, field, requiresWorldRestart, this.getRequiredPermissionEnum()));
-            }
-        }
-
-        @Override
-        public String getCommandName() {
-            return "set";
-        }
-
-        @Override
-        public String getCommandUsage(ICommandSender sender) {
-            return "cubicchunks.command.usage.config.set";
-        }
-    }
-
-    static class SetConfig extends CubicCommandBase {
-
-        private static final Set<String> TRUE_STRINGS = new HashSet<>(
-            Arrays.asList("true", "1", "yes", "on", "enable", "enabled"));
-        private static final Set<String> FALSE_STRINGS = new HashSet<>(
-            Arrays.asList("false", "0", "no", "off", "disable", "disabled"));
-
-        private final String name;
-        private final Object object;
-        private final Field field;
-        private final boolean requiresWorldRestart;
-
-        public SetConfig(String name, @Nullable Object object, Field field, boolean requiresWorldRestart,
-            PermissionLevel permissionLevel) {
-            super(permissionLevel);
-            this.name = name;
-            this.object = object;
-            this.field = field;
-            this.requiresWorldRestart = requiresWorldRestart;
-        }
-
-        @Override
-        public String getCommandName() {
-            return name;
-        }
-
-        @SuppressWarnings("deprecation")
-        @Override
-        public String getCommandUsage(ICommandSender sender) {
-            return I18n.format("cubicchunks.command.usage.config.set_option", name); // TODO?
-            // if (FMLCommonHandler.instance().getSide() == Side.CLIENT) {
-            //
-            // } else {
-            // //we have to use this on the dedicated server, as the client I18n class isn't available there...
-            // // unfortunately this could result in a client being sent a string in a language other than their
-            // configured locale, but i don't
-            // // see any alternative other than adding separate translation keys for every single config option
-            // return
-            // net.minecraft.util.text.translation.I18n.translateToLocalFormatted("cubicchunks.command.usage.config.set_option",
-            // name);
-            // }
-        }
-
-        @Override
-        public void processCommand(ICommandSender sender, String[] args) throws CommandException {
-            Object newValue = parseConfigValue(args, sender);
-            try {
-                field.set(object, newValue);
-                CubicChunksConfig.sync();
-                sender.addChatMessage(
-                    new ChatComponentTranslation(
-                        "cubicchunks.command.config.set.done",
-                        name,
-                        stringify(field.get(object))));
-                if (requiresWorldRestart) {
-                    sender.addChatMessage(
-                        new ChatComponentTranslation("cubicchunks.command.config.set.requires_restart", name));
-                }
-            } catch (ReflectiveOperationException e) {
-                throw new CommandException("cubicchunks.command.config.set.failed", name);
-            }
-        }
-
-        private String stringify(@Nullable Object o) {
-            if (o == null) {
-                return "null";
-            }
-            if (o.getClass()
-                .isPrimitive()
-                || o.getClass()
-                    .isEnum()
-                || o instanceof String
-                || o instanceof Collection) {
-                return o.toString();
-            }
-            if (o instanceof int[]) {
-                return Arrays.toString((int[]) o);
-            }
-            if (o instanceof String[]) {
-                return Arrays.deepToString((Object[]) o);
-            }
-            throw new IllegalArgumentException(o.toString());
-        }
-
-        private Object parseConfigValue(String[] args, ICommandSender sender) throws CommandException {
-            Class<?> type = field.getType();
-            if (type == String.class) {
-                return String.join(" ", args);
-            }
-            if ((type.isPrimitive() || type.isEnum()) && args.length != 1) {
-                throw new WrongUsageException(
-                    "cubicchunks.command.usage.config.set.primitive",
-                    name,
-                    type.getSimpleName());
-            }
-            Object o = tryParseSimpleType(type, args[0], sender);
-            if (o != null) {
-                return o;
-            }
-            if (type == int[].class) {
-                int[] value = new int[args.length];
-                for (int i = 0; i < args.length; i++) {
-                    value[i] = parseInt(sender, args[i]);
-                }
-                return value;
-            }
-            if (type == String[].class) {
-                return args;
-            }
-            if (type == Map.class) {
-                Type genericType = field.getGenericType();
-                if (!(genericType instanceof ParameterizedType)) {
-                    throw new IllegalStateException(
-                        "Field " + field.getDeclaringClass()
-                            + "."
-                            + field.getName()
-                            + " appears to be a raw type Map!");
-                }
-                Type[] actualTypeArguments = ((ParameterizedType) genericType).getActualTypeArguments();
-                Type key = actualTypeArguments[0];
-                if (!(key instanceof Class)) {
-                    throw new IllegalStateException(
-                        "Field " + field.getDeclaringClass()
-                            + "."
-                            + field.getName()
-                            + " key generic type is not a class!");
-                }
-                Type value = actualTypeArguments[1];
-                if (!(value instanceof Class)) {
-                    throw new IllegalStateException(
-                        "Field " + field.getDeclaringClass()
-                            + "."
-                            + field.getName()
-                            + " key generic type is not a class!");
-                }
-                Map<Object, Object> map = new HashMap<>();
-                for (String arg : args) {
-                    String[] split = arg.split("=");
-                    Object k = tryParseSimpleType((Class<?>) key, split[0], sender);
-                    Object v = tryParseSimpleType((Class<?>) value, split[1], sender);
-                    map.put(k, v);
-                }
-                return map;
-            }
-            throw new IllegalStateException("Unsupported field type " + field);
-        }
-
-        @SuppressWarnings({ "rawtypes", "unchecked" })
-        @Nullable
-        private Object tryParseSimpleType(Class<?> type, String value, ICommandSender sender) throws CommandException {
-            if (type == String.class) {
-                return value;
-            }
-            if (type == int.class) {
-                return parseInt(sender, value);
-            }
-            if (type == boolean.class) {
-                return parseBool(value);
-            }
-            if (type == float.class) {
-                return (float) parseDouble(sender, value);
-            }
-            if (type == double.class) {
-                return parseDouble(sender, value);
-            }
-            if (type.isEnum()) {
-                return Enum.valueOf((Class) type, value);
-            }
-            return null;
-        }
-
-        private boolean parseBool(String value) throws CommandException {
-            value = value.toLowerCase(Locale.ROOT);
-            if (TRUE_STRINGS.contains(value)) {
-                return true;
-            }
-            if (FALSE_STRINGS.contains(value)) {
-                return false;
-            }
-            throw new CommandException("commands.generic.boolean.invalid", value);
-        }
-    }
-
-    static class ReloadConfig extends CubicCommandBase {
-
-        public ReloadConfig(PermissionLevel permissionLevelRequired) {
-            super(permissionLevelRequired);
-        }
-
-        @Override
-        public String getCommandName() {
-            return "reload";
-        }
-
-        @Override
-        public String getCommandUsage(ICommandSender sender) {
-            return "cubicchunks.command.usage.config.reload";
-        }
-
-        @Override
-        public void processCommand(ICommandSender sender, String[] args) throws CommandException {
-            CubicChunksConfig.sync();
-            sender.addChatMessage(new ChatComponentTranslation("cubicchunks.command.config.reload.done"));
-        }
+        ConfigurationManager.save(CubicChunksConfig.class);
     }
 }

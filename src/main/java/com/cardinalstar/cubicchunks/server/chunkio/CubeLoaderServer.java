@@ -6,6 +6,8 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
+import javax.annotation.Nonnull;
+
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.world.ChunkCoordIntPair;
 import net.minecraft.world.WorldServer;
@@ -29,9 +31,12 @@ import com.cardinalstar.cubicchunks.server.CubicPlayerManager;
 import com.cardinalstar.cubicchunks.util.Array3D;
 import com.cardinalstar.cubicchunks.util.CubePos;
 import com.cardinalstar.cubicchunks.util.XZAddressable;
+import com.cardinalstar.cubicchunks.world.CubicChunksSavedData;
 import com.cardinalstar.cubicchunks.world.api.ICubeProviderServer.Requirement;
+import com.cardinalstar.cubicchunks.world.column.EmptyColumn;
 import com.cardinalstar.cubicchunks.world.core.IColumnInternal;
 import com.cardinalstar.cubicchunks.world.cube.BlankCube;
+import com.cardinalstar.cubicchunks.world.cube.BoundaryCube;
 import com.cardinalstar.cubicchunks.world.cube.Cube;
 
 import it.unimi.dsi.fastutil.Pair;
@@ -59,12 +64,28 @@ public class CubeLoaderServer implements ICubeLoader {
     @Setter
     private long now;
 
+    private final int maxCube;
+    private final int minCube;
+
+    @Nonnull
+    private final EmptyColumn emptyColumn;
+    @Nonnull
+    private final BlankCube emptyCube;
+
     public CubeLoaderServer(WorldServer world, ICubicStorage storage, IWorldGenerator generator,
         CubeLoaderCallback callback) {
         this.world = world;
         this.cubeIO = new CubeIO(storage, generator instanceof IPreloadFailureDelegate delegate ? delegate : null);
         this.generator = generator;
         this.callback = callback;
+
+        CubicChunksSavedData data = CubicChunksSavedData.get(world);
+
+        this.minCube = data.minHeight >> 4;
+        this.maxCube = (data.maxHeight - 1) >> 4;
+
+        this.emptyColumn = new EmptyColumn(world, 0, 0);
+        this.emptyCube = new BlankCube(emptyColumn);
     }
 
     @Override
@@ -489,7 +510,8 @@ public class CubeLoaderServer implements ICubeLoader {
         None,
         Disk,
         Generated,
-        GeneratedSideEffect
+        GeneratedSideEffect,
+        Boundary
     }
 
     private class ColumnInfo implements XZAddressable {
@@ -653,6 +675,11 @@ public class CubeLoaderServer implements ICubeLoader {
         }
 
         public boolean initialize(Requirement effort) throws IOException {
+            if (pos.getY() < minCube || pos.getY() > maxCube) {
+                loadBoundaryCube();
+                return true;
+            }
+
             if (effort == Requirement.GET_CACHED) {
                 return cube != null;
             }
@@ -679,6 +706,25 @@ public class CubeLoaderServer implements ICubeLoader {
             // We may have loaded a cube, but it wasn't to the required initialization level
             // Do some more work on it, to whatever level is required
             return generate(requestedInitLevel);
+        }
+
+        private void loadBoundaryCube() {
+            ensureColumn(Requirement.LOAD);
+
+            if (this.column == null) {
+                CubicChunks.LOGGER.error(
+                    "Tried to load a cube that did not have a saved column: it will be regenerated ({},{},{})",
+                    getX(),
+                    getY(),
+                    getZ(),
+                    new Exception());
+                this.cube = null;
+                this.tag = null;
+                return;
+            }
+
+            this.cube = new BoundaryCube(this.column.column, this.getY());
+            onCubeLoaded();
         }
 
         private boolean loadNBT() {

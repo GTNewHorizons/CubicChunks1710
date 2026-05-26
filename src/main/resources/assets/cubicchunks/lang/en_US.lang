@@ -31,3 +31,9 @@ cubicchunks.config.optimizations=Optimizations
 cubicchunks.config.optimizations.background_threads=Background Threads
 
 generator.VanillaCubic=Vanilla + Cubic
+
+#################################
+###          misc             ###
+#################################
+
+cubicchunks.build.too.low=Minimum building depth reached

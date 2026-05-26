@@ -101,8 +101,8 @@ public class CubicPlayerManager extends PlayerManager implements CubeLoaderCallb
             ((ICubicPlayerList) worldServer.func_73046_m()
                 .getConfigurationManager()).getVerticalViewDistance());
 
-        provider = ((Server) worldServer).getCubeCache();
-        provider.registerCallback(this);
+        this.provider = ((Server) worldServer).getCubeCache();
+        this.provider.registerCallback(this);
     }
 
     /**
