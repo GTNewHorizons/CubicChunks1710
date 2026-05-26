@@ -71,14 +71,18 @@ public class ColumnTileEntityMap implements Map<ChunkPosition, TileEntity> {
 
     @Override
     public boolean containsKey(Object o) {
-        if (!(o instanceof ChunkPosition)) {
+        if (!(o instanceof ChunkPosition pos)) {
             return false;
         }
-        ChunkPosition pos = (ChunkPosition) o;
+
         int y = Coords.blockToCube(pos.chunkPosY);
-        ICube cube = column.getCube(y); // see comment in get() for why getCube instead of getLoadedCube is used
-        return cube.getTileEntityMap()
-            .containsKey(o);
+
+        // Use getLoadedCube to avoid loading or generating cubes.
+        // You almost never want to load chunks with this method, and you definitely never want to generate chunks with
+        // this method.
+        ICube cube = column.getLoadedCube(y);
+
+        return cube != null && cube.getTileEntityMap().containsKey(o);
     }
 
     @Override
@@ -96,10 +100,10 @@ public class ColumnTileEntityMap implements Map<ChunkPosition, TileEntity> {
     @Nullable
     @Override
     public TileEntity get(Object o) {
-        if (!(o instanceof ChunkPosition)) {
+        if (!(o instanceof ChunkPosition pos)) {
             return null;
         }
-        ChunkPosition pos = (ChunkPosition) o;
+
         int y = Coords.blockToCube(pos.chunkPosY);
 
         // Use getLoadedCube to avoid loading or generating cubes.
@@ -123,15 +127,20 @@ public class ColumnTileEntityMap implements Map<ChunkPosition, TileEntity> {
     @Nullable
     @Override
     public TileEntity remove(Object o) {
-        if (!(o instanceof ChunkPosition)) {
+        if (!(o instanceof ChunkPosition pos)) {
             return null;
         }
-        ChunkPosition pos = (ChunkPosition) o;
+
         int y = Coords.blockToCube(pos.chunkPosY);
+
+        // Use getLoadedCube to avoid loading or generating cubes.
+        // You almost never want to load chunks with this method, and you definitely never want to generate chunks with
+        // this method.
         ICube cube = column.getLoadedCube(y);
+
         return cube == null ? null
             : cube.getTileEntityMap()
-                .remove(pos);
+                .remove(o);
     }
 
     @Override
