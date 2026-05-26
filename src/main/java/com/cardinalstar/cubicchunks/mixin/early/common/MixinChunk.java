@@ -221,38 +221,6 @@ public abstract class MixinChunk implements IColumn, IColumnInternal {
         }
     }
 
-    // this method can't be saved by just redirecting EBS access
-    @Inject(method = "getTopFilledSegment", at = @At(value = "HEAD"), cancellable = true)
-    private void getTopFilledSegment_CubicChunks(CallbackInfoReturnable<Integer> cbi) {
-        if (!isColumn) {
-            return;
-        }
-        int blockY = Coords.NO_HEIGHT;
-        for (int localX = 0; localX < Cube.SIZE; localX++) {
-            for (int localZ = 0; localZ < Cube.SIZE; localZ++) {
-                int y = this.opacityIndex.getTopBlockY(localX, localZ);
-                if (y > blockY) {
-                    blockY = y;
-                }
-            }
-        }
-        if (blockY < getWorldObj().getMinHeight()) {
-            // PANIC!
-            // this column doesn't have any blocks in it that aren't air!
-            // but we can't return null here because vanilla code expects there to be a surface down there somewhere
-            // we don't actually know where the surface is yet, because maybe it hasn't been generated
-            // but we do know that the surface has to be at least at sea level,
-            // so let's go with that for now and hope for the best
-
-            int ret = Coords.cubeToMinBlock(blockToCube(this.getWorldObj().provider.getAverageGroundLevel()));
-            cbi.setReturnValue(ret);
-            return;
-        }
-        int ret = Coords.cubeToMinBlock(blockToCube(blockY)); // return the lowest block in the Cube (kinda weird I
-                                                              // know)
-        cbi.setReturnValue(ret);
-    }
-
     /*
      * Light update code called from this:
      * if (addedNewCube) {
