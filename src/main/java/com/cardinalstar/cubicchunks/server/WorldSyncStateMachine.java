@@ -4,7 +4,6 @@ import java.util.Iterator;
 
 import net.minecraft.world.ChunkCoordIntPair;
 import net.minecraft.world.chunk.Chunk;
-
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.world.ChunkWatchEvent;
 
@@ -26,6 +25,7 @@ import com.cardinalstar.cubicchunks.util.BooleanArray2D;
 import com.cardinalstar.cubicchunks.util.ChunkMap;
 import com.cardinalstar.cubicchunks.util.CubePos;
 import com.cardinalstar.cubicchunks.world.cube.Cube;
+
 import it.unimi.dsi.fastutil.shorts.ShortOpenHashSet;
 
 public class WorldSyncStateMachine {
@@ -81,8 +81,8 @@ public class WorldSyncStateMachine {
                     PacketEncoderUnloadColumn.createPacket(pos.getX(), pos.getZ())
                         .sendToPlayer(player.player);
 
-                    MinecraftForge.EVENT_BUS.post(new ChunkWatchEvent.UnWatch(
-                        new ChunkCoordIntPair(pos.getX(), pos.getZ()), player.player));
+                    MinecraftForge.EVENT_BUS.post(
+                        new ChunkWatchEvent.UnWatch(new ChunkCoordIntPair(pos.getX(), pos.getZ()), player.player));
                 }
             } else if (cube != null && cube.isInitializedToLevel(CubeInitLevel.Lit) && !wasCubeSynced) {
                 if (player.isWatchingCube(pos.getX(), pos.getY(), pos.getZ())) {
@@ -96,8 +96,10 @@ public class WorldSyncStateMachine {
                             PacketEncoderColumn.createPacket(cube.getColumn())
                                 .sendToPlayer(player.player);
 
-                            MinecraftForge.EVENT_BUS.post(new ChunkWatchEvent.Watch(
-                                new ChunkCoordIntPair(pos.getX(), pos.getZ()), player.player));
+                            MinecraftForge.EVENT_BUS.post(
+                                new ChunkWatchEvent.Watch(
+                                    new ChunkCoordIntPair(pos.getX(), pos.getZ()),
+                                    player.player));
                         }
                     }
 

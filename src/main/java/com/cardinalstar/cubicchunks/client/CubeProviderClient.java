@@ -32,7 +32,6 @@ import net.minecraft.client.multiplayer.ChunkProviderClient;
 import net.minecraft.world.ChunkCoordIntPair;
 import net.minecraft.world.World;
 import net.minecraft.world.chunk.Chunk;
-
 import net.minecraftforge.event.world.ChunkEvent;
 
 import com.cardinalstar.cubicchunks.api.IColumn;

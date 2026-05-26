@@ -82,7 +82,8 @@ public class ColumnTileEntityMap implements Map<ChunkPosition, TileEntity> {
         // this method.
         ICube cube = column.getLoadedCube(y);
 
-        return cube != null && cube.getTileEntityMap().containsKey(o);
+        return cube != null && cube.getTileEntityMap()
+            .containsKey(o);
     }
 
     @Override

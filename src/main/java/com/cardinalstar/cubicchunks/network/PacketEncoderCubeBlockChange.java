@@ -44,6 +44,7 @@ import com.cardinalstar.cubicchunks.world.cube.BlankCube;
 import com.cardinalstar.cubicchunks.world.cube.Cube;
 import com.falsepattern.chunk.internal.DataRegistryImpl;
 import com.github.bsideup.jabel.Desugar;
+
 import cpw.mods.fml.relauncher.Side;
 import cpw.mods.fml.relauncher.SideOnly;
 import gnu.trove.iterator.TIntIterator;
@@ -73,7 +74,7 @@ public class PacketEncoderCubeBlockChange extends CCPacketEncoder<PacketEncoderC
         List<S23PacketBlockChange> updates = new ArrayList<>(localAddresses.size());
         TIntSet xzAddresses = new TIntHashSet();
 
-        var addrIter= localAddresses.iterator();
+        var addrIter = localAddresses.iterator();
 
         while (addrIter.hasNext()) {
             short localAddress = addrIter.nextShort();
