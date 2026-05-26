@@ -447,6 +447,21 @@ public abstract class MixinChunk implements IColumn, IColumnInternal {
     // return cube != null && cube.isCubeLoaded();
     // }
 
+    @Unique
+    private void markDirty(Cube cube) {
+        this.isModified = true;
+        cube.markDirty();
+    }
+
+    @Unique
+    private void markDirty(int cubeY) {
+        this.isModified = true;
+
+        if (isColumn) {
+            this.getCube(cubeY).markDirty();
+        }
+    }
+
     // ==============================================
     // getBlock
     // ==============================================
@@ -513,11 +528,9 @@ public abstract class MixinChunk implements IColumn, IColumnInternal {
             return;
         }
 
-        this.isModified = true;
-        ICube cube = this.getCube(blockToCube(y));
-        cube.markDirty();
+        markDirty(blockToCube(y));
 
-        if (cube.isSurfaceTracked()) {
+        if (getCube(blockToCube(y)).isSurfaceTracked()) {
             opacityIndex.onOpacityChange(blockToLocal(x), y, blockToLocal(z), block.getLightOpacity());
             getWorldObj().getLightingManager()
                 .onHeightUpdate(x + 16 * this.xPosition, y, z + 16 * this.zPosition);
@@ -551,12 +564,7 @@ public abstract class MixinChunk implements IColumn, IColumnInternal {
         at = @At(value = "FIELD", target = "Lnet/minecraft/world/chunk/Chunk;isModified:Z"))
     private void setIsModifiedFromSetBlockWithMeta_Field(Chunk chunk, boolean isModifiedIn, int x, int y, int z,
         Block block, int meta) {
-        if (isColumn) {
-            ICube cube = this.getCube(blockToCube(y));
-            cube.markDirty();
-        } else {
-            isModified = isModifiedIn;
-        }
+        markDirty(blockToCube(y));
     }
 
     // ==============================================
@@ -574,12 +582,11 @@ public abstract class MixinChunk implements IColumn, IColumnInternal {
         if (!isColumn) {
             return;
         }
-        Block block = getEBS_CubicChunks(blockToCube(y))
-            .getBlockByExtId(Coords.blockToLocal(x), Coords.blockToLocal(y), Coords.blockToLocal(z)); // TODO WATCH
 
-        this.isModified = true;
-        ICube cube = this.getCube(blockToCube(y));
-        cube.markDirty();
+        Cube cube = this.getCube(blockToCube(y));
+        markDirty(cube);
+
+        Block block = cube.getBlock(x, y, z);
 
         if (cube.isSurfaceTracked()) {
             opacityIndex.onOpacityChange(blockToLocal(x), y, blockToLocal(z), block.getLightOpacity());
@@ -604,12 +611,7 @@ public abstract class MixinChunk implements IColumn, IColumnInternal {
         at = @At(value = "FIELD", target = "Lnet/minecraft/world/chunk/Chunk;isModified:Z"))
     private void setIsModifiedFromSetBlockMetadata_Field(Chunk chunk, boolean isModifiedIn, int x, int y, int z,
         int meta) {
-        if (isColumn) {
-            ICube cube = this.getCube(blockToCube(y));
-            cube.markDirty();
-        } else {
-            isModified = isModifiedIn;
-        }
+        markDirty(blockToCube(y));
     }
 
     // ==============================================
@@ -627,7 +629,7 @@ public abstract class MixinChunk implements IColumn, IColumnInternal {
                 .onGetLight(type, x, y, z);
         }
 
-        return ((Cube) this.getCube(blockToCube(y))).getCachedLightFor(type, x, y, z);
+        return this.getCube(blockToCube(y)).getCachedLightFor(type, x, y, z);
     }
 
     @Nullable
@@ -657,7 +659,7 @@ public abstract class MixinChunk implements IColumn, IColumnInternal {
     }
 
     // ==============================================
-    // setLightFor
+    // setLightValue
     // ==============================================
 
     @Redirect(
@@ -687,12 +689,7 @@ public abstract class MixinChunk implements IColumn, IColumnInternal {
         at = @At(value = "FIELD", target = "Lnet/minecraft/world/chunk/Chunk;isModified:Z"))
     private void setIsModifiedFromSetLightValue_Field(Chunk chunk, boolean isModifiedIn, EnumSkyBlock type, int x,
         int y, int z, int value) {
-        if (isColumn) {
-            ICube cube = this.getCube(blockToCube(y));
-            cube.markDirty();
-        } else {
-            isModified = isModifiedIn;
-        }
+        markDirty(blockToCube(y));
     }
 
     // ==============================================
@@ -1115,36 +1112,38 @@ public abstract class MixinChunk implements IColumn, IColumnInternal {
     }
 
     @Override
-    public ICube getLoadedCube(int cubeY) {
+    public Cube getLoadedCube(int cubeY) {
         if (cachedCube != null && cachedCube.getY() == cubeY) {
             return cachedCube;
         }
-        return getCubicWorld().getCubeCache()
-            .getLoadedCube(xPosition, cubeY, zPosition);
+
+        return this.cubeMap.get(cubeY);
     }
 
     @Override
-    public ICube getCube(int cubeY) {
-        if (cachedCube != null && cachedCube.getY() == cubeY) {
-            return cachedCube;
-        }
-        return getCubicWorld().getCubeCache()
-            .getCube(xPosition, cubeY, zPosition);
+    public Cube getCube(int cubeY) {
+        Cube loaded = getLoadedCube(cubeY);
+
+        if (loaded != null) return loaded;
+
+        // No loaded cube, try to load or generate one
+        return getCubicWorld().getCubeCache().getCube(xPosition, cubeY, zPosition);
     }
 
     @Override
-    public void addCube(ICube cube) {
-        this.cubeMap.put((Cube) cube);
+    public void addCube(Cube cube) {
+        this.cubeMap.put(cube);
 
         ((Cube) cube).putEBSInChunk();
     }
 
     @Override
-    public ICube removeCube(int cubeY) {
+    public Cube removeCube(int cubeY) {
         if (cachedCube != null && cachedCube.getY() == cubeY) {
-            cubicChunks$invalidateCachedCube();
+            cachedCube = null;
         }
-        ICube removed = this.cubeMap.remove(cubeY);
+
+        Cube removed = this.cubeMap.remove(cubeY);
 
         ExtendedBlockStorage[] storage = this.getBlockStorageArray();
         if (cubeY >= 0 && cubeY < storage.length) {
@@ -1177,11 +1176,6 @@ public abstract class MixinChunk implements IColumn, IColumnInternal {
         return Math.max(opacityIndex.getTopBlockY(localX, localZ), stagingHeightMap.getTopBlockY(localX, localZ));
     }
 
-    @Unique
-    private void cubicChunks$invalidateCachedCube() {
-        cachedCube = null;
-    }
-
     @Override
     public boolean hasLoadedCubes() {
         return !cubeMap.isEmpty();
@@ -1210,7 +1204,7 @@ public abstract class MixinChunk implements IColumn, IColumnInternal {
     }
 
     @Override
-    public Collection<? extends ICube> getLoadedCubes() {
+    public Collection<? extends Cube> getLoadedCubes() {
         return this.cubeMap.all();
     }
 
@@ -1220,13 +1214,13 @@ public abstract class MixinChunk implements IColumn, IColumnInternal {
     }
 
     @Override
-    public Iterable<? extends ICube> getLoadedCubes(int startY, int endY) {
+    public Iterable<? extends Cube> getLoadedCubes(int startY, int endY) {
         return this.cubeMap.cubes(startY, endY);
     }
 
     @Override
-    public void preCacheCube(ICube cube) {
-        this.cachedCube = (Cube) cube;
+    public void preCacheCube(Cube cube) {
+        this.cachedCube = cube;
     }
 
     @Override

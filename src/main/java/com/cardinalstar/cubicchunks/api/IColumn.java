@@ -29,6 +29,7 @@ import javax.annotation.ParametersAreNonnullByDefault;
 import net.minecraft.world.chunk.storage.ExtendedBlockStorage;
 
 import com.cardinalstar.cubicchunks.util.XZAddressable;
+import com.cardinalstar.cubicchunks.world.cube.Cube;
 
 @ParametersAreNonnullByDefault
 public interface IColumn extends XZAddressable {
@@ -87,7 +88,7 @@ public interface IColumn extends XZAddressable {
      *
      * @return the cubes
      */
-    Collection<? extends ICube> getLoadedCubes();
+    Collection<? extends Cube> getLoadedCubes();
 
     /// Returns an array of contained EBSes that need to be ticked.
     ExtendedBlockStorage[] getTickableStorages();
@@ -101,43 +102,40 @@ public interface IColumn extends XZAddressable {
      *
      * @return an iterator over all loaded cubes between {@code startY} and {@code endY} (inclusive)
      */
-    Iterable<? extends ICube> getLoadedCubes(int startY, int endY);
+    Iterable<? extends Cube> getLoadedCubes(int startY, int endY);
 
     /**
      * Retrieve the cube at the specified location if it is loaded.
      *
      * @param cubeY cube y position
-     *
      * @return the cube at that position, or {@code null} if it is not loaded
      */
     @Nullable
-    ICube getLoadedCube(int cubeY);
+    Cube getLoadedCube(int cubeY);
 
     /**
      * Retrieve the cube at the specified location
      *
      * @param cubeY cube y position
-     *
      * @return the cube at that position
      */
-    ICube getCube(int cubeY);
+    Cube getCube(int cubeY);
 
     /**
      * Add a cube to this column
      *
      * @param cube the cube being added
      */
-    void addCube(ICube cube);
+    void addCube(Cube cube);
 
     /**
      * Remove the cube at the specified height
      *
      * @param cubeY cube y position
-     *
      * @return the removed cube if it existed, otherwise {@code null}
      */
     @Nullable
-    ICube removeCube(int cubeY);
+    Cube removeCube(int cubeY);
 
     /**
      * Check if there are any loaded cube in this column
@@ -154,5 +152,5 @@ public interface IColumn extends XZAddressable {
      *
      * @param cube the cube to precache
      */
-    void preCacheCube(ICube cube);
+    void preCacheCube(Cube cube);
 }

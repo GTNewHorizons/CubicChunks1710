@@ -29,13 +29,11 @@ import net.minecraft.world.World;
 import net.minecraft.world.chunk.Chunk;
 import net.minecraft.world.chunk.EmptyChunk;
 import net.minecraft.world.chunk.storage.ExtendedBlockStorage;
-
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-import com.cardinalstar.cubicchunks.api.ICube;
 import com.cardinalstar.cubicchunks.world.column.CubeMap;
 import com.cardinalstar.cubicchunks.world.cube.BlankCube;
 import com.cardinalstar.cubicchunks.world.cube.Cube;
@@ -52,20 +50,20 @@ public abstract class MixinEmptyChunk extends MixinChunk_Cubes {
     }
 
     @Override
-    public ICube getCube(int cubeY) {
+    public Cube getCube(int cubeY) {
         return blankCube;
     }
 
     @Override
-    public ICube removeCube(int cubeY) {
+    public Cube removeCube(int cubeY) {
         return blankCube;
     }
 
     @Override
-    public void addCube(ICube cube) {}
+    public void addCube(Cube cube) {}
 
     @Override
-    public Collection<ICube> getLoadedCubes() {
+    public Collection<Cube> getLoadedCubes() {
         return Collections.emptySet();
     }
 
@@ -75,7 +73,7 @@ public abstract class MixinEmptyChunk extends MixinChunk_Cubes {
     }
 
     @Override
-    public Iterable<ICube> getLoadedCubes(int startY, int endY) {
+    public Iterable<Cube> getLoadedCubes(int startY, int endY) {
         return Collections.emptySet();
     }
 }

@@ -65,6 +65,19 @@ public class CubeMap implements Iterable<Cube> {
     }
 
     /**
+     * Removes the cube at {@code cubeY}
+     *
+     * @param cubeY cube y position
+     *
+     * @return the removed cube if it existed, otherwise <code>null</code>
+     */
+    @Nullable
+    public Cube get(int cubeY) {
+        int index = binarySearch(cubeY);
+        return index < cubes.size() && cubes.get(index).getY() == cubeY ? cubes.get(index) : null;
+    }
+
+    /**
      * Adds a cube
      *
      * @param cube the cube to add

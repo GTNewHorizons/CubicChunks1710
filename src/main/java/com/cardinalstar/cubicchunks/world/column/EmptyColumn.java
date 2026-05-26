@@ -54,10 +54,11 @@ import com.cardinalstar.cubicchunks.api.IColumn;
 import com.cardinalstar.cubicchunks.api.ICube;
 import com.cardinalstar.cubicchunks.api.IHeightMap;
 import com.cardinalstar.cubicchunks.world.cube.BlankCube;
+import com.cardinalstar.cubicchunks.world.cube.Cube;
 
 public class EmptyColumn extends Chunk implements IColumn {
 
-    private final ICube emptyCube;
+    private final Cube emptyCube;
 
     public EmptyColumn(World worldIn, int x, int z) {
         super(worldIn, x, z);
@@ -96,7 +97,7 @@ public class EmptyColumn extends Chunk implements IColumn {
     }
 
     // @Override
-    public Collection<? extends ICube> getLoadedCubes() {
+    public Collection<? extends Cube> getLoadedCubes() {
         return Collections.emptyList();
     }
 
@@ -106,29 +107,29 @@ public class EmptyColumn extends Chunk implements IColumn {
     }
 
     // @Override
-    public Iterable<? extends ICube> getLoadedCubes(int startY, int endY) {
+    public Iterable<? extends Cube> getLoadedCubes(int startY, int endY) {
         return Collections.emptyList();
     }
 
     @Nullable
     // @Override
-    public ICube getLoadedCube(int cubeY) {
+    public Cube getLoadedCube(int cubeY) {
         return null;
     }
 
     // @Override
-    public ICube getCube(int cubeY) {
+    public Cube getCube(int cubeY) {
         return emptyCube;
     }
 
     // @Override
-    public void addCube(ICube cube) {
+    public void addCube(Cube cube) {
         throw new RuntimeException("This should never be called!");
     }
 
     @Nullable
     // @Override
-    public ICube removeCube(int cubeY) {
+    public Cube removeCube(int cubeY) {
         return null;
     }
 
@@ -138,7 +139,7 @@ public class EmptyColumn extends Chunk implements IColumn {
     }
 
     // @Override
-    public void preCacheCube(ICube cube) {
+    public void preCacheCube(Cube cube) {
 
     }
 

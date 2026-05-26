@@ -13,6 +13,7 @@ import com.cardinalstar.cubicchunks.world.ICubicWorld;
 import com.cardinalstar.cubicchunks.world.api.ICubeProviderServer;
 import com.cardinalstar.cubicchunks.world.api.ICubeProviderServer.Requirement;
 import com.cardinalstar.cubicchunks.world.column.EmptyEBS;
+import com.cardinalstar.cubicchunks.world.cube.Cube;
 import com.google.common.collect.AbstractIterator;
 
 @SuppressWarnings("unused")
@@ -46,22 +47,22 @@ public final class CCAPI {
     }
 
     /// Gets all loaded cubes in a column.
-    public static Collection<ICube> getLoadedCubes(Chunk chunk) {
+    public static Collection<Cube> getLoadedCubes(Chunk chunk) {
         // noinspection unchecked
-        return (Collection<ICube>) ((IColumn) chunk).getLoadedCubes();
+        return (Collection<Cube>) ((IColumn) chunk).getLoadedCubes();
     }
 
     /// Gets all loaded block storages in a column.
     public static Iterable<ExtendedBlockStorage> getLoadedBlockStorages(Chunk chunk) {
         return () -> new AbstractIterator<>() {
 
-            private final Iterator<? extends ICube> iter = ((IColumn) chunk).getLoadedCubes()
+            private final Iterator<? extends Cube> iter = ((IColumn) chunk).getLoadedCubes()
                 .iterator();
 
             @Override
             protected ExtendedBlockStorage computeNext() {
                 while (iter.hasNext()) {
-                    ICube cube = iter.next();
+                    Cube cube = iter.next();
 
                     if (cube == null) continue;
 
