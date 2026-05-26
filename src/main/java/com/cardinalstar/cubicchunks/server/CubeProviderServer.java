@@ -386,7 +386,7 @@ public class CubeProviderServer extends ChunkProviderServer
 
         loadTimeAccumulator += delta;
 
-        if ((loadedColumns > 0 || loadedCubes > 0) && lastTickEnd > 0 && (end - lastTickEnd) > 10e9) {
+        if ((loadedColumns > 0 || loadedCubes > 0) && (end - lastTickEnd) > 10e9) {
             double colPerSecPrecise = loadedColumns / (double) loadTimeAccumulator;
             double colPerSecReal = loadedColumns / (double) (end - lastTickEnd);
 
@@ -395,7 +395,7 @@ public class CubeProviderServer extends ChunkProviderServer
 
             CubicChunks.LOGGER.info(
                 "Columns per second: {} (precise: {}). Cubes per second: {} (precise: {}).",
-                String.format("%,f", colPerSecReal * 1e9),
+            String.format("%,f", colPerSecReal * 1e9),
                 String.format("%,f", colPerSecPrecise * 1e9),
                 String.format("%,.2f", cubePerSecReal * 1e9),
                 String.format("%,.2f", cubePerSecPrecise * 1e9));
