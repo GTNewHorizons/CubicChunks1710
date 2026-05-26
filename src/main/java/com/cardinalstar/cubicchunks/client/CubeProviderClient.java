@@ -33,9 +33,11 @@ import net.minecraft.world.ChunkCoordIntPair;
 import net.minecraft.world.World;
 import net.minecraft.world.chunk.Chunk;
 
+import net.minecraftforge.event.world.ChunkEvent;
+
 import com.cardinalstar.cubicchunks.api.IColumn;
 import com.cardinalstar.cubicchunks.api.XYZMap;
-import com.cardinalstar.cubicchunks.event.events.CubeEvent;
+import com.cardinalstar.cubicchunks.api.event.CubeEvent;
 import com.cardinalstar.cubicchunks.mixin.api.ICubicWorldInternal;
 import com.cardinalstar.cubicchunks.mixin.early.client.IChunkProviderClient;
 import com.cardinalstar.cubicchunks.util.CubePos;
@@ -109,8 +111,7 @@ public class CubeProviderClient extends ChunkProviderClient implements ICubeProv
         if (init != null) init.accept(column);
 
         // fire a forge event... make mods happy :)
-        net.minecraftforge.common.MinecraftForge.EVENT_BUS
-            .post(new net.minecraftforge.event.world.ChunkEvent.Load(column));
+        EVENT_BUS.post(new ChunkEvent.Load(column));
 
         column.isChunkLoaded = true;
         return column;
@@ -149,7 +150,7 @@ public class CubeProviderClient extends ChunkProviderClient implements ICubeProv
         world.getLightingManager()
             .onCubeLoad(cube);
         cube.setCubeLoaded();
-        EVENT_BUS.post(new CubeEvent.Load(column.worldObj, pos, cube));
+        EVENT_BUS.post(new CubeEvent.Load(column.worldObj, cube));
         return cube;
     }
 

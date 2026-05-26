@@ -22,8 +22,8 @@ import com.cardinalstar.cubicchunks.api.XZMap;
 import com.cardinalstar.cubicchunks.api.world.storage.ICubicStorage;
 import com.cardinalstar.cubicchunks.api.worldgen.GenerationResult;
 import com.cardinalstar.cubicchunks.api.worldgen.IWorldGenerator;
-import com.cardinalstar.cubicchunks.event.events.ColumnEvent;
-import com.cardinalstar.cubicchunks.event.events.CubeEvent;
+import com.cardinalstar.cubicchunks.api.event.ColumnEvent;
+import com.cardinalstar.cubicchunks.api.event.CubeEvent;
 import com.cardinalstar.cubicchunks.mixin.api.ICubicWorldInternal;
 import com.cardinalstar.cubicchunks.server.CubicPlayerManager;
 import com.cardinalstar.cubicchunks.util.Array3D;
@@ -552,11 +552,7 @@ public class CubeLoaderServer implements ICubeLoader {
 
             source = ObjectSource.Disk;
 
-            ColumnEvent.LoadNBT event = new ColumnEvent.LoadNBT(world, pos, tag);
-
-            EVENT_BUS.post(event);
-
-            tag = event.tag;
+            EVENT_BUS.post(new ColumnEvent.LoadNBT(world, pos, tag));
 
             return true;
         }
@@ -692,11 +688,7 @@ public class CubeLoaderServer implements ICubeLoader {
 
             if (tag == null) return false;
 
-            CubeEvent.LoadNBT event = new CubeEvent.LoadNBT(world, pos, tag);
-
-            EVENT_BUS.post(event);
-
-            tag = event.tag;
+            EVENT_BUS.post(new CubeEvent.LoadNBT(world, pos, tag));
 
             return true;
         }

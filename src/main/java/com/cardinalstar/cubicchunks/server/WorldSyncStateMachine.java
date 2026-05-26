@@ -5,8 +5,12 @@ import java.util.Iterator;
 import net.minecraft.world.ChunkCoordIntPair;
 import net.minecraft.world.chunk.Chunk;
 
+import net.minecraftforge.common.MinecraftForge;
+import net.minecraftforge.event.world.ChunkWatchEvent;
+
 import com.cardinalstar.cubicchunks.CubicChunks;
 import com.cardinalstar.cubicchunks.api.XYZAddressable;
+import com.cardinalstar.cubicchunks.api.event.CubeEvent;
 import com.cardinalstar.cubicchunks.network.PacketEncoderColumn;
 import com.cardinalstar.cubicchunks.network.PacketEncoderCubeBlockChange;
 import com.cardinalstar.cubicchunks.network.PacketEncoderCubes;
@@ -58,8 +62,12 @@ public class WorldSyncStateMachine {
             boolean wasCubeSynced = syncedCubes.contains(pos);
 
             if ((cube == null || !cube.isInitializedToLevel(CubeInitLevel.Lit)) && wasCubeSynced) {
-                PacketEncoderUnloadCube.createPacket(new CubePos(pos))
+                CubePos cubePos = new CubePos(pos);
+
+                PacketEncoderUnloadCube.createPacket(cubePos)
                     .sendToPlayer(player.player);
+
+                MinecraftForge.EVENT_BUS.post(new CubeEvent.UnWatch(provider.worldObj, cubePos, player.player));
 
                 syncedCubes.remove(pos);
 
@@ -72,6 +80,9 @@ public class WorldSyncStateMachine {
 
                     PacketEncoderUnloadColumn.createPacket(pos.getX(), pos.getZ())
                         .sendToPlayer(player.player);
+
+                    MinecraftForge.EVENT_BUS.post(new ChunkWatchEvent.UnWatch(
+                        new ChunkCoordIntPair(pos.getX(), pos.getZ()), player.player));
                 }
             } else if (cube != null && cube.isInitializedToLevel(CubeInitLevel.Lit) && !wasCubeSynced) {
                 if (player.isWatchingCube(pos.getX(), pos.getY(), pos.getZ())) {
@@ -84,6 +95,9 @@ public class WorldSyncStateMachine {
                         if (player.isWatchingColumn(pos.getX(), pos.getZ())) {
                             PacketEncoderColumn.createPacket(cube.getColumn())
                                 .sendToPlayer(player.player);
+
+                            MinecraftForge.EVENT_BUS.post(new ChunkWatchEvent.Watch(
+                                new ChunkCoordIntPair(pos.getX(), pos.getZ()), player.player));
                         }
                     }
 
@@ -92,6 +106,8 @@ public class WorldSyncStateMachine {
 
                     PacketEncoderCubes.createPacket(cube)
                         .sendToPlayer(player.player);
+
+                    MinecraftForge.EVENT_BUS.post(new CubeEvent.Watch(provider.worldObj, cube, player.player));
                 }
             }
         }

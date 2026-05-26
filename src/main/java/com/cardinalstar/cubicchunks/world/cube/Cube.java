@@ -63,7 +63,7 @@ import com.cardinalstar.cubicchunks.api.IColumn;
 import com.cardinalstar.cubicchunks.api.ICube;
 import com.cardinalstar.cubicchunks.api.IHeightMap;
 import com.cardinalstar.cubicchunks.api.MetaKey;
-import com.cardinalstar.cubicchunks.event.events.CubeEvent;
+import com.cardinalstar.cubicchunks.api.event.CubeEvent;
 import com.cardinalstar.cubicchunks.mixin.api.ICubicWorldInternal;
 import com.cardinalstar.cubicchunks.network.CCPacketBuffer;
 import com.cardinalstar.cubicchunks.server.CubicPlayerManager;
@@ -620,7 +620,7 @@ public class Cube implements ICube {
         ((ICubicWorldInternal) world).getLightingManager()
             .onCubeLoad(this);
         CompatHandler.onCubeLoad(new ChunkEvent.Load(getColumn()));
-        EVENT_BUS.post(new CubeEvent.Load(world, coords, this));
+        EVENT_BUS.post(new CubeEvent.Load(world, this));
 
         ICubicWorldInternal world = this.getWorld();
 
@@ -658,7 +658,7 @@ public class Cube implements ICube {
      * Mark this cube as no longer part of this world
      */
     public void onCubeUnload() {
-        EVENT_BUS.post(new CubeEvent.Unload(this.world, this.coords, this));
+        EVENT_BUS.post(new CubeEvent.Unload(this.world, this));
         ((ICubicWorldInternal) this.world).getLightingManager()
             .onCubeUnload(this);
 

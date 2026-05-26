@@ -16,12 +16,13 @@ import net.minecraftforge.common.MinecraftForge;
 import org.jetbrains.annotations.Nullable;
 
 import com.cardinalstar.cubicchunks.CubicChunks;
+import com.cardinalstar.cubicchunks.api.event.ColumnEvent;
 import com.cardinalstar.cubicchunks.api.world.storage.ICubicStorage;
 import com.cardinalstar.cubicchunks.api.world.storage.ICubicStorage.PosBatch;
 import com.cardinalstar.cubicchunks.async.TaskPool;
 import com.cardinalstar.cubicchunks.async.TaskPool.ITaskExecutor;
 import com.cardinalstar.cubicchunks.async.TaskPool.ITaskFuture;
-import com.cardinalstar.cubicchunks.event.events.CubeEvent;
+import com.cardinalstar.cubicchunks.api.event.CubeEvent;
 import com.cardinalstar.cubicchunks.util.CubePos;
 import com.cardinalstar.cubicchunks.util.DataUtils;
 import com.cardinalstar.cubicchunks.world.cube.Cube;
@@ -244,6 +245,8 @@ public class CubeIO implements ICubeIO {
         // add the column to the save queue
         NBTTagCompound tag = IONbtWriter.write(column);
 
+        MinecraftForge.EVENT_BUS.post(new ColumnEvent.SaveNBT(column.worldObj, column, tag));
+
         column.isModified = false;
 
         Future<?> task = TaskPool.submit(saveExecutor, new SaveColumn(pos, tag));
@@ -281,11 +284,7 @@ public class CubeIO implements ICubeIO {
 
         NBTTagCompound tag = IONbtWriter.write(cube);
 
-        CubeEvent.SaveNBT event = new CubeEvent.SaveNBT(cube.getWorld(), cube.getCoords(), tag);
-
-        MinecraftForge.EVENT_BUS.post(event);
-
-        tag = event.tag;
+        MinecraftForge.EVENT_BUS.post(new CubeEvent.SaveNBT(cube.getWorld(), cube, tag));
 
         Future<?> task = TaskPool.submit(saveExecutor, new SaveCube(pos, tag));
 
