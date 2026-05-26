@@ -395,7 +395,7 @@ public class CubeProviderServer extends ChunkProviderServer
 
             CubicChunks.LOGGER.info(
                 "Columns per second: {} (precise: {}). Cubes per second: {} (precise: {}).",
-            String.format("%,.2f", colPerSecReal * 1e9),
+                String.format("%,.2f", colPerSecReal * 1e9),
                 String.format("%,.2f", colPerSecPrecise * 1e9),
                 String.format("%,.2f", cubePerSecReal * 1e9),
                 String.format("%,.2f", cubePerSecPrecise * 1e9));
