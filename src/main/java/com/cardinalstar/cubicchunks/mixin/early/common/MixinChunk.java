@@ -717,7 +717,9 @@ public abstract class MixinChunk implements IColumn, IColumnInternal {
         constant = @Constant(expandZeroConditions = Constant.Condition.LESS_THAN_ZERO, intValue = 0),
         require = 1)
     private int addEntity_getMinY(int zero) {
-        return blockToCube(getWorldObj().getMinHeight());
+        // For columns, no-op the comparison by returning min int
+        // For chunks, return 0 (the vanilla value), since it delegates to entityLists
+        return isColumn ? Integer.MIN_VALUE : 0;
     }
 
     @Redirect(
@@ -728,8 +730,9 @@ public abstract class MixinChunk implements IColumn, IColumnInternal {
             target = "Lnet/minecraft/world/chunk/Chunk;entityLists:[Ljava/util/List;"),
         require = 2)
     private int addEntity_getMaxHeight(List<Entity>[] entityLists) {
-        return isColumn ? blockToCube(getWorldObj().getMaxHeight())
-            : (entityLists.length - blockToCube(getWorldObj().getMinHeight()));
+        // For columns, no-op the comparison by returning max int
+        // For chunks, return entityLists.length (the vanilla value), since it delegates to entityLists
+        return isColumn ? Integer.MAX_VALUE : entityLists.length;
     }
 
     @Redirect(
@@ -739,32 +742,14 @@ public abstract class MixinChunk implements IColumn, IColumnInternal {
             args = "array=get",
             target = "Lnet/minecraft/world/chunk/Chunk;entityLists:[Ljava/util/List;"),
         require = 1)
-    private List<Entity> addEntity_getEntityList(List<Entity>[] entityLists, int idx, Entity entity) {
+    private List<Entity> addEntity_getEntityList(List<Entity>[] entityLists, int cubeY, Entity entity) {
         if (!isColumn) {
-            return entityLists[idx - blockToCube(getWorldObj().getMinHeight())];
-        } else if (cachedCube != null && cachedCube.getY() == idx) {
-            cachedCube.getEntityContainer()
-                .add(entity);
-            return null;
-        } else {
-            getWorldObj().getCubeCache()
-                .getCube(this.xPosition, idx, this.zPosition)
-                .getEntityContainer()
-                .add(entity);
-            return null;
+            // Chunks never check cubes, so use the built-in entityLists
+            return entityLists[cubeY];
         }
-    }
 
-    @Redirect(
-        method = "addEntity",
-        at = @At(value = "INVOKE", target = "Ljava/util/List;add(Ljava/lang/Object;)Z"),
-        require = 1)
-    private boolean addEntity_getEntityList(List<Object> obj, Object entity) {
-        if (!isColumn) {
-            return obj.add(entity);
-        }
-        assert obj == null;
-        return true; // ignored
+        // Get the loaded cube, or make a new one
+        return getCube(cubeY).getEntityContainer();
     }
 
     // ==============================================
@@ -779,7 +764,9 @@ public abstract class MixinChunk implements IColumn, IColumnInternal {
             from = @At("HEAD"),
             to = @At(value = "INVOKE", target = "Ljava/util/List;remove(Ljava/lang/Object;)Z")))
     private int removeEntityAtIndex_getMinY(int zero) {
-        return blockToCube(getWorldObj().getMinHeight());
+        // For columns, no-op the comparison by returning min int
+        // For chunks, return 0 (the vanilla value), since it delegates to entityLists
+        return isColumn ? Integer.MIN_VALUE : 0;
     }
 
     @Redirect(
@@ -790,8 +777,9 @@ public abstract class MixinChunk implements IColumn, IColumnInternal {
             target = "Lnet/minecraft/world/chunk/Chunk;entityLists:[Ljava/util/List;"),
         require = 2)
     private int removeEntityAtIndex_getMaxHeight(List<Entity>[] entityLists) {
-        return isColumn ? blockToCube(getWorldObj().getMaxHeight())
-            : (entityLists.length - blockToCube(getWorldObj().getMinHeight()));
+        // For columns, no-op the comparison by returning max int
+        // For chunks, return entityLists.length (the vanilla value), since it delegates to entityLists
+        return isColumn ? Integer.MAX_VALUE : entityLists.length;
     }
 
     @Redirect(
@@ -801,33 +789,15 @@ public abstract class MixinChunk implements IColumn, IColumnInternal {
             args = "array=get",
             target = "Lnet/minecraft/world/chunk/Chunk;entityLists:[Ljava/util/List;"),
         require = 1)
-    private List<Entity> removeEntityAtIndex_getEntityList(List<Entity>[] entityLists, int idx, Entity entity,
-        int index) {
+    private List<Entity> removeEntityAtIndex_getEntityList(List<Entity>[] entityLists, int cubeY, Entity entity,
+        int $cubeY) {
         if (!isColumn) {
-            return entityLists[idx - blockToCube(getWorldObj().getMinHeight())];
-        } else if (cachedCube != null && cachedCube.getY() == idx) {
-            cachedCube.getEntityContainer()
-                .remove(entity);
-            return null;
-        } else {
-            getWorldObj().getCubeCache()
-                .getCube(this.xPosition, idx, this.zPosition)
-                .getEntityContainer()
-                .remove(entity);
-            return null;
+            // Chunks never check cubes, so use the built-in entityLists
+            return entityLists[cubeY];
         }
-    }
 
-    @Redirect(
-        method = "removeEntityAtIndex",
-        at = @At(value = "INVOKE", target = "Ljava/util/List;remove(Ljava/lang/Object;)Z"),
-        require = 1)
-    private boolean removeEntityAtIndex_getEntityList(List<Object> obj, Object entity) {
-        if (!isColumn) {
-            return obj.remove(entity);
-        }
-        assert obj == null;
-        return true; // ignored
+        // Get the loaded cube, or make a new one
+        return getCube(cubeY).getEntityContainer();
     }
 
     // ==============================================
@@ -1134,7 +1104,7 @@ public abstract class MixinChunk implements IColumn, IColumnInternal {
     public void addCube(Cube cube) {
         this.cubeMap.put(cube);
 
-        ((Cube) cube).putEBSInChunk();
+        cube.installIntoChunk();
     }
 
     @Override
@@ -1145,9 +1115,8 @@ public abstract class MixinChunk implements IColumn, IColumnInternal {
 
         Cube removed = this.cubeMap.remove(cubeY);
 
-        ExtendedBlockStorage[] storage = this.getBlockStorageArray();
-        if (cubeY >= 0 && cubeY < storage.length) {
-            storage[cubeY] = null;
+        if (removed != null) {
+            removed.uninstallFromChunk();
         }
 
         return removed;

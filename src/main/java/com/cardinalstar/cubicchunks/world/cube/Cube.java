@@ -540,7 +540,7 @@ public class Cube implements ICube {
                 .onCreateCubeStorage(this, ebs);
         }
 
-        putEBSInChunk();
+        installIntoChunk();
 
         return ebs;
     }
@@ -556,15 +556,28 @@ public class Cube implements ICube {
     public void setStorageFromSave(@Nullable ExtendedBlockStorage ebs) {
         this.storage = ebs;
 
-        putEBSInChunk();
+        installIntoChunk();
     }
 
-    public void putEBSInChunk() {
-        ExtendedBlockStorage[] chunkEBS = column.getBlockStorageArray();
+    public static final int VANILLA_EBS_COUNT = 16;
 
-        // Store the EBS in the chunk's EBS array for compat with mods that access it directly
-        if (getY() >= 0 && getY() < chunkEBS.length) {
-            chunkEBS[getY()] = this.storage;
+    public void installIntoChunk() {
+        if (getY() >= 0 && getY() < VANILLA_EBS_COUNT) {
+            // Store the EBS in the chunk's EBS array for compat with mods that access it directly
+            column.getBlockStorageArray()[getY()] = this.storage;
+
+            // Do the same with the entity list
+            column.entityLists[getY()] = this.getEntityContainer();
+        }
+    }
+
+    public void uninstallFromChunk() {
+        if (getY() >= 0 && getY() < VANILLA_EBS_COUNT) {
+            // Remove the EBS from the EBS array
+            column.getBlockStorageArray()[getY()] = null;
+
+            // Do the same with the entity list
+            column.entityLists[getY()] = null;
         }
     }
 
