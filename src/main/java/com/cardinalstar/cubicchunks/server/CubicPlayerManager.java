@@ -81,6 +81,8 @@ public class CubicPlayerManager extends PlayerManager implements CubeLoaderCallb
     private int horizontalViewDistance;
     private int verticalViewDistance;
 
+    private long lastWorldTime;
+
     // these player adds will be processed on the next tick
     // this exists as temporary workaround to player respawn code calling addPlayer() before spawning
     // the player in world as it's spawning player in world that triggers sending cubic chunks world
@@ -128,6 +130,12 @@ public class CubicPlayerManager extends PlayerManager implements CubeLoaderCallb
 
         getWorldServer().theProfiler.endStartSection("Immediate nearby cube loading");
 
+        long now = getWorldServer().getWorldTime();
+
+        long delta = lastWorldTime == 0 ? 0 : now - lastWorldTime;
+
+        this.lastWorldTime = now;
+
         for (var player : players.values()) {
             CubeProviderServer cubeCache = ((Server) getWorldServer()).getCubeCache();
 
@@ -139,6 +147,12 @@ public class CubicPlayerManager extends PlayerManager implements CubeLoaderCallb
             }
 
             player.sync.flush();
+
+            Chunk inColumn = provider.getLoadedColumn(player.getManagedCubePosX(), player.getManagedCubePosZ());
+
+            if (inColumn != null) {
+                inColumn.inhabitedTime += delta;
+            }
         }
 
         getWorldServer().theProfiler.endStartSection("tickEntries");
