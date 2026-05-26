@@ -32,7 +32,7 @@ public class AddressTools {
     }
 
     public static int getLocalAddress(int localX, int localZ) {
-        return Bits.packUnsignedToInt(localX, 4, 0) | Bits.packUnsignedToInt(localZ, 4, 4);
+        return Bits.packUnsignedToInt(localX & 0xF, 4, 0) | Bits.packUnsignedToInt(localZ & 0xF, 4, 4);
     }
 
     /**
