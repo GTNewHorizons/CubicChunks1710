@@ -281,8 +281,8 @@ public class CubicPlayerManager extends PlayerManager implements CubeLoaderCallb
         CuboidalCubeSelector.INSTANCE.forAllVisibleCubes(
             playerCubePos,
             horizontalViewDistance,
-            verticalViewDistance, pos -> onPlayerStoppedViewingCube(watchingPlayer, pos)
-        );
+            verticalViewDistance,
+            pos -> onPlayerStoppedViewingCube(watchingPlayer, pos));
 
         playerArray = players.values()
             .toArray(EMPTY_PLAYER_ARRAY);

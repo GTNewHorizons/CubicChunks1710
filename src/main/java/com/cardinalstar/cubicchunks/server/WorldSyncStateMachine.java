@@ -61,7 +61,8 @@ public class WorldSyncStateMachine {
 
             boolean isWatched = syncedCubes.contains(pos);
 
-            boolean watchable = cube != null && cube.isInitializedToLevel(CubeInitLevel.Lit) && player.isWatchingCube(pos.getX(), pos.getY(), pos.getZ());
+            boolean watchable = cube != null && cube.isInitializedToLevel(CubeInitLevel.Lit)
+                && player.isWatchingCube(pos.getX(), pos.getY(), pos.getZ());
 
             if (isWatched && !watchable) {
                 CubePos cubePos = new CubePos(pos);
@@ -98,9 +99,7 @@ public class WorldSyncStateMachine {
                             .sendToPlayer(player.player);
 
                         MinecraftForge.EVENT_BUS.post(
-                            new ChunkWatchEvent.Watch(
-                                new ChunkCoordIntPair(pos.getX(), pos.getZ()),
-                                player.player));
+                            new ChunkWatchEvent.Watch(new ChunkCoordIntPair(pos.getX(), pos.getZ()), player.player));
                     }
                 }
 
