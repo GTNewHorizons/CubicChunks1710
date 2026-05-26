@@ -173,7 +173,7 @@ public class CubicPlayerManager extends PlayerManager implements CubeLoaderCallb
             }
 
             for (var player : playerArray) {
-                player.sync.onCubeStatusChanged(cube.getX(), cube.getY(), cube.getZ());
+                player.sync.onCubeMarkedDirty(cube.getX(), cube.getY(), cube.getZ());
             }
 
             var request = cubeLoadRequests.remove(cube);
@@ -196,7 +196,7 @@ public class CubicPlayerManager extends PlayerManager implements CubeLoaderCallb
         loadedCubes.remove(cube);
 
         for (var player : playerArray) {
-            player.sync.onCubeStatusChanged(cube.getX(), cube.getY(), cube.getZ());
+            player.sync.onCubeMarkedDirty(cube.getX(), cube.getY(), cube.getZ());
         }
 
         CubeStatusVisualizer.remove(cube.getCoords());
@@ -215,7 +215,7 @@ public class CubicPlayerManager extends PlayerManager implements CubeLoaderCallb
 
         if (cube != null) {
             for (var player : playerArray) {
-                player.sync.onBlockChanged(x, y, z);
+                player.sync.onBlockMarkedDirty(x, y, z);
             }
         }
     }
@@ -226,7 +226,7 @@ public class CubicPlayerManager extends PlayerManager implements CubeLoaderCallb
 
         if (column != null) {
             for (var player : playerArray) {
-                player.sync.onHeightChanged(x, z);
+                player.sync.onColumnHeightMarkedDirty(x, z);
             }
         }
     }
@@ -359,7 +359,7 @@ public class CubicPlayerManager extends PlayerManager implements CubeLoaderCallb
                 cubeLoadRequests.put(provider.loadCubeEagerly(pos.getX(), pos.getY(), pos.getZ(), Requirement.LIGHT));
             }
         } else {
-            player.sync.onCubeStatusChanged(pos.getX(), pos.getY(), pos.getZ());
+            player.sync.onCubeMarkedDirty(pos.getX(), pos.getY(), pos.getZ());
         }
     }
 

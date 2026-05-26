@@ -159,16 +159,16 @@ public class WorldSyncStateMachine {
         dirtyHeightCols.clear();
     }
 
-    public void onCubeStatusChanged(int x, int y, int z) {
+    public void onCubeMarkedDirty(int x, int y, int z) {
         dirtyCubes.add(x, y, z);
     }
 
-    public void onHeightChanged(int x, int z) {
+    public void onColumnHeightMarkedDirty(int x, int z) {
         dirtyHeightCols.computeIfAbsent(x >> 4, z >> 4, (x1, z1) -> new BooleanArray2D(16, 16))
             .set(x & 0xF, z & 0xF);
     }
 
-    public void onBlockChanged(int x, int y, int z) {
+    public void onBlockMarkedDirty(int x, int y, int z) {
         dirtyBlocks.computeIfAbsent(x >> 4, y >> 4, z >> 4, (x1, y1, z1) -> new ShortOpenHashSet())
             .add((short) AddressTools.getLocalAddress(x, y, z));
     }
