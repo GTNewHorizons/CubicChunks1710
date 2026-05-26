@@ -148,8 +148,10 @@ public class WorldSyncStateMachine {
             if (player.isWatchingColumn(e.getChunkX(), e.getChunkZ())) {
                 Chunk column = provider.getLoadedColumn(e.getChunkX(), e.getChunkZ());
 
+                if (column != null) {
                 PacketEncoderHeightMapUpdate.createPacket(e.getValue(), column)
                     .sendToPlayer(player.player);
+                }
             }
         }
 
