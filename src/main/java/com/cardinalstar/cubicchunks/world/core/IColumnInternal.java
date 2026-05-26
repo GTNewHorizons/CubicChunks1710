@@ -21,7 +21,6 @@
 
 package com.cardinalstar.cubicchunks.world.core;
 
-import net.minecraft.block.Block;
 import net.minecraft.network.PacketBuffer;
 
 import com.cardinalstar.cubicchunks.api.IColumn;
@@ -33,10 +32,6 @@ import com.cardinalstar.cubicchunks.world.cube.Cube;
 public interface IColumnInternal extends IColumn {
 
     void setColumn(boolean isColumn);
-
-    Block[] takeCompatGenerationBlockArray();
-
-    byte[] takeCompatGenerationByteArray();
 
     void removeFromStagingHeightmap(ICube cube);
 

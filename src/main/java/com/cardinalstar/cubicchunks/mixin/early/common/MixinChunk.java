@@ -131,11 +131,6 @@ public abstract class MixinChunk implements IColumn, IColumnInternal {
     @Unique
     private boolean isColumn = false;
 
-    @Unique
-    private Block[] compatGenerationBlockArray;
-    @Unique
-    private byte[] compatGenerationByteArray;
-
     @Shadow
     public abstract byte[] getBiomeArray();
 
@@ -222,19 +217,6 @@ public abstract class MixinChunk implements IColumn, IColumnInternal {
         if (!Mods.ChunkAPI.isModLoaded()) {
             Arrays.fill(getBiomeArray(), (byte) -1);
         }
-    }
-
-    @ModifyConstant(
-        method = "<init>(Lnet/minecraft/world/World;[Lnet/minecraft/block/Block;[BII)V",
-        constant = @Constant(intValue = 16, ordinal = 0),
-        require = 1)
-    private int getInitChunkLoopEnd(int _16, World world, Block[] blocks, byte[] metaDatas, int x, int z) {
-        if (((ICubicWorldInternal.Server) world).isCompatGenerationScope()) {
-            this.compatGenerationBlockArray = blocks;
-            this.compatGenerationByteArray = metaDatas;
-            return -1;
-        }
-        return _16;
     }
 
     // this method can't be saved by just redirecting EBS access
@@ -1013,20 +995,6 @@ public abstract class MixinChunk implements IColumn, IColumnInternal {
     @Override
     public void setColumn(boolean isColumn) {
         this.isColumn = isColumn;
-    }
-
-    @Override
-    public Block[] takeCompatGenerationBlockArray() {
-        Block[] array = compatGenerationBlockArray;
-        compatGenerationBlockArray = null;
-        return array;
-    }
-
-    @Override
-    public byte[] takeCompatGenerationByteArray() {
-        byte[] array = compatGenerationByteArray;
-        compatGenerationByteArray = null;
-        return array;
     }
 
     @Override

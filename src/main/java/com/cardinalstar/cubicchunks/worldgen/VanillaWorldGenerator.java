@@ -21,6 +21,7 @@
 package com.cardinalstar.cubicchunks.worldgen;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -30,7 +31,6 @@ import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import javax.annotation.ParametersAreNonnullByDefault;
 
-import net.minecraft.block.Block;
 import net.minecraft.entity.EnumCreatureType;
 import net.minecraft.init.Blocks;
 import net.minecraft.world.ChunkCoordIntPair;
@@ -39,12 +39,12 @@ import net.minecraft.world.World;
 import net.minecraft.world.biome.BiomeGenBase;
 import net.minecraft.world.chunk.Chunk;
 import net.minecraft.world.chunk.IChunkProvider;
+import net.minecraft.world.chunk.storage.ExtendedBlockStorage;
 
 import org.joml.Vector3i;
 import org.joml.Vector3ic;
 
 import com.cardinalstar.cubicchunks.CubicChunks;
-import com.cardinalstar.cubicchunks.CubicChunksConfig;
 import com.cardinalstar.cubicchunks.api.ICube;
 import com.cardinalstar.cubicchunks.api.util.Box;
 import com.cardinalstar.cubicchunks.api.world.Precalculable;
@@ -63,19 +63,12 @@ import com.cardinalstar.cubicchunks.world.ICubicWorld;
 import com.cardinalstar.cubicchunks.world.api.ICubeProviderServer.Requirement;
 import com.cardinalstar.cubicchunks.world.core.IColumnInternal;
 import com.cardinalstar.cubicchunks.world.cube.Cube;
-import com.cardinalstar.cubicchunks.world.cube.blockview.ChunkArrayBlockView;
 import com.cardinalstar.cubicchunks.world.cube.blockview.ChunkBlockView;
 import com.cardinalstar.cubicchunks.world.cube.blockview.IBlockView;
-import com.cardinalstar.cubicchunks.world.cube.blockview.IMutableBlockView;
-import com.cardinalstar.cubicchunks.world.cube.blockview.SafeMutableBlockView;
 import com.cardinalstar.cubicchunks.world.cube.blockview.UniformBlockView;
 import com.github.bsideup.jabel.Desugar;
 import com.gtnewhorizon.gtnhlib.util.data.BlockMeta;
 import com.gtnewhorizon.gtnhlib.util.data.ImmutableBlockMeta;
-
-import it.unimi.dsi.fastutil.Pair;
-import it.unimi.dsi.fastutil.ints.Int2IntFunction;
-import it.unimi.dsi.fastutil.ints.Int2ObjectFunction;
 import it.unimi.dsi.fastutil.objects.Object2IntMap;
 import it.unimi.dsi.fastutil.objects.Object2IntOpenHashMap;
 
@@ -221,34 +214,31 @@ public class VanillaWorldGenerator implements IWorldGenerator, IPreloadFailureDe
 
     @Override
     public GenerationResult<Chunk> provideColumn(World world, int columnX, int columnZ) {
-        Pair<Chunk, IBlockView> data = getVanillaChunkView(columnX, columnZ);
+        Chunk base = vanilla.provideChunk(columnX, columnZ);
 
         List<Cube> cubes = new ArrayList<>();
 
-        // Ceiling div by 16
-        int heightCubes = (data.right()
-            .getBounds()
-            .getSizeY() + 15) >> 4;
+        ExtendedBlockStorage[] ebses = base.getBlockStorageArray();
 
-        for (int y = 0; y < heightCubes; y++) {
-            Cube c = new Cube(
-                data.left(),
-                y,
-                data.right()
-                    .subView(Box.horizontalChunkSlice(y << 4, 16)));
+        for (int ebsY = 0; ebsY < 16; ebsY++) {
+            var ebs = ebses[ebsY];
+
+            Cube c = new Cube(base, ebsY, ebs);
 
             try {
                 decorator.generate(world, c);
             } catch (Throwable t) {
-                CubicChunks.LOGGER.error("Could not run generation for cube {},{},{}", columnX, y, columnZ, t);
+                CubicChunks.LOGGER.error("Could not run generation for cube {},{},{}", columnX, ebsY, columnZ, t);
             }
 
             cubes.add(c);
         }
 
-        ((IColumnInternal) data.left()).setColumn(true);
+        Arrays.fill(ebses, null);
 
-        return new GenerationResult<>(data.left(), null, cubes);
+        ((IColumnInternal) base).setColumn(true);
+
+        return new GenerationResult<>(base, null, cubes);
     }
 
     @Override
@@ -270,12 +260,13 @@ public class VanillaWorldGenerator implements IWorldGenerator, IPreloadFailureDe
             List<Cube> generatedCubes = new ArrayList<>();
 
             if (cubeY >= 0 && cubeY < 16 || chunk == null) {
-                // Generate the vanilla chunk
-                Pair<Chunk, IBlockView> data = getVanillaChunkView(cubeX, cubeZ);
+                Chunk base = vanilla.provideChunk(cubeX, cubeZ);
 
-                IBlockView chunkBlocks = data.right();
+                boolean newChunk = true;
 
                 if (chunk != null) {
+                    newChunk = false;
+
                     CubicChunks.LOGGER.error(
                         "Needed to regenerate a cube within the vanilla chunk for a chunk that already exists: something is fucky ({},{},{})",
                         cubeX,
@@ -283,24 +274,30 @@ public class VanillaWorldGenerator implements IWorldGenerator, IPreloadFailureDe
                         cubeZ,
                         new Exception());
                 } else {
-                    chunk = data.left();
+                    chunk = base;
                     generatedColumns.add(chunk);
                 }
 
-                // Ceiling div by 16
-                int heightCubes = (chunkBlocks.getBounds()
-                    .getSizeY() + 15) >> 4;
+                ExtendedBlockStorage[] ebses = base.getBlockStorageArray();
 
-                for (int y = 0; y < heightCubes; y++) {
-                    Cube c = new Cube(chunk, y, chunkBlocks.subView(Box.horizontalChunkSlice(y << 4, 16)));
+                for (int ebsY = 0; ebsY < 16; ebsY++) {
+                    var ebs = ebses[ebsY];
+
+                    Cube c = new Cube(base, ebsY, ebs);
 
                     try {
                         decorator.generate(world, c);
                     } catch (Throwable t) {
-                        CubicChunks.LOGGER.error("Could not run generation for cube {},{},{}", cubeX, y, cubeZ, t);
+                        CubicChunks.LOGGER.error("Could not run generation for cube {},{},{}", cubeX, ebsY, cubeZ, t);
                     }
 
                     generatedCubes.add(c);
+                }
+
+                if (newChunk) {
+                    Arrays.fill(base.getBlockStorageArray(), null);
+
+                    ((IColumnInternal) base).setColumn(true);
                 }
             }
 
@@ -335,82 +332,6 @@ public class VanillaWorldGenerator implements IWorldGenerator, IPreloadFailureDe
         } finally {
             WorldgenHangWatchdog.endWorldGen();
         }
-    }
-
-    private Pair<Chunk, IBlockView> getVanillaChunkView(int cubeX, int cubeZ) {
-        if (CubicChunksConfig.optimizedCompatibilityGenerator) {
-            try (ICubicWorldInternal.CompatGenerationScope ignored = ((ICubicWorldInternal.Server) world)
-                .doCompatibilityGeneration()) {
-                Chunk chunk = vanilla.provideChunk(cubeX, cubeZ);
-
-                Block[] compatBlocks = ((IColumnInternal) chunk).takeCompatGenerationBlockArray();
-                byte[] compatBlockMeta = ((IColumnInternal) chunk).takeCompatGenerationByteArray();
-
-                if (compatBlocks == null || compatBlockMeta == null) {
-                    CubicChunks.LOGGER.error("Optimized compatibility generation failed, disabling...");
-                    CubicChunksConfig.optimizedCompatibilityGenerator = false;
-                } else {
-                    int lastChunkHeight = compatBlocks.length >> 8;
-
-                    IMutableBlockView view = new ChunkArrayBlockView(
-                        16,
-                        lastChunkHeight,
-                        16,
-                        wrapBlockArray(compatBlocks),
-                        wrapByteArray(compatBlockMeta));
-
-                    view = new SafeMutableBlockView(Box.horizontalChunkSlice(0, worldHeightBlocks), view);
-
-                    return Pair.of(chunk, view);
-                }
-            }
-        }
-
-        Chunk chunk = vanilla.provideChunk(cubeX, cubeZ);
-
-        return Pair.of(chunk, new SafeMutableBlockView(Box.horizontalChunkSlice(0, 256), new ChunkBlockView(chunk)));
-    }
-
-    private static Int2ObjectFunction<Block> wrapBlockArray(Block[] compatBlocks) {
-        return new Int2ObjectFunction<>() {
-
-            @Override
-            public Block get(int key) {
-                return compatBlocks[key];
-            }
-
-            @Override
-            public Block put(int key, Block value) {
-                compatBlocks[key] = value;
-                return null;
-            }
-
-            @Override
-            public int size() {
-                return compatBlocks.length;
-            }
-        };
-    }
-
-    private static Int2IntFunction wrapByteArray(byte[] compatBlockMeta) {
-        return new Int2IntFunction() {
-
-            @Override
-            public int get(int key) {
-                return compatBlockMeta[key];
-            }
-
-            @Override
-            public int put(int key, int value) {
-                compatBlockMeta[key] = (byte) value;
-                return 0;
-            }
-
-            @Override
-            public int size() {
-                return compatBlockMeta.length;
-            }
-        };
     }
 
     @Override

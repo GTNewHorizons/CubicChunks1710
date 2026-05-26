@@ -118,10 +118,6 @@ public interface ICubicWorldInternal extends ICubicWorld {
 
         void setSpawnArea(SpawnCubes spawn);
 
-        CompatGenerationScope doCompatibilityGeneration();
-
-        boolean isCompatGenerationScope();
-
         void initCubicWorldServer();
 
         // VanillaNetworkHandler getVanillaNetworkHandler();
@@ -140,10 +136,5 @@ public interface ICubicWorldInternal extends ICubicWorld {
         void initCubicWorldClient(IntRange heightRange, IntRange generationRange);
 
         CubeProviderClient getCubeCache();
-    }
-
-    interface CompatGenerationScope extends AutoCloseable {
-
-        void close();
     }
 }

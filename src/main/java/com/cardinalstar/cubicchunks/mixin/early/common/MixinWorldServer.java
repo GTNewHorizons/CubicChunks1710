@@ -288,17 +288,6 @@ public abstract class MixinWorldServer extends MixinWorld implements ICubicWorld
         CubicChunkManager.unforceChunk(ticket, chunk);
     }
 
-    @Override
-    public CompatGenerationScope doCompatibilityGeneration() {
-        runningCompatibilityGenerator = true;
-        return () -> runningCompatibilityGenerator = false;
-    }
-
-    @Override
-    public boolean isCompatGenerationScope() {
-        return runningCompatibilityGenerator;
-    }
-
     @WrapOperation(
         method = "func_147456_g",
         at = @At(

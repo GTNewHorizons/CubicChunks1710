@@ -264,6 +264,12 @@ public class Cube implements ICube {
         }
     }
 
+    public Cube(Chunk column, int cubeY, ExtendedBlockStorage ebs) {
+        this(column, cubeY);
+
+        this.storage = ebs;
+    }
+
     /**
      * Constructor to be used from subclasses to provide all field values
      *
