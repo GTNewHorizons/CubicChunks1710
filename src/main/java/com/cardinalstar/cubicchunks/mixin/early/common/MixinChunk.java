@@ -68,7 +68,6 @@ import com.cardinalstar.cubicchunks.api.IColumn;
 import com.cardinalstar.cubicchunks.api.ICube;
 import com.cardinalstar.cubicchunks.api.IHeightMap;
 import com.cardinalstar.cubicchunks.mixin.api.ICubicWorldInternal;
-import com.cardinalstar.cubicchunks.util.Coords;
 import com.cardinalstar.cubicchunks.util.Mods;
 import com.cardinalstar.cubicchunks.world.column.ColumnTileEntityMap;
 import com.cardinalstar.cubicchunks.world.column.CubeMap;

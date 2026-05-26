@@ -97,8 +97,8 @@ public class WorldSyncStateMachine {
                     PacketEncoderColumn.createPacket(cube.getColumn())
                         .sendToPlayer(player.player);
 
-                    MinecraftForge.EVENT_BUS.post(
-                        new ChunkWatchEvent.Watch(new ChunkCoordIntPair(pos.getX(), pos.getZ()), player.player));
+                    MinecraftForge.EVENT_BUS
+                        .post(new ChunkWatchEvent.Watch(new ChunkCoordIntPair(pos.getX(), pos.getZ()), player.player));
                 }
 
                 columnData.syncedCubeCount++;
