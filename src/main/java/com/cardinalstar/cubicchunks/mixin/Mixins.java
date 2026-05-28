@@ -88,7 +88,7 @@ public enum Mixins implements IMixins {
         .setApplyIf(() -> true)),
     MIXIN_S23_HEIGHTLIMITS(new MixinBuilder("Changing packet S23 for reading and writing ints to Y values")
         .addCommonMixins("common.MixinS23PacketBlockChange")
-        .setPhase(Phase.LATE)
+        .setPhase(Phase.EARLY)
         .addExcludedMod(Mods.ChunkAPI)
         .setApplyIf(() -> true)),
     MIXIN_BIOME_GEN_BASE(
