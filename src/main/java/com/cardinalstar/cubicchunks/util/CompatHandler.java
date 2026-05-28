@@ -33,7 +33,6 @@ import java.util.stream.Collectors;
 
 import net.minecraft.world.World;
 import net.minecraft.world.chunk.Chunk;
-import net.minecraft.world.chunk.IChunkProvider;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.terraingen.DecorateBiomeEvent;
 import net.minecraftforge.event.terraingen.PopulateChunkEvent;
@@ -45,8 +44,6 @@ import com.cardinalstar.cubicchunks.fixes.common.fakeheight.IEventBus;
 import com.cardinalstar.cubicchunks.mixin.api.ICubicWorldInternal;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableSet;
-
-import cpw.mods.fml.common.IWorldGenerator;
 import cpw.mods.fml.common.Loader;
 import cpw.mods.fml.common.eventhandler.Event;
 import cpw.mods.fml.common.eventhandler.EventBus;
@@ -134,35 +131,6 @@ public class CompatHandler {
             } catch (ClassNotFoundException ignored) {}
         }
         return mods;
-    }
-
-    public static void beforePopulate(World world, IChunkProvider vanilla) {
-        String modid = packageToModId.get(getPackageName(vanilla.getClass()));
-        if (vanillaCompatPopulationFakeHeight.contains(modid)) {
-            ((ICubicWorldInternal.Server) world).fakeWorldHeight(256);
-        }
-    }
-
-    public static void afterPopulate(World world) {
-        ((ICubicWorldInternal.Server) world).fakeWorldHeight(0);
-    }
-
-    public static void beforeGenerate(World world, IWorldGenerator generator) {
-        Class<? extends IWorldGenerator> genClass = generator.getClass();
-        String modid = packageToModId.get(getPackageName(genClass));
-        if (modid == null) {
-            CubicChunks.bigWarning(
-                "Found IWorldGenerator %s that doesn't come from any mod! This is most likely a bug.",
-                genClass);
-            return;
-        }
-        if (IWORLDGENERATOR_FAKE_HEIGHT.contains(modid)) {
-            ((ICubicWorldInternal.Server) world).fakeWorldHeight(256);
-        }
-    }
-
-    public static void afterGenerate(World world) {
-        ((ICubicWorldInternal.Server) world).fakeWorldHeight(0);
     }
 
     // this is called from a mixin into ForgeEventFactory

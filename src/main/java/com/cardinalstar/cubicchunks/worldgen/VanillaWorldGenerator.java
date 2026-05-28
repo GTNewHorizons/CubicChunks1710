@@ -57,7 +57,6 @@ import com.cardinalstar.cubicchunks.server.CubeProviderServer;
 import com.cardinalstar.cubicchunks.server.chunkio.CubeInitLevel;
 import com.cardinalstar.cubicchunks.server.chunkio.ICubeLoader;
 import com.cardinalstar.cubicchunks.server.chunkio.IPreloadFailureDelegate;
-import com.cardinalstar.cubicchunks.util.CompatHandler;
 import com.cardinalstar.cubicchunks.util.Coords;
 import com.cardinalstar.cubicchunks.util.CubePos;
 import com.cardinalstar.cubicchunks.world.CubicChunksSavedData;
@@ -70,7 +69,6 @@ import com.cardinalstar.cubicchunks.world.cube.blockview.IBlockView;
 import com.cardinalstar.cubicchunks.world.cube.blockview.UniformBlockView;
 import com.gtnewhorizon.gtnhlib.util.data.BlockMeta;
 import com.gtnewhorizon.gtnhlib.util.data.ImmutableBlockMeta;
-
 import it.unimi.dsi.fastutil.objects.Object2IntMap;
 import it.unimi.dsi.fastutil.objects.Object2IntOpenHashMap;
 
@@ -437,7 +435,7 @@ public class VanillaWorldGenerator implements IWorldGenerator, IPreloadFailureDe
         column.isModified = true;
 
         try {
-            CompatHandler.beforePopulate(world, vanilla);
+            ((ICubicWorldInternal.Server) world).fakeWorldHeight(256);
 
             vanilla.populate(vanilla, columnX, columnZ);
 
@@ -445,7 +443,7 @@ public class VanillaWorldGenerator implements IWorldGenerator, IPreloadFailureDe
         } catch (Throwable t) {
             CubicChunks.LOGGER.error("Could not populate column {},{}", columnX, columnZ, t);
         } finally {
-            CompatHandler.afterPopulate(world);
+            ((ICubicWorldInternal.Server) world).fakeWorldHeight(0);
         }
     }
 
@@ -466,10 +464,10 @@ public class VanillaWorldGenerator implements IWorldGenerator, IPreloadFailureDe
         for (cpw.mods.fml.common.IWorldGenerator generator : generators) {
             fmlRandom.setSeed(chunkSeed);
             try {
-                CompatHandler.beforeGenerate(world, generator);
+                ((ICubicWorldInternal.Server) world).fakeWorldHeight(256);
                 generator.generate(fmlRandom, x, z, world, vanillaGen, provider);
             } finally {
-                CompatHandler.afterGenerate(world);
+                ((ICubicWorldInternal.Server) world).fakeWorldHeight(0);
             }
         }
     }
