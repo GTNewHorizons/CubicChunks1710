@@ -47,7 +47,7 @@ import org.joml.Vector3ic;
 
 import com.cardinalstar.cubicchunks.api.util.Box;
 import com.cardinalstar.cubicchunks.server.CubicPlayerManager;
-import com.cardinalstar.cubicchunks.util.BlockPosSet;
+import com.cardinalstar.cubicchunks.util.HashSet3D;
 import com.cardinalstar.cubicchunks.util.CubePos;
 import com.cardinalstar.cubicchunks.util.MathUtil;
 import com.cardinalstar.cubicchunks.world.cube.Cube;
@@ -66,7 +66,7 @@ public class CubeSpawnerAnimals implements ISpawnerAnimals {
     private static final int SPAWN_RADIUS = 8;
 
     @Nonnull
-    private final BlockPosSet cubesForSpawn = new BlockPosSet();
+    private final HashSet3D cubesForSpawn = new HashSet3D();
 
     @Override
     public int findChunksForSpawning(WorldServer world, boolean hostileEnable, boolean peacefulEnable,
@@ -105,10 +105,10 @@ public class CubeSpawnerAnimals implements ISpawnerAnimals {
         return totalSpawnCount;
     }
 
-    private int addEligibleCubes(WorldServer world, BlockPosSet possibleCubes) {
+    private int addEligibleCubes(WorldServer world, HashSet3D possibleCubes) {
         int cubeCount = 0;
 
-        BlockPosSet checkedCubes = new BlockPosSet();
+        HashSet3D checkedCubes = new HashSet3D();
 
         for (EntityPlayer player : world.playerEntities) {
             CubePos center = CubePos.fromEntity(player);

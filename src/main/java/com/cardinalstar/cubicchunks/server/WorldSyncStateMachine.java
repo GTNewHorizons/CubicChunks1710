@@ -20,9 +20,9 @@ import com.cardinalstar.cubicchunks.server.CubicPlayerManager.WatchingPlayer;
 import com.cardinalstar.cubicchunks.server.chunkio.CubeInitLevel;
 import com.cardinalstar.cubicchunks.util.AddressTools;
 import com.cardinalstar.cubicchunks.util.HashMap3D;
-import com.cardinalstar.cubicchunks.util.BlockPosSet;
+import com.cardinalstar.cubicchunks.util.HashSet3D;
 import com.cardinalstar.cubicchunks.util.BooleanArray2D;
-import com.cardinalstar.cubicchunks.util.ChunkMap;
+import com.cardinalstar.cubicchunks.util.HashMap2D;
 import com.cardinalstar.cubicchunks.util.CubePos;
 import com.cardinalstar.cubicchunks.world.cube.Cube;
 
@@ -39,12 +39,12 @@ public class WorldSyncStateMachine {
         public int syncedCubeCount;
     }
 
-    private final ChunkMap<ColumnData> syncedColumns = new ChunkMap<>();
-    private final BlockPosSet syncedCubes = new BlockPosSet();
+    private final HashMap2D<ColumnData> syncedColumns = new HashMap2D<>();
+    private final HashSet3D syncedCubes = new HashSet3D();
 
-    private final BlockPosSet dirtyCubes = new BlockPosSet();
+    private final HashSet3D dirtyCubes = new HashSet3D();
     private final HashMap3D<ShortOpenHashSet> dirtyBlocks = new HashMap3D<>();
-    private final ChunkMap<BooleanArray2D> dirtyHeightCols = new ChunkMap<>();
+    private final HashMap2D<BooleanArray2D> dirtyHeightCols = new HashMap2D<>();
 
     public WorldSyncStateMachine(CubeProviderServer provider, WatchingPlayer player) {
         this.provider = provider;
@@ -133,18 +133,18 @@ public class WorldSyncStateMachine {
         }
 
         for (var e : dirtyHeightCols.fastEntryIterable()) {
-            if (!syncedColumns.containsKey(e.getChunkX(), e.getChunkZ())) {
+            if (!syncedColumns.containsKey(e.getX(), e.getZ())) {
                 CubicChunks.LOGGER.trace(
                     "Tried to sync {} height map updates to a column at {} which was not synced",
                     e.getValue()
                         .cardinality(),
-                    new ChunkCoordIntPair(e.getChunkX(), e.getChunkZ()));
+                    new ChunkCoordIntPair(e.getX(), e.getZ()));
 
                 continue;
             }
 
-            if (player.isWatchingColumn(e.getChunkX(), e.getChunkZ())) {
-                Chunk column = provider.getLoadedColumn(e.getChunkX(), e.getChunkZ());
+            if (player.isWatchingColumn(e.getX(), e.getZ())) {
+                Chunk column = provider.getLoadedColumn(e.getX(), e.getZ());
 
                 if (column != null) {
                     PacketEncoderHeightMapUpdate.createPacket(e.getValue(), column)

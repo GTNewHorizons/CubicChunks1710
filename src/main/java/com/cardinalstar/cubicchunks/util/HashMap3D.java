@@ -13,6 +13,7 @@ import java.util.stream.StreamSupport;
 
 import org.jetbrains.annotations.NotNull;
 
+import com.cardinalstar.cubicchunks.api.XYZAddressable;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.objects.AbstractObjectSet;
 import it.unimi.dsi.fastutil.objects.ObjectIterator;
@@ -25,16 +26,32 @@ public class HashMap3D<V> extends Long2ObjectOpenHashMap<V> {
         return super.get(pack(posX, posY, posZ));
     }
 
+    public V get(XYZAddressable xyz) {
+        return get(xyz.getX(), xyz.getY(), xyz.getZ());
+    }
+
     public V remove(int posX, int posY, int posZ) {
         return super.remove(pack(posX, posY, posZ));
+    }
+
+    public V remove(XYZAddressable xyz) {
+        return remove(xyz.getX(), xyz.getY(), xyz.getZ());
     }
 
     public boolean containsKey(int posX, int posY, int posZ) {
         return super.containsKey(pack(posX, posY, posZ));
     }
 
+    public boolean containsKey(XYZAddressable xyz) {
+        return containsKey(xyz.getX(), xyz.getY(), xyz.getZ());
+    }
+
     public V put(int posX, int posY, int posZ, V v) {
         return super.put(pack(posX, posY, posZ), v);
+    }
+
+    public V put(XYZAddressable xyz, V v) {
+        return put(xyz.getX(), xyz.getY(), xyz.getZ(), v);
     }
 
     public interface ComputeFn3D<V> {
@@ -67,7 +84,7 @@ public class HashMap3D<V> extends Long2ObjectOpenHashMap<V> {
         }
     }
 
-    public interface FastEntrySet<V> extends ObjectSet<Entry3D<V>> {
+    public interface FastEntrySet3D<V> extends ObjectSet<Entry3D<V>> {
 
         /**
          * Returns a fast iterator over this entry set; the iterator might return always the same entry
@@ -95,10 +112,10 @@ public class HashMap3D<V> extends Long2ObjectOpenHashMap<V> {
         }
     }
 
-    private FastEntrySet3D entrySet;
+    private FastEntrySet3DImpl entrySet;
 
-    public FastEntrySet<V> fastEntrySet() {
-        if (entrySet == null) entrySet = new FastEntrySet3D();
+    public FastEntrySet3D<V> fastEntrySet() {
+        if (entrySet == null) entrySet = new FastEntrySet3DImpl();
 
         return entrySet;
     }
@@ -116,7 +133,7 @@ public class HashMap3D<V> extends Long2ObjectOpenHashMap<V> {
             false);
     }
 
-    private class FastEntrySet3D extends AbstractObjectSet<Entry3D<V>> implements FastEntrySet<V> {
+    private class FastEntrySet3DImpl extends AbstractObjectSet<Entry3D<V>> implements FastEntrySet3D<V> {
 
         @Override
         public ObjectIterator<Entry3D<V>> fastIterator() {
@@ -136,8 +153,8 @@ public class HashMap3D<V> extends Long2ObjectOpenHashMap<V> {
                 public Entry3D<V> next() {
                     var e = iter.next();
 
-                    entry.setKeyImpl(e.getLongKey());
-                    entry.setValueImpl(e.getValue());
+                    entry.setKey(e.getLongKey());
+                    entry.setValue(e.getValue());
 
                     return entry;
                 }
@@ -171,7 +188,7 @@ public class HashMap3D<V> extends Long2ObjectOpenHashMap<V> {
         }
     }
 
-    public static class Entry3D<T> extends BasicEntry<T> {
+    public static class Entry3D<T> extends BasicEntry<T> implements XYZAddressable {
 
         public Entry3D() {}
 
@@ -189,22 +206,28 @@ public class HashMap3D<V> extends Long2ObjectOpenHashMap<V> {
             super(pack(posX, posY, posZ), value);
         }
 
-        private void setKeyImpl(long key) {
+        void setKey(long key) {
             super.key = key;
         }
 
-        private void setValueImpl(T value) {
+        @Override
+        public T setValue(T value) {
+            T old = super.value;
             super.value = value;
+            return old;
         }
 
+        @Override
         public final int getX() {
             return unpackX(getLongKey());
         }
 
+        @Override
         public final int getY() {
             return unpackY(getLongKey());
         }
 
+        @Override
         public final int getZ() {
             return unpackZ(getLongKey());
         }

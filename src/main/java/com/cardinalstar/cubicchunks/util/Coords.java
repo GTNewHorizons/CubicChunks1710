@@ -39,6 +39,7 @@ public class Coords {
      * areas.
      */
     public static final int BIOMES_PER_CUBE = 8 * 1 * 8;
+    private static final long XZ_INT = 0xFFFFFFFFL;
 
     // public static BlockPos midPos(BlockPos p1, BlockPos p2) {
     // //bitshifting each number and then adding the result - this rounds the number down and prevents overflow
@@ -204,5 +205,17 @@ public class Coords {
 
     public static int z(long key) {
         return (int) unpack(key, Z_SHIFT);
+    }
+
+    public static long packChunk(int x, int z) {
+        return (z & XZ_INT) << 32 | (long) x & XZ_INT;
+    }
+
+    public static int unpackChunkX(long key) {
+        return (int) key;
+    }
+
+    public static int unpackChunkZ(long key) {
+        return (int) (key >> 32);
     }
 }

@@ -10,54 +10,44 @@ import it.unimi.dsi.fastutil.longs.LongIterator;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 
 @SuppressWarnings("unused")
-public class BlockPosSet extends LongOpenHashSet {
+public class HashSet3D extends LongOpenHashSet {
 
-    public boolean contains(int blockX, int blockY, int blockZ) {
-        return super.contains(pack(blockX, blockY, blockZ));
+    public boolean contains(int posX, int posY, int posZ) {
+        return super.contains(pack(posX, posY, posZ));
     }
 
     public boolean contains(XYZAddressable xyz) {
         return contains(xyz.getX(), xyz.getY(), xyz.getZ());
     }
 
-    public boolean remove(int blockX, int blockY, int blockZ) {
-        return super.remove(pack(blockX, blockY, blockZ));
+    public boolean remove(int posX, int posY, int posZ) {
+        return super.remove(pack(posX, posY, posZ));
     }
 
     public boolean remove(XYZAddressable xyz) {
         return remove(xyz.getX(), xyz.getY(), xyz.getZ());
     }
 
-    public boolean add(int blockX, int blockY, int blockZ) {
-        return super.add(pack(blockX, blockY, blockZ));
+    public boolean add(int posX, int posY, int posZ) {
+        return super.add(pack(posX, posY, posZ));
     }
 
     public boolean add(XYZAddressable xyz) {
         return add(xyz.getX(), xyz.getY(), xyz.getZ());
     }
 
+    public interface Consumer3D {
+        void accept(int posX, int posY, int posZ);
+    }
+
+    public void forEach(Consumer3D consumer) {
+        for (var e : this.fastEntryIterable()) {
+            consumer.accept(e.getX(), e.getY(), e.getZ());
+        }
+    }
+
     public Iterator<XYZAddressable> fastIterator() {
         LongIterator iter = super.iterator();
-
-        class MutableXYZ implements XYZAddressable {
-
-            public int x, y, z;
-
-            @Override
-            public int getX() {
-                return x;
-            }
-
-            @Override
-            public int getY() {
-                return y;
-            }
-
-            @Override
-            public int getZ() {
-                return z;
-            }
-        }
 
         MutableXYZ pos = new MutableXYZ();
 
