@@ -32,11 +32,6 @@ public class HashSet2D extends LongOpenHashSet {
         return add(xyz.getX(), xyz.getZ());
     }
 
-    public interface Consumer2D {
-
-        void accept(int posX, int posZ);
-    }
-
     public void forEach(Consumer2D consumer) {
         for (var e : this.fastEntryIterable()) {
             consumer.accept(e.getX(), e.getZ());

@@ -69,12 +69,7 @@ public class HashMap2D<V> extends Long2ObjectOpenHashMap<V> {
         return v;
     }
 
-    public interface Consumer2D<T> {
-
-        void accept(int posX, int posZ, T value);
-    }
-
-    public void forEach(Consumer2D<V> consumer) {
+    public void forEach(Consumer2DWithValue<V> consumer) {
         for (var e : this.fastEntryIterable()) {
             consumer.accept(e.getX(), e.getZ(), e.getValue());
         }

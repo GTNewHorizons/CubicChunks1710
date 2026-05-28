@@ -20,22 +20,20 @@
  */
 package com.cardinalstar.cubicchunks.visibility;
 
-import java.util.function.Consumer;
-
 import javax.annotation.ParametersAreNonnullByDefault;
 
-import net.minecraft.world.ChunkCoordIntPair;
-
 import com.cardinalstar.cubicchunks.util.CubePos;
+import com.cardinalstar.cubicchunks.util.Consumer2D;
+import com.cardinalstar.cubicchunks.util.Consumer3D;
 
 @ParametersAreNonnullByDefault
 public interface CubeSelector {
 
     void forAllVisibleCubes(CubePos cubePos, int horizontalViewDistance, int verticalViewDistance,
-        Consumer<CubePos> fn);
+        Consumer3D fn);
 
     void forAllVisibleColumns(CubePos cubePos, int horizontalViewDistance, int verticalViewDistance,
-        Consumer<ChunkCoordIntPair> fn);
+        Consumer2D fn);
 
     WorldVisibilityChange findChanged(CubePos oldPos, CubePos newPos, int oldHorizonalView, int oldVerticalView,
         int newHorizontalView, int newVerticalView);

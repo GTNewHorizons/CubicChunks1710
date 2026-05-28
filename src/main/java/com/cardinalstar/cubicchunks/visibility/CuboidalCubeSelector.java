@@ -20,14 +20,13 @@
  */
 package com.cardinalstar.cubicchunks.visibility;
 
-import java.util.HashSet;
-import java.util.function.Consumer;
-
 import javax.annotation.ParametersAreNonnullByDefault;
 
-import net.minecraft.world.ChunkCoordIntPair;
-
+import com.cardinalstar.cubicchunks.util.Consumer2D;
+import com.cardinalstar.cubicchunks.util.Consumer3D;
 import com.cardinalstar.cubicchunks.util.CubePos;
+import com.cardinalstar.cubicchunks.util.HashSet2D;
+import com.cardinalstar.cubicchunks.util.HashSet3D;
 
 @ParametersAreNonnullByDefault
 public class CuboidalCubeSelector implements CubeSelector {
@@ -38,7 +37,7 @@ public class CuboidalCubeSelector implements CubeSelector {
 
     @Override
     public void forAllVisibleCubes(CubePos cubePos, int horizontalViewDistance, int verticalViewDistance,
-        Consumer<CubePos> fn) {
+        Consumer3D fn) {
         int cubeX = cubePos.getX();
         int cubeY = cubePos.getY();
         int cubeZ = cubePos.getZ();
@@ -46,7 +45,7 @@ public class CuboidalCubeSelector implements CubeSelector {
         for (int x = cubeX - horizontalViewDistance; x <= cubeX + horizontalViewDistance; x++) {
             for (int y = cubeY - verticalViewDistance; y <= cubeY + verticalViewDistance; y++) {
                 for (int z = cubeZ - horizontalViewDistance; z <= cubeZ + horizontalViewDistance; z++) {
-                    fn.accept(new CubePos(x, y, z));
+                    fn.accept(x, y, z);
                 }
             }
         }
@@ -54,13 +53,13 @@ public class CuboidalCubeSelector implements CubeSelector {
 
     @Override
     public void forAllVisibleColumns(CubePos cubePos, int horizontalViewDistance, int verticalViewDistance,
-        Consumer<ChunkCoordIntPair> fn) {
+        Consumer2D fn) {
         int cubeX = cubePos.getX();
         int cubeZ = cubePos.getZ();
 
         for (int x = cubeX - horizontalViewDistance; x <= cubeX + horizontalViewDistance; x++) {
             for (int z = cubeZ - horizontalViewDistance; z <= cubeZ + horizontalViewDistance; z++) {
-                fn.accept(new ChunkCoordIntPair(x, z));
+                fn.accept(x, z);
             }
         }
     }
@@ -68,43 +67,43 @@ public class CuboidalCubeSelector implements CubeSelector {
     @Override
     public WorldVisibilityChange findChanged(CubePos oldPos, CubePos newPos, int oldHorizontalView, int oldVerticalView,
         int newHorizontalView, int newVerticalView) {
-        HashSet<CubePos> visCubesOld = new HashSet<>();
+        HashSet3D visCubesOld = new HashSet3D();
         forAllVisibleCubes(oldPos, oldHorizontalView, oldVerticalView, visCubesOld::add);
 
-        HashSet<ChunkCoordIntPair> visColsOld = new HashSet<>();
+        HashSet2D visColsOld = new HashSet2D();
         forAllVisibleColumns(oldPos, oldHorizontalView, oldVerticalView, visColsOld::add);
 
-        HashSet<CubePos> visCubesNew = new HashSet<>();
+        HashSet3D visCubesNew = new HashSet3D();
         forAllVisibleCubes(newPos, newHorizontalView, newVerticalView, visCubesNew::add);
 
-        HashSet<ChunkCoordIntPair> visColsNew = new HashSet<>();
+        HashSet2D visColsNew = new HashSet2D();
         forAllVisibleColumns(newPos, newHorizontalView, newVerticalView, visColsNew::add);
 
         WorldVisibilityChange result = new WorldVisibilityChange();
 
-        for (var old : visColsOld) {
-            if (!visColsNew.contains(old)) {
-                result.columnsToUnload.add(old);
+        visColsOld.forEach((x, z) -> {
+            if (!visColsNew.contains(x, z)) {
+                result.columnsToUnload.add(x, z);
             }
-        }
+        });
 
-        for (var old : visCubesOld) {
-            if (!visCubesNew.contains(old)) {
-                result.cubesToUnload.add(old);
+        visCubesOld.forEach((x, y, z) -> {
+            if (!visCubesNew.contains(x, y, z)) {
+                result.cubesToUnload.add(x, y, z);
             }
-        }
+        });
 
-        for (var old : visColsNew) {
-            if (!visColsOld.contains(old)) {
-                result.columnsToLoad.add(old);
+        visColsNew.forEach((x, z) -> {
+            if (!visColsOld.contains(x, z)) {
+                result.columnsToLoad.add(x, z);
             }
-        }
+        });
 
-        for (var old : visCubesNew) {
-            if (!visCubesOld.contains(old)) {
-                result.cubesToLoad.add(old);
+        visCubesNew.forEach((x, y, z) -> {
+            if (!visCubesOld.contains(x, y, z)) {
+                result.cubesToLoad.add(x, y, z);
             }
-        }
+        });
 
         return result;
     }

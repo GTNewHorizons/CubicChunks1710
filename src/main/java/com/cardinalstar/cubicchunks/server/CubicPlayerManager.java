@@ -48,6 +48,7 @@ import com.cardinalstar.cubicchunks.server.chunkio.CubeLoaderCallback;
 import com.cardinalstar.cubicchunks.util.CubePos;
 import com.cardinalstar.cubicchunks.util.CubeStatusVisualizer;
 import com.cardinalstar.cubicchunks.util.CubeStatusVisualizer.CubeStatus;
+import com.cardinalstar.cubicchunks.util.HashSet2D;
 import com.cardinalstar.cubicchunks.visibility.CuboidalCubeSelector;
 import com.cardinalstar.cubicchunks.visibility.WorldVisibilityChange;
 import com.cardinalstar.cubicchunks.world.api.ICubeProviderServer.Requirement;
@@ -264,7 +265,7 @@ public class CubicPlayerManager extends PlayerManager implements CubeLoaderCallb
             watchingPlayer.getManagedCubePos(),
             horizontalViewDistance,
             verticalViewDistance,
-            pos -> onPlayerStartedViewingCube(watchingPlayer, pos));
+            (x, y, z) -> onPlayerStartedViewingCube(watchingPlayer, x, y, z));
 
         watchingPlayer.sync.flush();
     }
@@ -286,7 +287,7 @@ public class CubicPlayerManager extends PlayerManager implements CubeLoaderCallb
             playerCubePos,
             horizontalViewDistance,
             verticalViewDistance,
-            pos -> onPlayerStoppedViewingCube(watchingPlayer, pos));
+            (x, y, z) -> onPlayerStoppedViewingCube(watchingPlayer, x, y, z));
 
         watchingPlayer.sync.flush();
     }
@@ -350,25 +351,25 @@ public class CubicPlayerManager extends PlayerManager implements CubeLoaderCallb
             .doGC();
     }
 
-    private void onPlayerStartedViewingCube(WatchingPlayer player, CubePos pos) {
-        Cube cube = provider.getLoadedCube(pos);
+    private void onPlayerStartedViewingCube(WatchingPlayer player, int x, int y, int z) {
+        Cube cube = provider.getLoadedCube(x, y, z);
 
         if (cube == null || !cube.isInitializedToLevel(CubeInitLevel.Lit)) {
-            var request = cubeLoadRequests.get(pos);
+            var request = cubeLoadRequests.get(x, y, z);
 
             if (request == null || request.isCompleted()) {
-                cubeLoadRequests.put(provider.loadCubeEagerly(pos.getX(), pos.getY(), pos.getZ(), Requirement.LIGHT));
+                cubeLoadRequests.put(provider.loadCubeEagerly(x, y, z, Requirement.LIGHT));
             }
         } else {
-            player.sync.onCubeMarkedDirty(pos.getX(), pos.getY(), pos.getZ());
+            player.sync.onCubeMarkedDirty(x, y, z);
         }
     }
 
-    private void onPlayerStoppedViewingCube(WatchingPlayer player, CubePos pos) {
-        player.sync.onCubeMarkedDirty(pos.getX(), pos.getY(), pos.getZ());
+    private void onPlayerStoppedViewingCube(WatchingPlayer player, int x, int y, int z) {
+        player.sync.onCubeMarkedDirty(x, y, z);
 
-        if (!isCubeWatched(pos.getX(), pos.getY(), pos.getZ())) {
-            var request = cubeLoadRequests.remove(pos);
+        if (!isCubeWatched(x, y, z)) {
+            var request = cubeLoadRequests.remove(x, y, z);
 
             if (request != null) {
                 request.cancel();
@@ -467,8 +468,8 @@ public class CubicPlayerManager extends PlayerManager implements CubeLoaderCallb
     }
 
     private void applyWorldVisibilityChanges(WatchingPlayer player, WorldVisibilityChange delta) {
-        delta.cubesToLoad.forEach(pos -> onPlayerStartedViewingCube(player, pos));
-        delta.cubesToUnload.forEach(pos -> onPlayerStoppedViewingCube(player, pos));
+        delta.cubesToLoad.forEach((x, y, z) -> onPlayerStartedViewingCube(player, x, y, z));
+        delta.cubesToUnload.forEach((x, y, z) -> onPlayerStoppedViewingCube(player, x, y, z));
     }
 
     public class WatchingPlayer {

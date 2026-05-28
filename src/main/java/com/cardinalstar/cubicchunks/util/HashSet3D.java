@@ -36,11 +36,6 @@ public class HashSet3D extends LongOpenHashSet {
         return add(xyz.getX(), xyz.getY(), xyz.getZ());
     }
 
-    public interface Consumer3D {
-
-        void accept(int posX, int posY, int posZ);
-    }
-
     public void forEach(Consumer3D consumer) {
         for (var e : this.fastEntryIterable()) {
             consumer.accept(e.getX(), e.getY(), e.getZ());

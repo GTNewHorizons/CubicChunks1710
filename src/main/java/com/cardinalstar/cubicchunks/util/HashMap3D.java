@@ -76,12 +76,7 @@ public class HashMap3D<V> extends Long2ObjectOpenHashMap<V> {
         return v;
     }
 
-    public interface Consumer3D<T> {
-
-        void accept(int posX, int posY, int posZ, T value);
-    }
-
-    public void forEach(Consumer3D<V> consumer) {
+    public void forEach(Consumer3DWithValue<V> consumer) {
         for (var e : this.fastEntryIterable()) {
             consumer.accept(e.getX(), e.getY(), e.getZ(), e.getValue());
         }
