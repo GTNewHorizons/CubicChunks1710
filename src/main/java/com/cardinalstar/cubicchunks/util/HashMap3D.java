@@ -19,37 +19,36 @@ import it.unimi.dsi.fastutil.objects.ObjectIterator;
 import it.unimi.dsi.fastutil.objects.ObjectSet;
 
 @SuppressWarnings("unused")
-public class BlockPosMap<V> extends Long2ObjectOpenHashMap<V> {
+public class HashMap3D<V> extends Long2ObjectOpenHashMap<V> {
 
-    public V get(int blockX, int blockY, int blockZ) {
-        return super.get(pack(blockX, blockY, blockZ));
+    public V get(int posX, int posY, int posZ) {
+        return super.get(pack(posX, posY, posZ));
     }
 
-    public V remove(int blockX, int blockY, int blockZ) {
-        return super.remove(pack(blockX, blockY, blockZ));
+    public V remove(int posX, int posY, int posZ) {
+        return super.remove(pack(posX, posY, posZ));
     }
 
-    public boolean containsKey(int blockX, int blockY, int blockZ) {
-        return super.containsKey(pack(blockX, blockY, blockZ));
+    public boolean containsKey(int posX, int posY, int posZ) {
+        return super.containsKey(pack(posX, posY, posZ));
     }
 
-    public V put(int blockX, int blockY, int blockZ, V v) {
-        return super.put(pack(blockX, blockY, blockZ), v);
+    public V put(int posX, int posY, int posZ, V v) {
+        return super.put(pack(posX, posY, posZ), v);
     }
 
-    public interface BlockPosMapComputeFn<V> {
-
-        V apply(int blockX, int blockY, int blockZ);
+    public interface ComputeFn3D<V> {
+        V apply(int posX, int posY, int posZ);
     }
 
-    public V computeIfAbsent(int blockX, int blockY, int blockZ, @NotNull BlockPosMapComputeFn<V> mappingFunction) {
+    public V computeIfAbsent(int posX, int posY, int posZ, @NotNull HashMap3D.ComputeFn3D<V> mappingFunction) {
         V v;
 
-        long key = pack(blockX, blockY, blockZ);
+        long key = pack(posX, posY, posZ);
 
         if ((v = get(key)) == null) {
             V newValue;
-            if ((newValue = mappingFunction.apply(blockX, blockY, blockZ)) != null) {
+            if ((newValue = mappingFunction.apply(posX, posY, posZ)) != null) {
                 put(key, newValue);
                 return newValue;
             }
@@ -58,7 +57,17 @@ public class BlockPosMap<V> extends Long2ObjectOpenHashMap<V> {
         return v;
     }
 
-    public interface FastEntrySet<V> extends ObjectSet<BlockPosEntry<V>> {
+    public interface Consumer3D<T> {
+        void accept(int posX, int posY, int posZ, T value);
+    }
+
+    public void forEach(Consumer3D<V> consumer) {
+        for (var e : this.fastEntryIterable()) {
+            consumer.accept(e.getX(), e.getY(), e.getZ(), e.getValue());
+        }
+    }
+
+    public interface FastEntrySet<V> extends ObjectSet<Entry3D<V>> {
 
         /**
          * Returns a fast iterator over this entry set; the iterator might return always the same entry
@@ -67,7 +76,7 @@ public class BlockPosMap<V> extends Long2ObjectOpenHashMap<V> {
          * @return a fast iterator over this entry set; the iterator might return always the same
          *         {@link java.util.Map.Entry} instance, suitably mutated.
          */
-        ObjectIterator<BlockPosEntry<V>> fastIterator();
+        ObjectIterator<Entry3D<V>> fastIterator();
 
         /**
          * Iterates quickly over this entry set; the iteration might happen always on the same entry
@@ -81,24 +90,24 @@ public class BlockPosMap<V> extends Long2ObjectOpenHashMap<V> {
          *                 represented by the same entry instance, suitably mutated.
          * @since 8.1.0
          */
-        default void fastForEach(final Consumer<? super BlockPosEntry<V>> consumer) {
+        default void fastForEach(final Consumer<? super Entry3D<V>> consumer) {
             forEach(consumer);
         }
     }
 
-    private FastChunkEntrySet entrySet = new FastChunkEntrySet();
+    private FastEntrySet3D entrySet;
 
     public FastEntrySet<V> fastEntrySet() {
-        if (entrySet == null) entrySet = new FastChunkEntrySet();
+        if (entrySet == null) entrySet = new FastEntrySet3D();
 
         return entrySet;
     }
 
-    public Iterable<BlockPosEntry<V>> fastEntryIterable() {
+    public Iterable<Entry3D<V>> fastEntryIterable() {
         return () -> fastEntrySet().fastIterator();
     }
 
-    public Stream<BlockPosEntry<V>> fastEntryStream() {
+    public Stream<Entry3D<V>> fastEntryStream() {
         return StreamSupport.stream(
             Spliterators.spliterator(
                 fastEntryIterable().iterator(),
@@ -107,13 +116,13 @@ public class BlockPosMap<V> extends Long2ObjectOpenHashMap<V> {
             false);
     }
 
-    private class FastChunkEntrySet extends AbstractObjectSet<BlockPosEntry<V>> implements FastEntrySet<V> {
+    private class FastEntrySet3D extends AbstractObjectSet<Entry3D<V>> implements FastEntrySet<V> {
 
         @Override
-        public ObjectIterator<BlockPosEntry<V>> fastIterator() {
-            BlockPosEntry<V> entry = new BlockPosEntry<>();
+        public ObjectIterator<Entry3D<V>> fastIterator() {
+            Entry3D<V> entry = new Entry3D<>();
 
-            var iter = BlockPosMap.this.long2ObjectEntrySet()
+            var iter = HashMap3D.this.long2ObjectEntrySet()
                 .fastIterator();
 
             return new ObjectIterator<>() {
@@ -124,7 +133,7 @@ public class BlockPosMap<V> extends Long2ObjectOpenHashMap<V> {
                 }
 
                 @Override
-                public BlockPosEntry<V> next() {
+                public Entry3D<V> next() {
                     var e = iter.next();
 
                     entry.setKeyImpl(e.getLongKey());
@@ -136,8 +145,8 @@ public class BlockPosMap<V> extends Long2ObjectOpenHashMap<V> {
         }
 
         @Override
-        public @NotNull ObjectIterator<BlockPosEntry<V>> iterator() {
-            var iter = BlockPosMap.this.long2ObjectEntrySet()
+        public @NotNull ObjectIterator<Entry3D<V>> iterator() {
+            var iter = HashMap3D.this.long2ObjectEntrySet()
                 .fastIterator();
 
             return new ObjectIterator<>() {
@@ -148,34 +157,36 @@ public class BlockPosMap<V> extends Long2ObjectOpenHashMap<V> {
                 }
 
                 @Override
-                public BlockPosEntry<V> next() {
+                public Entry3D<V> next() {
                     var e = iter.next();
 
-                    return new BlockPosEntry<>(e.getLongKey(), e.getValue());
+                    return new Entry3D<>(e.getLongKey(), e.getValue());
                 }
             };
         }
 
         @Override
         public int size() {
-            return BlockPosMap.this.size();
+            return HashMap3D.this.size();
         }
     }
 
-    public static class BlockPosEntry<T> extends BasicEntry<T> {
+    public static class Entry3D<T> extends BasicEntry<T> {
 
-        public BlockPosEntry() {}
+        public Entry3D() {}
 
-        public BlockPosEntry(Long key, T value) {
+        /// @deprecated Use [#Entry3D(long, Object)] to avoid the long boxing.
+        @Deprecated
+        public Entry3D(Long key, T value) {
             super(key, value);
         }
 
-        public BlockPosEntry(long key, T value) {
+        public Entry3D(long key, T value) {
             super(key, value);
         }
 
-        public BlockPosEntry(int blockX, int blockY, int blockZ, T value) {
-            super(pack(blockX, blockY, blockZ), value);
+        public Entry3D(int posX, int posY, int posZ, T value) {
+            super(pack(posX, posY, posZ), value);
         }
 
         private void setKeyImpl(long key) {
@@ -186,15 +197,15 @@ public class BlockPosMap<V> extends Long2ObjectOpenHashMap<V> {
             super.value = value;
         }
 
-        public final int getBlockX() {
+        public final int getX() {
             return unpackX(getLongKey());
         }
 
-        public final int getBlockY() {
+        public final int getY() {
             return unpackY(getLongKey());
         }
 
-        public final int getBlockZ() {
+        public final int getZ() {
             return unpackZ(getLongKey());
         }
     }

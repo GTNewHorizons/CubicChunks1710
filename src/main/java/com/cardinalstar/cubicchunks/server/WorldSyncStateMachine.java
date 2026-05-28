@@ -19,7 +19,7 @@ import com.cardinalstar.cubicchunks.network.PacketEncoderUnloadCube;
 import com.cardinalstar.cubicchunks.server.CubicPlayerManager.WatchingPlayer;
 import com.cardinalstar.cubicchunks.server.chunkio.CubeInitLevel;
 import com.cardinalstar.cubicchunks.util.AddressTools;
-import com.cardinalstar.cubicchunks.util.BlockPosMap;
+import com.cardinalstar.cubicchunks.util.HashMap3D;
 import com.cardinalstar.cubicchunks.util.BlockPosSet;
 import com.cardinalstar.cubicchunks.util.BooleanArray2D;
 import com.cardinalstar.cubicchunks.util.ChunkMap;
@@ -43,7 +43,7 @@ public class WorldSyncStateMachine {
     private final BlockPosSet syncedCubes = new BlockPosSet();
 
     private final BlockPosSet dirtyCubes = new BlockPosSet();
-    private final BlockPosMap<ShortOpenHashSet> dirtyBlocks = new BlockPosMap<>();
+    private final HashMap3D<ShortOpenHashSet> dirtyBlocks = new HashMap3D<>();
     private final ChunkMap<BooleanArray2D> dirtyHeightCols = new ChunkMap<>();
 
     public WorldSyncStateMachine(CubeProviderServer provider, WatchingPlayer player) {
@@ -112,18 +112,18 @@ public class WorldSyncStateMachine {
         }
 
         for (var e : dirtyBlocks.fastEntryIterable()) {
-            if (!syncedCubes.contains(e.getBlockX(), e.getBlockY(), e.getBlockZ())) {
+            if (!syncedCubes.contains(e.getX(), e.getY(), e.getZ())) {
                 CubicChunks.LOGGER.trace(
                     "Tried to sync {} block updates to a cube at {} which was not synced",
                     e.getValue()
                         .size(),
-                    new CubePos(e.getBlockX(), e.getBlockY(), e.getBlockZ()));
+                    new CubePos(e.getX(), e.getY(), e.getZ()));
 
                 continue;
             }
 
-            if (player.isWatchingCube(e.getBlockX(), e.getBlockY(), e.getBlockZ())) {
-                Cube cube = provider.getLoadedCube(e.getBlockX(), e.getBlockY(), e.getBlockZ());
+            if (player.isWatchingCube(e.getX(), e.getY(), e.getZ())) {
+                Cube cube = provider.getLoadedCube(e.getX(), e.getY(), e.getZ());
 
                 if (cube != null) {
                     PacketEncoderCubeBlockChange.createPacket(cube, e.getValue())
