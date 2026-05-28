@@ -336,17 +336,6 @@ public abstract class MixinChunk implements IColumn, IColumnInternal {
     // getBlockLightOpacity
     // ==============================================
 
-    // TODO Maybe check this. For some reason there is no isLoaded check on this.
-    // @Redirect(method = "func_150808_b(III)I", at = @At(value = "FIELD", target =
-    // "Lnet/minecraft/world/chunk/Chunk;isChunkLoaded:Z"))
-    // private boolean getBlockLightOpacity_isChunkLoadedCubeRedirect(Chunk chunk, int x, int y, int z) {
-    // if (!isColumn) {
-    // return isChunkLoaded;
-    // }
-    // ICube cube = ((IColumn) this).getLoadedCube(blockToCube(y));
-    // return cube != null && cube.isCubeLoaded();
-    // }
-
     @Unique
     private void markDirty(Cube cube) {
         this.isModified = true;
