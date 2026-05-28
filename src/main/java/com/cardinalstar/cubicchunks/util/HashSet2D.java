@@ -33,6 +33,7 @@ public class HashSet2D extends LongOpenHashSet {
     }
 
     public interface Consumer2D {
+
         void accept(int posX, int posZ);
     }
 

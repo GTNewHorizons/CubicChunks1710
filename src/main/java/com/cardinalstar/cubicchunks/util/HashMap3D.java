@@ -14,6 +14,7 @@ import java.util.stream.StreamSupport;
 import org.jetbrains.annotations.NotNull;
 
 import com.cardinalstar.cubicchunks.api.XYZAddressable;
+
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.objects.AbstractObjectSet;
 import it.unimi.dsi.fastutil.objects.ObjectIterator;
@@ -55,6 +56,7 @@ public class HashMap3D<V> extends Long2ObjectOpenHashMap<V> {
     }
 
     public interface ComputeFn3D<V> {
+
         V apply(int posX, int posY, int posZ);
     }
 
@@ -75,6 +77,7 @@ public class HashMap3D<V> extends Long2ObjectOpenHashMap<V> {
     }
 
     public interface Consumer3D<T> {
+
         void accept(int posX, int posY, int posZ, T value);
     }
 

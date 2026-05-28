@@ -62,11 +62,9 @@ public abstract class MixinWorld_DeferInit implements WorldExt {
 
     @WrapOperation(
         method = "<init>(Lnet/minecraft/world/storage/ISaveHandler;Ljava/lang/String;Lnet/minecraft/world/WorldSettings;Lnet/minecraft/world/WorldProvider;Lnet/minecraft/profiler/Profiler;)V",
-        at = @At(
-            value = "INVOKE", target = "Lnet/minecraft/world/storage/WorldInfo;isInitialized()Z"
-        )
-    )
-    public boolean deferInit(WorldInfo instance, Operation<Boolean> original, @Local(argsOnly = true) WorldSettings settings) {
+        at = @At(value = "INVOKE", target = "Lnet/minecraft/world/storage/WorldInfo;isInitialized()Z"))
+    public boolean deferInit(WorldInfo instance, Operation<Boolean> original,
+        @Local(argsOnly = true) WorldSettings settings) {
         this.settings = settings;
         // isInitialized(): false -> inverted to disable init
         return true;
@@ -76,10 +74,8 @@ public abstract class MixinWorld_DeferInit implements WorldExt {
     public static class MixinWorldServer {
 
         @Inject(method = "<init>", at = @At("TAIL"))
-        public void doInit(
-            MinecraftServer p_i45284_1_, ISaveHandler p_i45284_2_, String p_i45284_3_, int p_i45284_4_,
-            WorldSettings p_i45284_5_, Profiler p_i45284_6_, CallbackInfo ci
-        ) {
+        public void doInit(MinecraftServer p_i45284_1_, ISaveHandler p_i45284_2_, String p_i45284_3_, int p_i45284_4_,
+            WorldSettings p_i45284_5_, Profiler p_i45284_6_, CallbackInfo ci) {
             ((WorldExt) this).cc$initialize();
         }
     }

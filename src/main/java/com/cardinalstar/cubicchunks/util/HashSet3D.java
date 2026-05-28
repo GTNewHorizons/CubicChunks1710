@@ -37,6 +37,7 @@ public class HashSet3D extends LongOpenHashSet {
     }
 
     public interface Consumer3D {
+
         void accept(int posX, int posY, int posZ);
     }
 

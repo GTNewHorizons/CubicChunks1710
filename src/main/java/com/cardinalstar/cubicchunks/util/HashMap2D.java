@@ -49,6 +49,7 @@ public class HashMap2D<V> extends Long2ObjectOpenHashMap<V> {
     }
 
     public interface ComputeFn2D<V> {
+
         V apply(int posX, int posZ);
     }
 
@@ -69,6 +70,7 @@ public class HashMap2D<V> extends Long2ObjectOpenHashMap<V> {
     }
 
     public interface Consumer2D<T> {
+
         void accept(int posX, int posZ, T value);
     }
 

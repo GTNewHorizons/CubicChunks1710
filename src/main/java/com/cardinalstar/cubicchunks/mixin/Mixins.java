@@ -95,8 +95,8 @@ public enum Mixins implements IMixins {
         new MixinBuilder("Removes bedrock for pure cubic worlds.").addCommonMixins("common.MixinBiomeGenBase")
             .setPhase(Phase.EARLY)
             .setApplyIf(() -> true)),
-    MIXIN_WORLD_SERVER_DEFER_INIT(
-        new MixinBuilder("Defer World.initialize calls for servers so that chunk loads aren't posted before the server is properly register into DimensionManager")
+    MIXIN_WORLD_SERVER_DEFER_INIT(new MixinBuilder(
+        "Defer World.initialize calls for servers so that chunk loads aren't posted before the server is properly register into DimensionManager")
             .addCommonMixins("common.MixinWorld_DeferInit", "common.MixinWorld_DeferInit$MixinWorldServer")
             .setPhase(Phase.EARLY)
             .setApplyIf(() -> true)),
