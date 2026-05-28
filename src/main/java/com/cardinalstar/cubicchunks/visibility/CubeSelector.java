@@ -22,18 +22,16 @@ package com.cardinalstar.cubicchunks.visibility;
 
 import javax.annotation.ParametersAreNonnullByDefault;
 
-import com.cardinalstar.cubicchunks.util.CubePos;
 import com.cardinalstar.cubicchunks.util.Consumer2D;
 import com.cardinalstar.cubicchunks.util.Consumer3D;
+import com.cardinalstar.cubicchunks.util.CubePos;
 
 @ParametersAreNonnullByDefault
 public interface CubeSelector {
 
-    void forAllVisibleCubes(CubePos cubePos, int horizontalViewDistance, int verticalViewDistance,
-        Consumer3D fn);
+    void forAllVisibleCubes(CubePos cubePos, int horizontalViewDistance, int verticalViewDistance, Consumer3D fn);
 
-    void forAllVisibleColumns(CubePos cubePos, int horizontalViewDistance, int verticalViewDistance,
-        Consumer2D fn);
+    void forAllVisibleColumns(CubePos cubePos, int horizontalViewDistance, int verticalViewDistance, Consumer2D fn);
 
     WorldVisibilityChange findChanged(CubePos oldPos, CubePos newPos, int oldHorizonalView, int oldVerticalView,
         int newHorizontalView, int newVerticalView);
