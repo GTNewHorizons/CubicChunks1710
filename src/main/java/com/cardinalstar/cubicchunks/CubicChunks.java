@@ -74,7 +74,7 @@ import cpw.mods.fml.common.versioning.VersionRange;
 import cpw.mods.fml.relauncher.Side;
 
 @ParametersAreNonnullByDefault
-@Mod(modid = CubicChunks.MODID, useMetadata = true)
+@Mod(modid = CubicChunks.MODID, useMetadata = true, dependencies = "required-after:RegionLib;")
 public class CubicChunks {
 
     public static final int MAX_RENDER_DISTANCE = 64;
