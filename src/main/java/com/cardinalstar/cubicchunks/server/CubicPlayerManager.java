@@ -53,7 +53,6 @@ import com.cardinalstar.cubicchunks.visibility.CuboidalCubeSelector;
 import com.cardinalstar.cubicchunks.visibility.WorldVisibilityChange;
 import com.cardinalstar.cubicchunks.world.api.ICubeProviderServer.Requirement;
 import com.cardinalstar.cubicchunks.world.cube.Cube;
-
 import lombok.Getter;
 
 /**
@@ -75,7 +74,7 @@ public class CubicPlayerManager extends PlayerManager implements CubeLoaderCallb
     private int horizontalViewDistance;
     private int verticalViewDistance;
 
-    private long lastWorldTime;
+    private long lastChunkInhabitedUpdate;
 
     // these player adds will be processed on the next tick
     // this exists as temporary workaround to player respawn code calling addPlayer() before spawning
@@ -124,12 +123,6 @@ public class CubicPlayerManager extends PlayerManager implements CubeLoaderCallb
 
         getWorldServer().theProfiler.endStartSection("Immediate nearby cube loading");
 
-        long now = getWorldServer().getWorldTime();
-
-        long delta = lastWorldTime == 0 ? 0 : now - lastWorldTime;
-
-        this.lastWorldTime = now;
-
         for (var player : players.getPlayerArray()) {
             CubeProviderServer cubeCache = ((Server) getWorldServer()).getCubeCache();
 
@@ -141,12 +134,32 @@ public class CubicPlayerManager extends PlayerManager implements CubeLoaderCallb
             }
 
             player.sync.flush();
+        }
 
-            Chunk inColumn = provider.getLoadedColumn(player.getManagedCubePosX(), player.getManagedCubePosZ());
+        long now = getWorldServer().getTotalWorldTime();
 
-            if (inColumn != null) {
-                inColumn.inhabitedTime += delta;
+        long delta = lastChunkInhabitedUpdate == 0 ? 0 : now - lastChunkInhabitedUpdate;
+
+        if (delta >= 200) {
+            this.lastChunkInhabitedUpdate = now;
+
+            HashSet2D viewedColumns = new HashSet2D();
+
+            for (var player : players.getPlayerArray()) {
+                CuboidalCubeSelector.INSTANCE.forAllVisibleColumns(
+                    player.getManagedCubePos(),
+                    horizontalViewDistance,
+                    verticalViewDistance,
+                    viewedColumns::add);
             }
+
+            viewedColumns.forEach((x, z) -> {
+                Chunk loadedColumn = provider.getLoadedColumn(x, z);
+
+                if (loadedColumn != null) {
+                    loadedColumn.inhabitedTime += delta;
+                }
+            });
         }
 
         getWorldServer().theProfiler.endStartSection("tickEntries");
