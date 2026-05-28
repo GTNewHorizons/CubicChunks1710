@@ -11,8 +11,8 @@ import com.cardinalstar.cubicchunks.CubicChunks;
 import com.cardinalstar.cubicchunks.api.XYZAddressable;
 import com.cardinalstar.cubicchunks.api.event.CubeEvent;
 import com.cardinalstar.cubicchunks.network.PacketEncoderColumn;
+import com.cardinalstar.cubicchunks.network.PacketEncoderCube;
 import com.cardinalstar.cubicchunks.network.PacketEncoderCubeBlockChange;
-import com.cardinalstar.cubicchunks.network.PacketEncoderCubes;
 import com.cardinalstar.cubicchunks.network.PacketEncoderHeightMapUpdate;
 import com.cardinalstar.cubicchunks.network.PacketEncoderUnloadColumn;
 import com.cardinalstar.cubicchunks.network.PacketEncoderUnloadCube;
@@ -104,7 +104,7 @@ public class WorldSyncStateMachine {
                 columnData.syncedCubeCount++;
                 syncedCubes.add(pos);
 
-                PacketEncoderCubes.createPacket(cube)
+                PacketEncoderCube.createPacket(cube)
                     .sendToPlayer(player.player);
 
                 MinecraftForge.EVENT_BUS.post(new CubeEvent.Watch(provider.worldObj, cube, player.player));

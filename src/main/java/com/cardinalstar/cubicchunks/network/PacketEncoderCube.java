@@ -32,7 +32,7 @@ import net.minecraft.world.World;
 import com.cardinalstar.cubicchunks.CubicChunks;
 import com.cardinalstar.cubicchunks.client.CubeProviderClient;
 import com.cardinalstar.cubicchunks.modcompat.angelica.AngelicaInterop;
-import com.cardinalstar.cubicchunks.network.PacketEncoderCubes.PacketCube;
+import com.cardinalstar.cubicchunks.network.PacketEncoderCube.PacketCube;
 import com.cardinalstar.cubicchunks.util.CubePos;
 import com.cardinalstar.cubicchunks.util.CubeStatusVisualizer;
 import com.cardinalstar.cubicchunks.util.CubeStatusVisualizer.CubeStatus;
@@ -43,18 +43,18 @@ import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 
 @ParametersAreNonnullByDefault
-public class PacketEncoderCubes extends CCPacketEncoder<PacketCube> {
+public class PacketEncoderCube extends CCPacketEncoder<PacketCube> {
 
     @Desugar
     public record PacketCube(CubePos cubePos, byte[] data, List<NBTTagCompound> tileEntityTags) implements CCPacket {
 
         @Override
         public byte getPacketID() {
-            return CCPacketEntry.Cubes.id;
+            return CCPacketEntry.Cube.id;
         }
     }
 
-    public PacketEncoderCubes() {}
+    public PacketEncoderCube() {}
 
     public static PacketCube createPacket(Cube cube) {
         CubeStatusVisualizer.put(cube.getCoords(), CubeStatus.Synced);
@@ -84,7 +84,7 @@ public class PacketEncoderCubes extends CCPacketEncoder<PacketCube> {
 
     @Override
     public byte getPacketID() {
-        return CCPacketEntry.Cubes.id;
+        return CCPacketEntry.Cube.id;
     }
 
     @Override

@@ -2,7 +2,7 @@ package com.cardinalstar.cubicchunks.network;
 
 public enum CCPacketEntry {
 
-    Cubes(new PacketEncoderCubes()),
+    Cube(new PacketEncoderCube()),
     Column(new PacketEncoderColumn()),
     UnloadColumn(new PacketEncoderUnloadColumn()),
     UnloadCube(new PacketEncoderUnloadCube()),
