@@ -20,7 +20,9 @@
  */
 package com.cardinalstar.cubicchunks.server.chunkio.region;
 
-import static java.nio.file.StandardOpenOption.*;
+import static java.nio.file.StandardOpenOption.CREATE;
+import static java.nio.file.StandardOpenOption.READ;
+import static java.nio.file.StandardOpenOption.WRITE;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -42,8 +44,6 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.Function;
 
 import com.cardinalstar.cubicchunks.CubicChunks;
-import com.cardinalstar.cubicchunks.util.Tuple;
-
 import cubicchunks.regionlib.MultiUnsupportedDataException;
 import cubicchunks.regionlib.UnsupportedDataException;
 import cubicchunks.regionlib.api.region.IRegion;
@@ -58,6 +58,7 @@ import cubicchunks.regionlib.lib.header.IntPackedSectorMap;
 import cubicchunks.regionlib.util.CheckedConsumer;
 import cubicchunks.regionlib.util.CorruptedDataException;
 import cubicchunks.regionlib.util.Utils;
+import it.unimi.dsi.fastutil.Pair;
 
 /**
  * Simplified {@link Region} class implementing shadow paging by using custom sector tracker
@@ -203,10 +204,10 @@ public class ShadowPagingRegion<K extends IKey<K>> implements IRegion<K> {
                     // it won't cause the sector tracker to be updated, meaning that reallocated sectors won't be
                     // overwritten by
                     // subsequent writes from the same batch.
-                    Tuple<RegionEntryLocation, RegionEntryLocation> headerUpdate = this.sectorTracker
+                    Pair<RegionEntryLocation, RegionEntryLocation> headerUpdate = this.sectorTracker
                         .reserveForKey(key, numSectors);
-                    prevLocation = Optional.ofNullable(headerUpdate.getFirst());
-                    entryLocationsToUse.put(key, headerUpdate.getSecond());
+                    prevLocation = Optional.ofNullable(headerUpdate.left());
+                    entryLocationsToUse.put(key, headerUpdate.right());
                 }
                 pendingHeaderUpdates.put(key, prevLocation);
             } catch (UnsupportedDataException e) {
@@ -627,13 +628,13 @@ public class ShadowPagingRegion<K extends IKey<K>> implements IRegion<K> {
          *
          * The old sectors will not be released.
          */
-        public Tuple<RegionEntryLocation, RegionEntryLocation> reserveForKey(K key, int requestedSize)
+        public Pair<RegionEntryLocation, RegionEntryLocation> reserveForKey(K key, int requestedSize)
             throws IOException {
             Optional<RegionEntryLocation> existing = sectorMap.getEntryLocation(key);
             RegionEntryLocation found = findFree(requestedSize);
             this.sectorMap.setOffsetAndSize(key, found);
             this.updateUsedSectorsFor(null, found); // mark new sectors as allocated
-            return new Tuple<>(existing.orElse(null), found);
+            return Pair.of(existing.orElse(null), found);
         }
 
         private RegionEntryLocation findFree(int requestedSize) {
