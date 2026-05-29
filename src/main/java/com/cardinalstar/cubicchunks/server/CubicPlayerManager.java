@@ -139,7 +139,11 @@ public class CubicPlayerManager extends PlayerManager implements CubeLoaderCallb
 
         long now = getWorldServer().getTotalWorldTime();
 
-        long delta = lastChunkInhabitedUpdate == 0 ? 0 : now - lastChunkInhabitedUpdate;
+        if (this.lastChunkInhabitedUpdate == 0) {
+            this.lastChunkInhabitedUpdate = now;
+        }
+
+        long delta = now - this.lastChunkInhabitedUpdate;
 
         if (delta >= 200) {
             this.lastChunkInhabitedUpdate = now;
