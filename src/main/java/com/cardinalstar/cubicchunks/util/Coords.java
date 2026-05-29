@@ -208,7 +208,7 @@ public class Coords {
     }
 
     public static long packChunk(int x, int z) {
-        return (z & XZ_INT) << 32 | (long) x & XZ_INT;
+        return (z & XZ_INT) << 32 | (x & XZ_INT);
     }
 
     public static int unpackChunkX(long key) {
