@@ -1,7 +1,7 @@
 package com.cardinalstar.cubicchunks.api.compat;
 
 import com.cardinalstar.cubicchunks.CubicChunksConfig;
-import com.cardinalstar.cubicchunks.modcompat.angelica.AngelicaInterop;
+import com.cardinalstar.cubicchunks.util.Mods;
 
 public class CubicChunksVideoSettings {
 
@@ -10,7 +10,7 @@ public class CubicChunksVideoSettings {
     }
 
     public static int getMaxVerticalViewDistance() {
-        return AngelicaInterop.hasDelegate() ? 64 : 32;
+        return Mods.Angelica.isModLoaded() ? 64 : 32;
     }
 
     public static int getVerticalViewDistance() {

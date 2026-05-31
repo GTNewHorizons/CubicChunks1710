@@ -26,7 +26,6 @@ import net.minecraft.world.World;
 import net.minecraft.world.chunk.Chunk;
 
 import com.cardinalstar.cubicchunks.client.CubeProviderClient;
-import com.cardinalstar.cubicchunks.modcompat.angelica.AngelicaInterop;
 import com.cardinalstar.cubicchunks.world.ICubicWorld;
 import com.github.bsideup.jabel.Desugar;
 
@@ -84,10 +83,5 @@ public class PacketEncoderColumn extends CCPacketEncoder<PacketEncoderColumn.Pac
 
             WorldEncoder.decodeColumn(new CCPacketBuffer(buf), column);
         });
-
-        if (AngelicaInterop.hasDelegate()) {
-            AngelicaInterop.getDelegate()
-                .onColumnLoaded(packet.chunkX, packet.chunkZ);
-        }
     }
 }
