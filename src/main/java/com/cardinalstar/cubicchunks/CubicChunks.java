@@ -52,6 +52,7 @@ import com.cardinalstar.cubicchunks.util.Mods;
 import com.cardinalstar.cubicchunks.util.SideUtils;
 import com.cardinalstar.cubicchunks.world.worldgen.WorldGenerators;
 import com.cardinalstar.cubicchunks.worldgen.WorldgenHangWatchdog;
+import com.cardinalstar.cubicchunks.worldgen.ccenhanced.CCEnhancedWorldType;
 import com.falsepattern.chunk.api.DataRegistry;
 import com.gtnewhorizon.gtnhlib.config.ConfigException;
 import com.gtnewhorizon.gtnhlib.config.ConfigurationManager;
@@ -121,6 +122,7 @@ public class CubicChunks {
 
         registerAnvil3dStorageFormatProvider();
         VanillaCubicWorldType.init();
+        CCEnhancedWorldType.init();
 
         LOGGER.debug("Registered world types");
 
