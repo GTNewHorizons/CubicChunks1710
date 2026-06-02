@@ -305,7 +305,13 @@ public enum Mixins implements IMixins {
             .addCommonMixins("mod.MixinBlockPosUtil")
             .setPhase(Phase.LATE)
             .addRequiredMod(Mods.ChunkAPI)
-            .setApplyIf(() -> true))
+            .setApplyIf(() -> true)),
+    MIXIN_COORD_PACKER_CELERITAS(
+        new MixinBuilder("Overwrite Angelica/Celeritas PositionUtil packing methods with CC-compatible ones")
+            .addCommonMixins("mod.MixinPositionUtil")
+            .setPhase(Phase.EARLY)
+            .addRequiredMod(Mods.Angelica)
+            .setApplyIf(() -> true)),
     //
     ;
 
