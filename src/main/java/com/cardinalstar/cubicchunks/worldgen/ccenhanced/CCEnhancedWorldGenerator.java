@@ -1,42 +1,57 @@
 package com.cardinalstar.cubicchunks.worldgen.ccenhanced;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 import javax.annotation.Nullable;
 import javax.annotation.ParametersAreNonnullByDefault;
 
 import net.minecraft.entity.EnumCreatureType;
-import net.minecraft.init.Blocks;
 import net.minecraft.world.ChunkPosition;
 import net.minecraft.world.World;
 import net.minecraft.world.biome.BiomeGenBase;
 import net.minecraft.world.chunk.Chunk;
-import net.minecraft.world.chunk.storage.ExtendedBlockStorage;
 
 import com.cardinalstar.cubicchunks.api.ICube;
 import com.cardinalstar.cubicchunks.api.worldgen.GenerationResult;
 import com.cardinalstar.cubicchunks.api.worldgen.IWorldGenerator;
 import com.cardinalstar.cubicchunks.world.core.IColumnInternal;
 import com.cardinalstar.cubicchunks.world.cube.Cube;
+import com.cardinalstar.cubicchunks.worldgen.ccenhanced.climate.ClimateSystem;
+import com.cardinalstar.cubicchunks.worldgen.ccenhanced.terrain.CCBiomeCache;
+import com.cardinalstar.cubicchunks.worldgen.ccenhanced.terrain.CCTerrainGenerator;
+import com.cardinalstar.cubicchunks.worldgen.ccenhanced.terrain.ColumnContext;
 
 @ParametersAreNonnullByDefault
 public class CCEnhancedWorldGenerator implements IWorldGenerator {
 
-    private static final int SEA_LEVEL = 64;
-
-    // Flat world layout:
-    // cubeY 0-2 (blocks 0-47): all stone
-    // cubeY 3 (blocks 48-63): stone, top layer (local y=15) = dirt
-    // cubeY 4 (blocks 64-79): grass at local y=0, air above
-    // cubeY 5+ (blocks 80+ ): air
-    private static final int SURFACE_CUBE_Y = SEA_LEVEL / 16; // 4
-    private static final int DIRT_CUBE_Y = SURFACE_CUBE_Y - 1; // 3
+    /** ColumnContext LRU cache capacity: enough to cover a generous chunk-loading radius. */
+    private static final int CONTEXT_CACHE_CAPACITY = 256;
 
     private final World world;
+    private final ClimateSystem climateSystem;
+    private final CCBiomeCache biomeCache;
+    private final CCTerrainGenerator terrainGen;
+
+    // LRU cache: column position key → ColumnContext computed during provideColumn,
+    // read back during provideCube calls for the same column.
+    private final LinkedHashMap<Long, ColumnContext> contextCache;
 
     public CCEnhancedWorldGenerator(World world) {
         this.world = world;
+        long seed = world.getSeed();
+        this.climateSystem = new ClimateSystem(seed);
+        this.biomeCache = new CCBiomeCache(climateSystem);
+        this.terrainGen = new CCTerrainGenerator(seed);
+        this.contextCache = new LinkedHashMap<Long, ColumnContext>(CONTEXT_CACHE_CAPACITY, 0.75f, true) {
+
+            @Override
+            protected boolean removeEldestEntry(Map.Entry<Long, ColumnContext> eldest) {
+                return size() > CONTEXT_CACHE_CAPACITY;
+            }
+        };
     }
 
     // -------------------------------------------------------------------------
@@ -48,9 +63,12 @@ public class CCEnhancedWorldGenerator implements IWorldGenerator {
         Chunk chunk = new Chunk(world, columnX, columnZ);
         ((IColumnInternal) chunk).setColumn(true);
 
+        ColumnContext ctx = terrainGen.computeColumnContext(chunk, columnX, columnZ, biomeCache);
+        contextCache.put(packKey(columnX, columnZ), ctx);
+
         List<Cube> cubes = new ArrayList<>(16);
-        for (int cy = 0; cy < 16; cy++) {
-            cubes.add(new Cube(chunk, cy, createFlatEbs(cy)));
+        for (int cubeY = 0; cubeY < 16; cubeY++) {
+            cubes.add(new Cube(chunk, cubeY, terrainGen.buildEbs(world, ctx, cubeY)));
         }
 
         return new GenerationResult<>(chunk, null, cubes);
@@ -65,22 +83,24 @@ public class CCEnhancedWorldGenerator implements IWorldGenerator {
         List<Chunk> generatedColumns = new ArrayList<>();
         List<Cube> generatedCubes = new ArrayList<>();
 
-        // Generate column + all vanilla-range cubes if chunk is missing,
-        // or if the requested cube falls in the vanilla range.
+        // Generate column + all vanilla-range cubes if chunk is missing or
+        // the requested cube falls in the vanilla range.
         if ((cubeY >= 0 && cubeY < 16) || chunk == null) {
             if (chunk == null) {
                 chunk = new Chunk(world, cubeX, cubeZ);
                 ((IColumnInternal) chunk).setColumn(true);
                 generatedColumns.add(chunk);
             }
+            ColumnContext ctx = getOrComputeContext(chunk, cubeX, cubeZ);
             for (int cy = 0; cy < 16; cy++) {
-                generatedCubes.add(new Cube(chunk, cy, createFlatEbs(cy)));
+                generatedCubes.add(new Cube(chunk, cy, terrainGen.buildEbs(world, ctx, cy)));
             }
         }
 
-        // Cubes outside [0,16) are always air.
+        // Cubes outside [0, 16) are generated individually using the same terrain rules.
         if (cubeY < 0 || cubeY >= 16) {
-            generatedCubes.add(new Cube(chunk, cubeY, (ExtendedBlockStorage) null));
+            ColumnContext ctx = getOrComputeContext(chunk, cubeX, cubeZ);
+            generatedCubes.add(new Cube(chunk, cubeY, terrainGen.buildEbs(world, ctx, cubeY)));
         }
 
         // Extract the requested cube as the primary result.
@@ -131,40 +151,18 @@ public class CCEnhancedWorldGenerator implements IWorldGenerator {
     // Helpers
     // -------------------------------------------------------------------------
 
-    /**
-     * Build an ExtendedBlockStorage for the flat world at the given cube Y.
-     * Returns null for fully-air cubes (cubeY outside the filled range).
-     */
-    @Nullable
-    private ExtendedBlockStorage createFlatEbs(int cubeY) {
-        if (cubeY < 0 || cubeY > SURFACE_CUBE_Y) {
-            return null; // air
+    /** Returns the cached ColumnContext for this column, computing it on demand if absent. */
+    private ColumnContext getOrComputeContext(Chunk chunk, int chunkX, int chunkZ) {
+        long key = packKey(chunkX, chunkZ);
+        ColumnContext ctx = contextCache.get(key);
+        if (ctx == null) {
+            ctx = terrainGen.computeColumnContext(chunk, chunkX, chunkZ, biomeCache);
+            contextCache.put(key, ctx);
         }
+        return ctx;
+    }
 
-        int yBase = cubeY * 16;
-        boolean storeSkylight = !world.provider.hasNoSky;
-        ExtendedBlockStorage ebs = new ExtendedBlockStorage(yBase, storeSkylight);
-
-        for (int x = 0; x < 16; x++) {
-            for (int z = 0; z < 16; z++) {
-                if (cubeY < DIRT_CUBE_Y) {
-                    // All stone
-                    for (int ly = 0; ly < 16; ly++) {
-                        ebs.func_150818_a(x, ly, z, Blocks.stone);
-                    }
-                } else if (cubeY == DIRT_CUBE_Y) {
-                    // Stone with dirt cap
-                    for (int ly = 0; ly < 15; ly++) {
-                        ebs.func_150818_a(x, ly, z, Blocks.stone);
-                    }
-                    ebs.func_150818_a(x, 15, z, Blocks.dirt);
-                } else {
-                    // cubeY == SURFACE_CUBE_Y: grass at local y=0, air above
-                    ebs.func_150818_a(x, 0, z, Blocks.grass);
-                }
-            }
-        }
-
-        return ebs;
+    private static long packKey(int chunkX, int chunkZ) {
+        return ((long) chunkX << 32) | (chunkZ & 0xFFFFFFFFL);
     }
 }
