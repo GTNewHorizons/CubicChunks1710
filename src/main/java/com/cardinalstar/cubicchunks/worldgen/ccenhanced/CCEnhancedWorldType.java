@@ -11,6 +11,7 @@ import org.jetbrains.annotations.NotNull;
 import com.cardinalstar.cubicchunks.api.IntRange;
 import com.cardinalstar.cubicchunks.api.world.ICubicWorldType;
 import com.cardinalstar.cubicchunks.api.worldgen.IWorldGenerator;
+import com.cardinalstar.cubicchunks.worldgen.ccenhanced.biome.defaults.CCBiomes;
 
 @ParametersAreNonnullByDefault
 public class CCEnhancedWorldType extends WorldType implements ICubicWorldType {
@@ -23,6 +24,7 @@ public class CCEnhancedWorldType extends WorldType implements ICubicWorldType {
 
     public static void init() {
         INSTANCE = new CCEnhancedWorldType();
+        CCBiomes.init();
     }
 
     @Override
