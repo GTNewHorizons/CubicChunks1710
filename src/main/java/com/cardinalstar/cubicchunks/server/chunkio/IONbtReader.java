@@ -374,10 +374,15 @@ public class IONbtReader {
         }
 
         IHeightMap heightMap = ((IColumn) cube.getColumn()).getOpacityIndex();
+        int cubeMaxY = Coords.cubeToMaxBlock(cube.getY());
 
         for (int localX = 0; localX < Cube.SIZE; localX++) {
             for (int localZ = 0; localZ < Cube.SIZE; localZ++) {
                 int columnTop = heightMap.getTopBlockY(localX, localZ);
+                if (columnTop >= cubeMaxY) {
+                    continue;
+                }
+
                 for (int localY = Cube.SIZE - 1; localY >= 0; localY--) {
                     Block block = storage.getBlockByExtId(localX, localY, localZ);
                     if (block != null && block.getLightOpacity() > 0) {
