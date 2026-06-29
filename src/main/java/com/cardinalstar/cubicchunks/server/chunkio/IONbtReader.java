@@ -206,6 +206,7 @@ public class IONbtReader {
         readTileEntities(level, world, cube);
         readScheduledBlockTicks(level, world);
         readLightingInfo(cube, level, world);
+        validateSurfaceTracking(cube);
 
         cube.getColumn()
             .preCacheCube(cube);
@@ -360,6 +361,35 @@ public class IONbtReader {
         }
         NBTTagCompound lightingInfo = nbt.getCompoundTag("LightingInfo");
         lightingManager.readFromNbt(cube, lightingInfo);
+    }
+
+    private static void validateSurfaceTracking(Cube cube) {
+        if (!cube.isSurfaceTracked()) {
+            return;
+        }
+
+        ExtendedBlockStorage storage = cube.getStorage();
+        if (storage == null || storage.isEmpty()) {
+            return;
+        }
+
+        IHeightMap heightMap = ((IColumn) cube.getColumn()).getOpacityIndex();
+
+        for (int localX = 0; localX < Cube.SIZE; localX++) {
+            for (int localZ = 0; localZ < Cube.SIZE; localZ++) {
+                int columnTop = heightMap.getTopBlockY(localX, localZ);
+                for (int localY = Cube.SIZE - 1; localY >= 0; localY--) {
+                    Block block = storage.getBlockByExtId(localX, localY, localZ);
+                    if (block != null && block.getLightOpacity() > 0) {
+                        if (columnTop < Coords.localToBlock(cube.getY(), localY)) {
+                            cube.setSurfaceTracked(false);
+                            return;
+                        }
+                        break;
+                    }
+                }
+            }
+        }
     }
 
     private static void readBiomes(Cube cube, NBTTagCompound nbt) {// biomes
