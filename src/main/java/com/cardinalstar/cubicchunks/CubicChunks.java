@@ -40,6 +40,7 @@ import org.apache.logging.log4j.Logger;
 
 import com.cardinalstar.cubicchunks.api.world.storage.ICubicStorage;
 import com.cardinalstar.cubicchunks.api.world.storage.StorageFormatFactory;
+import com.cardinalstar.cubicchunks.api.worldgen.hwaccel.KernelContext;
 import com.cardinalstar.cubicchunks.api.worldtype.VanillaCubicWorldType;
 import com.cardinalstar.cubicchunks.async.TaskPool;
 import com.cardinalstar.cubicchunks.event.handlers.ClientEventHandler;
@@ -56,7 +57,6 @@ import com.cardinalstar.cubicchunks.worldgen.ccenhanced.CCEnhancedWorldType;
 import com.falsepattern.chunk.api.DataRegistry;
 import com.gtnewhorizon.gtnhlib.config.ConfigException;
 import com.gtnewhorizon.gtnhlib.config.ConfigurationManager;
-
 import cpw.mods.fml.common.FMLCommonHandler;
 import cpw.mods.fml.common.ICrashCallable;
 import cpw.mods.fml.common.Loader;
@@ -125,6 +125,12 @@ public class CubicChunks {
         CCEnhancedWorldType.init();
 
         LOGGER.debug("Registered world types");
+
+        if (FMLCommonHandler.instance().getSide() == Side.CLIENT) {
+            KernelContext.initClient();
+        } else {
+            KernelContext.initServer();
+        }
 
         try {
             ConfigurationManager.registerConfig(CubicChunksConfig.class);

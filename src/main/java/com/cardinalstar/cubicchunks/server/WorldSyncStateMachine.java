@@ -167,6 +167,10 @@ public class WorldSyncStateMachine {
             .set(x & 0xF, z & 0xF);
     }
 
+    public void onSurfaceTracked(Cube cube) {
+        dirtyHeightCols.computeIfAbsent(cube.getX(), cube.getZ(), (x1, z1) -> new BooleanArray2D(16, 16)).set(0, 256, true);
+    }
+
     public void onBlockMarkedDirty(int x, int y, int z) {
         dirtyBlocks.computeIfAbsent(x >> 4, y >> 4, z >> 4, (x1, y1, z1) -> new ShortOpenHashSet())
             .add((short) AddressTools.getLocalAddress(x, y, z));

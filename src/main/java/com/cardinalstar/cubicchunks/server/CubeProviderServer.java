@@ -51,11 +51,17 @@ import com.cardinalstar.cubicchunks.api.IColumn;
 import com.cardinalstar.cubicchunks.api.ICube;
 import com.cardinalstar.cubicchunks.api.XYZAddressable;
 import com.cardinalstar.cubicchunks.api.worldgen.IWorldGenerator;
+import com.cardinalstar.cubicchunks.api.worldgen.hwaccel.AcceleratableWorldGenerator;
+import com.cardinalstar.cubicchunks.api.worldgen.hwaccel.ComputePlan;
+import com.cardinalstar.cubicchunks.api.worldgen.hwaccel.KernelContext;
+import com.cardinalstar.cubicchunks.api.worldgen.hwaccel.KernelScheduler;
 import com.cardinalstar.cubicchunks.server.chunkio.CubeInitLevel;
 import com.cardinalstar.cubicchunks.server.chunkio.CubeLoaderCallback;
 import com.cardinalstar.cubicchunks.server.chunkio.CubeLoaderServer;
 import com.cardinalstar.cubicchunks.server.chunkio.ICubeLoader;
 import com.cardinalstar.cubicchunks.util.CubePos;
+import com.cardinalstar.cubicchunks.util.CubeStatusVisualizer;
+import com.cardinalstar.cubicchunks.util.CubeStatusVisualizer.CubeStatus;
 import com.cardinalstar.cubicchunks.util.XZAddressable;
 import com.cardinalstar.cubicchunks.world.api.ICubeProviderServer;
 import com.cardinalstar.cubicchunks.world.column.EmptyColumn;
@@ -65,8 +71,8 @@ import com.cardinalstar.cubicchunks.world.cube.ICubeProviderInternal;
 import com.cardinalstar.cubicchunks.world.savedata.WorldFormatSavedData;
 import com.google.common.collect.ListMultimap;
 import com.google.common.collect.MultimapBuilder;
-
 import it.unimi.dsi.fastutil.ints.Int2ObjectRBTreeMap;
+import it.unimi.dsi.fastutil.ints.IntArrayList;
 import it.unimi.dsi.fastutil.ints.IntComparator;
 import it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.objects.ObjectLinkedOpenHashSet;
@@ -105,7 +111,7 @@ public class CubeProviderServer extends ChunkProviderServer
     private final Map<ChunkCoordIntPair, EagerCubeLoadContainer> eagerLoads = new Object2ObjectOpenHashMap<>();
     private final List<ChunkCoordIntPair> eagerLoadOrder = new ArrayList<>();
 
-    private static final int MAX_NS_SPENT_LOADING = 10_000_000;
+    private static final int MAX_NS_SPENT_LOADING = 40_000_000;
 
     private int loadedColumns, loadedCubes;
     private long lastTickEnd = 0, loadTimeAccumulator;
@@ -309,10 +315,6 @@ public class CubeProviderServer extends ChunkProviderServer
     public void tick() {
         getCubeLoader().setNow(worldObj.getTotalWorldTime());
 
-        doEagerLoading();
-    }
-
-    private void doEagerLoading() {
         profiler.startSection("Eager object sorting");
 
         // TODO: make this faster
@@ -320,7 +322,35 @@ public class CubeProviderServer extends ChunkProviderServer
             Comparator.comparingInt(this::getChunkDistanceSquared)
                 .reversed());
 
-        profiler.endStartSection("Eager object loading");
+        profiler.endSection();
+
+        long pre = System.nanoTime();
+
+        if (worldGenerator instanceof AcceleratableWorldGenerator && KernelContext.isEnabled()) {
+            doAcceleratedTerrainGeneration();
+        }
+
+        doEagerLoading();
+
+        long post = System.nanoTime();
+
+        acc += post - pre;
+
+        if (counter++ == 20) {
+            CubicChunks.LOGGER.info(
+                "Worldgen {}ms",
+                (acc / 1e6) / counter);
+
+            acc = 0;
+            counter = 0;
+        }
+    }
+
+    private long acc;
+    private int counter;
+
+    private void doEagerLoading() {
+        profiler.startSection("Eager object loading");
 
         long start = System.nanoTime();
 
@@ -346,6 +376,7 @@ public class CubeProviderServer extends ChunkProviderServer
 
                 cubeIter.remove();
                 request.completed = true;
+                CubeStatusVisualizer.remove(request.pos, CubeStatus.Enqueued);
 
                 processed++;
 
@@ -415,6 +446,60 @@ public class CubeProviderServer extends ChunkProviderServer
                 processed,
                 startCols,
                 eagerLoadOrder.size());
+        }
+
+        profiler.endSection();
+    }
+
+    private void doAcceleratedTerrainGeneration() {
+        profiler.startSection("Accelerated terrain generation");
+
+        AcceleratableWorldGenerator generator = (AcceleratableWorldGenerator) this.worldGenerator;
+        KernelScheduler scheduler = KernelContext.getScheduler();
+
+        long start = System.nanoTime();
+        long gpuEstimatedNs = 0;
+
+        int i = eagerLoadOrder.size() - 1;
+
+        List<ComputePlan> plans = new ArrayList<>();
+
+        while (i >= 0) {
+            if ((System.nanoTime() - start) >= MAX_NS_SPENT_LOADING) break;
+            if (gpuEstimatedNs >= scheduler.getGpuBudget()) break;
+
+            ChunkCoordIntPair coord = eagerLoadOrder.get(i--);
+
+            EagerCubeLoadContainer container = eagerLoads.get(coord);
+
+            if (container == null) {
+                continue;
+            }
+
+            IntArrayList toGenerate = new IntArrayList();
+
+            for (var cubeRequest : container.cubes.values()) {
+                if (cubeRequest.effort.contains(Requirement.GENERATE)) {
+                    Cube cube = cubeLoader.getLoadedCube(cubeRequest.getX(), cubeRequest.getY(), cubeRequest.getZ());
+
+                    if (cube == null || !cube.isInitializedToLevel(CubeInitLevel.Generated)) {
+                        toGenerate.add(cubeRequest.getY());
+                    }
+                }
+            }
+
+            Chunk column = cubeLoader.getColumn(coord.chunkXPos, coord.chunkZPos, Requirement.GET_CACHED);
+
+            if (column != null && toGenerate.isEmpty()) continue;
+
+            ComputePlan plan = generator.plan(column, coord.chunkXPos, coord.chunkZPos, toGenerate);
+
+            gpuEstimatedNs += scheduler.estimatePlanCost(plan);
+            plans.add(plan);
+        }
+
+        if (!plans.isEmpty()) {
+            scheduler.submit(plans);
         }
 
         profiler.endSection();
@@ -506,6 +591,7 @@ public class CubeProviderServer extends ChunkProviderServer
 
         public void cancel() {
             this.cancelled = true;
+            CubeStatusVisualizer.remove(pos, CubeStatus.Enqueued);
         }
 
         @Override
@@ -559,6 +645,8 @@ public class CubeProviderServer extends ChunkProviderServer
         container.add(request);
 
         cubeLoader.preloadCube(pos, CubeInitLevel.fromRequirement(effort));
+
+        CubeStatusVisualizer.put(pos, CubeStatus.Enqueued);
 
         return request;
     }

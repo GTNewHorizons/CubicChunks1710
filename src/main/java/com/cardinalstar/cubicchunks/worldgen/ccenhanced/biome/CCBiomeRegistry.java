@@ -20,6 +20,10 @@ public class CCBiomeRegistry {
         biomes.add(biome);
     }
 
+    public static CCBiomeGenBase getBiome(int index) {
+        return biomes.get(index);
+    }
+
     public static List<CCBiomeGenBase> getBiomes() {
         return Collections.unmodifiableList(biomes);
     }
@@ -81,37 +85,19 @@ public class CCBiomeRegistry {
      * sorted in ascending order (index 0 = smallest distance = primary biome).
      */
     private static int[] topNSorted(float[] dists, int n) {
-        int[] indices = new int[n];
-        float[] best = new float[n];
-        Arrays.fill(best, Float.MAX_VALUE);
+        int[] indices = new int[dists.length];
 
-        // Selection: keep the n smallest distances
-        for (int i = 0; i < dists.length; i++) {
-            // Find the slot in our top-n that holds the worst (largest) distance
-            int worstSlot = 0;
-            for (int j = 1; j < n; j++) {
-                if (best[j] > best[worstSlot]) worstSlot = j;
-            }
-            if (dists[i] < best[worstSlot]) {
-                best[worstSlot] = dists[i];
-                indices[worstSlot] = i;
-            }
-        }
+        for (int i = 0; i < dists.length; i++) indices[i] = i;
 
-        // Insertion-sort the n results by distance (n is tiny — 3 by default)
-        for (int i = 1; i < n; i++) {
-            float key = best[i];
-            int idx = indices[i];
-            int j = i - 1;
-            while (j >= 0 && best[j] > key) {
-                best[j + 1] = best[j];
-                indices[j + 1] = indices[j];
-                j--;
-            }
-            best[j + 1] = key;
-            indices[j + 1] = idx;
-        }
+        it.unimi.dsi.fastutil.Arrays.mergeSort(
+            0, dists.length,
+            (a, b) -> Float.compare(dists[indices[a]], dists[indices[b]]),
+            (a, b) -> {
+                int temp = indices[a];
+                indices[a] = indices[b];
+                indices[b] = temp;
+            });
 
-        return indices;
+        return Arrays.copyOf(indices, n);
     }
 }

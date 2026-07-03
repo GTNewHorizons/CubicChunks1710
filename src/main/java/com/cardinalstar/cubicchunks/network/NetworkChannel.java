@@ -69,14 +69,19 @@ public class NetworkChannel extends MessageToMessageCodec<FMLProxyPacket, CCPack
         ByteBuf buffer = Unpooled.buffer()
             .writeByte(packet.getPacketID());
         CCPacketEncoder<CCPacket> encoder = this.encoders[packet.getPacketID()];
-        encoder.writePacket(new CCPacketBuffer(buffer), packet);
 
-        output.add(
-            new FMLProxyPacket(
-                buffer,
-                context.channel()
-                    .attr(NetworkRegistry.FML_CHANNEL)
-                    .get()));
+        try {
+            encoder.writePacket(new CCPacketBuffer(buffer), packet);
+
+            output.add(
+                new FMLProxyPacket(
+                    buffer,
+                    context.channel()
+                        .attr(NetworkRegistry.FML_CHANNEL)
+                        .get()));
+        } catch (Throwable t) {
+            CubicChunks.LOGGER.error("Could not write packet: {}", packet, t);
+        }
     }
 
     @Override
@@ -86,9 +91,14 @@ public class NetworkChannel extends MessageToMessageCodec<FMLProxyPacket, CCPack
         buffer = proxyPacket.payload();
 
         CCPacketEncoder<CCPacket> encoder = this.encoders[buffer.readByte()];
-        CCPacket packet = encoder.readPacket(new CCPacketBuffer(buffer));
-        encoder.setINetHandler(proxyPacket.handler(), packet);
-        output.add(packet);
+
+        try {
+            CCPacket packet = encoder.readPacket(new CCPacketBuffer(buffer));
+            encoder.setINetHandler(proxyPacket.handler(), packet);
+            output.add(packet);
+        } catch (Throwable t) {
+            CubicChunks.LOGGER.error("Could not read packet: {}", encoder, t);
+        }
     }
 
     public void sendToPlayer(CCPacket packet, EntityPlayerMP player) {

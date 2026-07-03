@@ -2,9 +2,11 @@ package com.cardinalstar.cubicchunks.worldgen.ccenhanced.climate;
 
 import java.util.Random;
 
+import com.cardinalstar.cubicchunks.api.worldgen.hwaccel.KernelBuilder;
 import com.cardinalstar.cubicchunks.world.worldgen.noise.NoiseSampler;
+import com.cardinalstar.cubicchunks.world.worldgen.noise.NormalizedSampler;
 import com.cardinalstar.cubicchunks.world.worldgen.noise.OctavesSampler;
-import com.cardinalstar.cubicchunks.world.worldgen.noise.ScaledNoise;
+import com.cardinalstar.cubicchunks.world.worldgen.noise.ScaledSampler;
 
 /**
  * ClimateAxis implementation backed by a ScaledNoise(OctavesSampler).
@@ -16,27 +18,18 @@ import com.cardinalstar.cubicchunks.world.worldgen.noise.ScaledNoise;
  */
 public class NoiseClimateAxis implements ClimateAxis {
 
-    private static final int LUT_SIZE = 1024;
-
     private final String name;
     private final NoiseSampler noise;
-    private final float[] remapLut;
-    /** Sum of octave amplitudes; used to normalise FBM output to [-1, 1] before LUT lookup. */
-    private final double amplitudeNorm;
 
     /**
      * @param name          Axis name (e.g. "temperature")
      * @param seed          RNG seed for the underlying SimplexNoiseSampler octaves
      * @param octaves       Number of FBM octaves
      * @param frequency     Base sampling frequency in 1/blocks (e.g. 1/4000)
-     * @param remapExponent Power-curve exponent for distribution remapping; &lt;1 spreads extremes
      */
-    public NoiseClimateAxis(String name, long seed, int octaves, double frequency, double remapExponent) {
+    public NoiseClimateAxis(String name, long seed, int octaves, double frequency) {
         this.name = name;
-        this.noise = new ScaledNoise(new OctavesSampler(new Random(seed), octaves), frequency);
-        this.remapLut = buildLut(remapExponent);
-        // Sum of amplitudes for n octaves: 2 * (1 - 0.5^n)
-        this.amplitudeNorm = 2.0 * (1.0 - Math.pow(0.5, octaves));
+        this.noise = new NormalizedSampler(new ScaledSampler(new OctavesSampler(new Random(seed), octaves), frequency));
     }
 
     @Override
@@ -46,26 +39,27 @@ public class NoiseClimateAxis implements ClimateAxis {
 
     @Override
     public double sample(double x, double z) {
-        double raw = noise.sample(x, z);
-        double normalized = raw / amplitudeNorm;
-        return remap(normalized);
+        return noise.sample(x, z);
     }
 
-    private float remap(double v) {
-        v = Math.max(-1.0, Math.min(1.0, v));
-        double t = (v + 1.0) * 0.5 * (LUT_SIZE - 1);
-        int lo = (int) t;
-        int hi = Math.min(lo + 1, LUT_SIZE - 1);
-        float frac = (float) (t - lo);
-        return remapLut[lo] + frac * (remapLut[hi] - remapLut[lo]);
-    }
+    @Override
+    public void compileShader(KernelBuilder builder, String functionName) {
+        String existingLogic = builder.logic.toString();
 
-    private static float[] buildLut(double exponent) {
-        float[] lut = new float[LUT_SIZE];
-        for (int i = 0; i < LUT_SIZE; i++) {
-            double v = (i / (double) (LUT_SIZE - 1)) * 2.0 - 1.0; // map i → [-1, 1]
-            lut[i] = (float) (Math.signum(v) * Math.pow(Math.abs(v), exponent));
-        }
-        return lut;
+        String result = this.noise.compileKernel2D(builder, "x", "y");
+
+        String function = """
+              float $name(float x, float y) {
+                  $logic
+                  return $result;
+              }
+              """
+            .replace("$name", functionName)
+            .replace("$logic", builder.logic.toString())
+            .replace("$result", result);
+
+        builder.preamble.append(function);
+        builder.logic.setLength(0);
+        builder.logic.append(existingLogic);
     }
 }

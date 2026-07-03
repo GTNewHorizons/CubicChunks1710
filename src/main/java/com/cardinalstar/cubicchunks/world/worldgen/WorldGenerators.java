@@ -10,7 +10,7 @@ import com.cardinalstar.cubicchunks.util.DoubleInterval;
 import com.cardinalstar.cubicchunks.util.Mods;
 import com.cardinalstar.cubicchunks.world.worldgen.compat.DeepslateCubePopulator;
 import com.cardinalstar.cubicchunks.world.worldgen.noise.OctavesSampler;
-import com.cardinalstar.cubicchunks.world.worldgen.noise.ScaledNoise;
+import com.cardinalstar.cubicchunks.world.worldgen.noise.ScaledSampler;
 import com.gtnewhorizon.gtnhlib.util.data.LazyBlock;
 
 import cpw.mods.fml.common.Optional;
@@ -67,7 +67,7 @@ public class WorldGenerators {
     public static final DoubleInterval NOODLE_CAVES = new DoubleInterval(0.7, 1);
     public static final DoubleInterval PILLAR_CAVES = new DoubleInterval(0, 0.3);
 
-    public static ScaledNoise caveChooser(Random rng) {
-        return new ScaledNoise(new OctavesSampler(rng, 2), CHOOSER_SCALE);
+    public static ScaledSampler caveChooser(Random rng) {
+        return new ScaledSampler(new OctavesSampler(rng, 2), CHOOSER_SCALE);
     }
 }

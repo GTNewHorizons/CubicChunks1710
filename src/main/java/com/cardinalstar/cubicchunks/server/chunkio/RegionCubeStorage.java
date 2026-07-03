@@ -284,7 +284,7 @@ public class RegionCubeStorage implements ICubicStorage {
                 .parallelStream()
                 .collect(Collectors.toMap(entry -> keyMappingFunction.apply(entry.getKey()), entry -> {
                     try {
-                        return CCNBTUtils.saveTag(entry.getValue(), true);
+                        return CCNBTUtils.saveTag(entry.getValue());
                     } catch (IOException e) {
                         // wrap exception so that we can throw it from inside the lambda
                         throw new UncheckedIOException(e);

@@ -26,14 +26,17 @@ import javax.annotation.Nonnull;
 import javax.annotation.ParametersAreNonnullByDefault;
 
 import net.minecraft.block.Block;
+import net.minecraft.client.multiplayer.WorldClient;
 import net.minecraft.entity.Entity;
 import net.minecraft.world.World;
 import net.minecraft.world.WorldProvider;
+import net.minecraft.world.WorldServer;
 import net.minecraft.world.chunk.Chunk;
 
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Constant;
 import org.spongepowered.asm.mixin.injection.Group;
@@ -58,6 +61,15 @@ import com.llamalad7.mixinextras.sugar.Local;
 @ParametersAreNonnullByDefault
 @Mixin(World.class)
 public abstract class MixinWorld_HeightLimit implements ICubicWorld {
+
+    @Unique
+    private boolean cc$isCubicWorld = isCubic();
+
+    @Unique
+    private boolean isCubic() {
+        //noinspection ConstantValue
+        return ((Object) this) instanceof WorldServer || ((Object) this) instanceof WorldClient;
+    }
 
     @Shadow
     public int skylightSubtracted;
@@ -116,9 +128,13 @@ public abstract class MixinWorld_HeightLimit implements ICubicWorld {
     @Expression("this.chunkExists(?, ?)")
     @Redirect(method = "blockExists", at = @At("MIXINEXTRAS:EXPRESSION"))
     boolean redirectChunkExistsCubeExists(World instance, int p_72916_1_, int p_72916_2_,
-        @Local(argsOnly = true, ordinal = 0) int x, @Local(argsOnly = true, ordinal = 1) int y,
-        @Local(argsOnly = true, ordinal = 2) int z) {
-        return cubeExists(x >> 4, y >> 4, z >> 4);
+        @Local(argsOnly = true, name = "p_72899_1_") int x, @Local(argsOnly = true, name = "p_72899_2_") int y,
+        @Local(argsOnly = true, name = "p_72899_3_") int z) {
+        if (cc$isCubicWorld) {
+            return cubeExists(x >> 4, y >> 4, z >> 4);
+        } else {
+            return chunkExists(x >> 4, z >> 4);
+        }
     }
 
     // checkChunksExist

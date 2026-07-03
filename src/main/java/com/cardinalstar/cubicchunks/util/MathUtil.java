@@ -35,6 +35,10 @@ public class MathUtil {
         return -Math.floorDiv(-a, b);
     }
 
+    public static long ceilDiv(long a, long b) {
+        return -Math.floorDiv(-a, b);
+    }
+
     public static boolean isPowerOfN(int toTest, int n) { // works only for positive numbers
         while (toTest > n - 1 && toTest % n == 0) {
             toTest /= n;
@@ -204,5 +208,37 @@ public class MathUtil {
         double d1 = coords.posY - toY;
         double d2 = coords.posZ - toZ;
         return d0 * d0 + d1 * d1 + d2 * d2;
+    }
+
+    public static int alignTo(int value, int alignment) {
+        if (Integer.bitCount(alignment) == 1) {
+            int log2L = Long.numberOfTrailingZeros(alignment);
+
+            int mask = (1 << log2L) - 1;
+
+            int result = value & ~mask;
+
+            if ((value & mask) != 0) result += (1 << log2L);
+
+            return result;
+        } else {
+            return ceilDiv(value, alignment) * alignment;
+        }
+    }
+
+    public static long alignTo(long value, long alignment) {
+        if (Long.bitCount(alignment) == 1) {
+            int log2L = Long.numberOfTrailingZeros(alignment);
+
+            long mask = (1L << log2L) - 1;
+
+            long result = value & ~mask;
+
+            if ((value & mask) != 0) result += (1L << log2L);
+
+            return result;
+        } else {
+            return ceilDiv(value, alignment) * alignment;
+        }
     }
 }

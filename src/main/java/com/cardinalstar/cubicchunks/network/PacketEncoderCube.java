@@ -37,9 +37,9 @@ import com.cardinalstar.cubicchunks.util.CubeStatusVisualizer;
 import com.cardinalstar.cubicchunks.util.CubeStatusVisualizer.CubeStatus;
 import com.cardinalstar.cubicchunks.world.cube.Cube;
 import com.github.bsideup.jabel.Desugar;
-
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
+import net.jpountz.lz4.LZ4Factory;
 
 @ParametersAreNonnullByDefault
 public class PacketEncoderCube extends CCPacketEncoder<PacketCube> {
@@ -90,7 +90,8 @@ public class PacketEncoderCube extends CCPacketEncoder<PacketCube> {
     public void writePacket(CCPacketBuffer buffer, PacketCube packet) {
         buffer.writeCubePos(packet.cubePos);
 
-        buffer.writeByteArray(packet.data);
+        buffer.writeVarIntToBuffer(packet.data.length);
+        buffer.writeByteArray(LZ4Factory.fastestInstance().fastCompressor().compress(packet.data));
 
         buffer.writeList(packet.tileEntityTags, CCPacketBuffer::writeCompoundTag);
     }
@@ -99,11 +100,14 @@ public class PacketEncoderCube extends CCPacketEncoder<PacketCube> {
     public PacketCube readPacket(CCPacketBuffer buf) {
         CubePos pos = buf.readCubePos();
 
+        byte[] decompressed = new byte[buf.readVarIntFromBuffer()];
         byte[] data = buf.readByteArray();
+
+        LZ4Factory.fastestInstance().fastDecompressor().decompress(data, decompressed);
 
         List<NBTTagCompound> tileEntityTags = buf.readList(CCPacketBuffer::readCompoundTag);
 
-        return new PacketCube(pos, data, tileEntityTags);
+        return new PacketCube(pos, decompressed, tileEntityTags);
     }
 
     @Override
