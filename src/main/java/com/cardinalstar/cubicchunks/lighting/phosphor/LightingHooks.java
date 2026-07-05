@@ -55,7 +55,7 @@ public class LightingHooks {
 
         scheduleRelightChecksForColumn(
             world,
-            world.getChunkFromBlockCoords(blockToCube(x), blockToCube(z)),
+            world.getChunkFromBlockCoords(x, z),
             lightType,
             x,
             z,
