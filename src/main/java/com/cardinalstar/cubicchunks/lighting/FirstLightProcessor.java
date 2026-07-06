@@ -24,6 +24,8 @@ import static com.cardinalstar.cubicchunks.util.Coords.blockToCube;
 import static com.cardinalstar.cubicchunks.util.Coords.cubeToMaxBlock;
 import static com.cardinalstar.cubicchunks.util.Coords.cubeToMinBlock;
 
+import java.util.Arrays;
+
 import javax.annotation.ParametersAreNonnullByDefault;
 
 import net.minecraft.block.Block;
@@ -116,8 +118,8 @@ public class FirstLightProcessor {
         // Cache min/max Y, generating them may be expensive
         int[] minBlockYArr = new int[Cube.SIZE * Cube.SIZE];
         int[] maxBlockYArr = new int[Cube.SIZE * Cube.SIZE];
-        java.util.Arrays.fill(minBlockYArr, Integer.MAX_VALUE);
-        java.util.Arrays.fill(maxBlockYArr, Integer.MIN_VALUE);
+        Arrays.fill(minBlockYArr, Integer.MAX_VALUE);
+        Arrays.fill(maxBlockYArr, Integer.MIN_VALUE);
 
         // the lowest minHeight and the highest maxHeight values
         // used to make the cube iteration the outer loop, so light propagator can do mass light updates
