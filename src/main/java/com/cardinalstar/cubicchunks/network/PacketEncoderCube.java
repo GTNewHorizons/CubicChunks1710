@@ -20,13 +20,8 @@
  */
 package com.cardinalstar.cubicchunks.network;
 
-import java.util.ArrayList;
-import java.util.List;
-
 import javax.annotation.ParametersAreNonnullByDefault;
 
-import net.minecraft.nbt.NBTTagCompound;
-import net.minecraft.tileentity.TileEntity;
 import net.minecraft.world.World;
 
 import com.cardinalstar.cubicchunks.CubicChunks;
@@ -46,7 +41,7 @@ import io.netty.buffer.Unpooled;
 public class PacketEncoderCube extends CCPacketEncoder<PacketCube> {
 
     @Desugar
-    public record PacketCube(CubePos cubePos, byte[] data, List<NBTTagCompound> tileEntityTags) implements CCPacket {
+    public record PacketCube(CubePos cubePos, byte[] data) implements CCPacket {
 
         @Override
         public byte getPacketID() {
@@ -67,19 +62,7 @@ public class PacketEncoderCube extends CCPacketEncoder<PacketCube> {
 
         cubeData.readBytes(data);
 
-        List<NBTTagCompound> tileEntityTags = new ArrayList<>();
-
-        if (!cube.getTileEntityMap()
-            .isEmpty()) {
-            for (TileEntity tileEntity : cube.getTileEntityMap()
-                .values()) {
-                NBTTagCompound tag = new NBTTagCompound();
-                tileEntity.writeToNBT(tag);
-                tileEntityTags.add(tag);
-            }
-        }
-
-        return new PacketCube(cube.getCoords(), data, tileEntityTags);
+        return new PacketCube(cube.getCoords(), data);
     }
 
     @Override
@@ -92,8 +75,6 @@ public class PacketEncoderCube extends CCPacketEncoder<PacketCube> {
         buffer.writeCubePos(packet.cubePos);
 
         buffer.writeByteArray(packet.data);
-
-        buffer.writeList(packet.tileEntityTags, CCPacketBuffer::writeCompoundTag);
     }
 
     @Override
@@ -102,9 +83,7 @@ public class PacketEncoderCube extends CCPacketEncoder<PacketCube> {
 
         byte[] data = buf.readByteArray();
 
-        List<NBTTagCompound> tileEntityTags = buf.readList(CCPacketBuffer::readCompoundTag);
-
-        return new PacketCube(pos, data, tileEntityTags);
+        return new PacketCube(pos, data);
     }
 
     @Override
@@ -128,17 +107,6 @@ public class PacketEncoderCube extends CCPacketEncoder<PacketCube> {
         if (AngelicaInterop.hasDelegate()) {
             AngelicaInterop.getDelegate()
                 .onCubeLoaded(cube.getX(), cube.getY(), cube.getZ());
-        }
-
-        for (var tag : packet.tileEntityTags) {
-            int blockX = tag.getInteger("x");
-            int blockY = tag.getInteger("y");
-            int blockZ = tag.getInteger("z");
-            TileEntity tileEntity = world.getTileEntity(blockX, blockY, blockZ);
-
-            if (tileEntity != null) {
-                tileEntity.readFromNBT(tag);
-            }
         }
     }
 }

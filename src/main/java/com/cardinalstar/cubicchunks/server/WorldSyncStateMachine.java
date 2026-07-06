@@ -2,6 +2,8 @@ package com.cardinalstar.cubicchunks.server;
 
 import java.util.Iterator;
 
+import net.minecraft.network.Packet;
+import net.minecraft.tileentity.TileEntity;
 import net.minecraft.world.ChunkCoordIntPair;
 import net.minecraft.world.chunk.Chunk;
 import net.minecraftforge.common.MinecraftForge;
@@ -26,6 +28,7 @@ import com.cardinalstar.cubicchunks.util.HashMap3D;
 import com.cardinalstar.cubicchunks.util.HashSet3D;
 import com.cardinalstar.cubicchunks.world.cube.Cube;
 
+import it.unimi.dsi.fastutil.shorts.ShortIterator;
 import it.unimi.dsi.fastutil.shorts.ShortOpenHashSet;
 
 public class WorldSyncStateMachine {
@@ -107,6 +110,16 @@ public class WorldSyncStateMachine {
                 PacketEncoderCube.createPacket(cube)
                     .sendToPlayer(player.player);
 
+                cube.cubeTileEntityMap.forEach((tePos, te) -> {
+                    Packet desc = te.getDescriptionPacket();
+
+                    if (desc != null) {
+                        player.player.playerNetServerHandler.sendPacket(desc);
+                    }
+                });
+
+                dirtyBlocks.remove(pos.getX(), pos.getY(), pos.getZ());
+
                 MinecraftForge.EVENT_BUS.post(new CubeEvent.Watch(provider.worldObj, cube, player.player));
             }
         }
@@ -128,6 +141,27 @@ public class WorldSyncStateMachine {
                 if (cube != null) {
                     PacketEncoderCubeBlockChange.createPacket(cube, e.getValue())
                         .sendToPlayer(player.player);
+
+                    ShortIterator blocks = e.getValue()
+                        .iterator();
+
+                    while (blocks.hasNext()) {
+                        short pos = blocks.nextShort();
+
+                        int rx = AddressTools.getLocalX(pos);
+                        int ry = AddressTools.getLocalY(pos);
+                        int rz = AddressTools.getLocalZ(pos);
+
+                        TileEntity te = cube.getTileEntityUnsafe(rx, (e.getY() << 4) + ry, rz);
+
+                        if (te != null) {
+                            Packet desc = te.getDescriptionPacket();
+
+                            if (desc != null) {
+                                player.player.playerNetServerHandler.sendPacket(desc);
+                            }
+                        }
+                    }
                 }
             }
         }
