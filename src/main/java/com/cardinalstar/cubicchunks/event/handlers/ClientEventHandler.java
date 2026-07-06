@@ -37,9 +37,9 @@ import com.cardinalstar.cubicchunks.api.compat.CubicChunksVideoSettings;
 import com.cardinalstar.cubicchunks.mixin.api.ICubicWorldInternal;
 import com.cardinalstar.cubicchunks.mixin.early.client.IGuiOptionsRowList;
 import com.cardinalstar.cubicchunks.mixin.early.client.IGuiVideoSettings;
-import com.cardinalstar.cubicchunks.modcompat.angelica.AngelicaInterop;
 import com.cardinalstar.cubicchunks.server.ICubicPlayerList;
 import com.cardinalstar.cubicchunks.util.MathUtil;
+import com.cardinalstar.cubicchunks.util.Mods;
 
 import cpw.mods.fml.client.FMLClientHandler;
 import cpw.mods.fml.common.FMLCommonHandler;
@@ -81,7 +81,7 @@ public class ClientEventHandler {
     public void initGuiEvent(InitGuiEvent.Post event) {
 
         GuiScreen currentGui = event.gui;
-        if (currentGui instanceof GuiVideoSettings && !AngelicaInterop.hasDelegate()) {
+        if (currentGui instanceof GuiVideoSettings && !Mods.Angelica.isModLoaded()) {
             GuiVideoSettings gvs = (GuiVideoSettings) currentGui;
             IGuiOptionsRowList gowl = (IGuiOptionsRowList) ((IGuiVideoSettings) gvs).getOptionsRowList();
             GuiOptionsRowList.Row row = this.createRow(100, gvs.width);

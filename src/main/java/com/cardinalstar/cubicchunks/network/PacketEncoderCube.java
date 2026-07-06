@@ -26,7 +26,6 @@ import net.minecraft.world.World;
 
 import com.cardinalstar.cubicchunks.CubicChunks;
 import com.cardinalstar.cubicchunks.client.CubeProviderClient;
-import com.cardinalstar.cubicchunks.modcompat.angelica.AngelicaInterop;
 import com.cardinalstar.cubicchunks.network.PacketEncoderCube.PacketCube;
 import com.cardinalstar.cubicchunks.util.CubePos;
 import com.cardinalstar.cubicchunks.util.CubeStatusVisualizer;
@@ -103,10 +102,5 @@ public class PacketEncoderCube extends CCPacketEncoder<PacketCube> {
         WorldEncoder.decodeCube(new CCPacketBuffer(Unpooled.wrappedBuffer(packet.data)), cube, world);
 
         cube.markForRenderUpdate();
-
-        if (AngelicaInterop.hasDelegate()) {
-            AngelicaInterop.getDelegate()
-                .onCubeLoaded(cube.getX(), cube.getY(), cube.getZ());
-        }
     }
 }
