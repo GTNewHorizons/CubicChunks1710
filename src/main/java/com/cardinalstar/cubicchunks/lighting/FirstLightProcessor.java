@@ -92,7 +92,8 @@ public class FirstLightProcessor {
 
                         try {
                             // Enable unsafe lighting here to disable a World.getBlock call within getLightValue
-                            // I don't know why that call exists, but the block is always correct at this point since we just fetched it
+                            // I don't know why that call exists, but the block is always correct at this point since we
+                            // just fetched it
                             ((BlockExt_Lighting) block).cc$setUnsafeLightMode(true);
 
                             if (block != Blocks.air && block.getLightValue(world, bX + lX, bY + lY, bZ + lZ) > 0) {
