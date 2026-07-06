@@ -521,9 +521,9 @@ public abstract class MixinWorld implements ICubicWorldInternal {
         return !allowedServerWorldClasses.contains(world.getClass());
     }
 
-    @WrapOperation(method = "setActivePlayerChunksAndCheckLight", at = @At(value = "INVOKE",
-                                                                           target = "Ljava/util/Set;add(Ljava/lang/Object;)Z"
-    ))
+    @WrapOperation(
+        method = "setActivePlayerChunksAndCheckLight",
+        at = @At(value = "INVOKE", target = "Ljava/util/Set;add(Ljava/lang/Object;)Z"))
     public boolean skipUnloadedChunks(Set<ChunkCoordIntPair> instance, Object coord2, Operation<Boolean> original) {
         ChunkCoordIntPair coord = (ChunkCoordIntPair) coord2;
 

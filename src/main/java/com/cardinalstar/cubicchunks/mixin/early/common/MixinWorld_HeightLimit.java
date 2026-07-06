@@ -67,7 +67,7 @@ public abstract class MixinWorld_HeightLimit implements ICubicWorld {
 
     @Unique
     private boolean isCubic() {
-        //noinspection ConstantValue
+        // noinspection ConstantValue
         return ((Object) this) instanceof WorldServer || ((Object) this) instanceof WorldClient;
     }
 
