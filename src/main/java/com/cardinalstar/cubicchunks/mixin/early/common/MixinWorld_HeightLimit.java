@@ -55,6 +55,8 @@ import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.llamalad7.mixinextras.sugar.Local;
 
+import cpw.mods.fml.common.FMLCommonHandler;
+
 /**
  * Contains fixes for hardcoded height checks and other height-related issues.
  */
@@ -67,8 +69,16 @@ public abstract class MixinWorld_HeightLimit implements ICubicWorld {
 
     @Unique
     private boolean isCubic() {
+        if (FMLCommonHandler.instance()
+            .getSide()
+            .isClient()) {
+            if (((Object) this) instanceof WorldClient) {
+                return true;
+            }
+        }
+
         // noinspection ConstantValue
-        return ((Object) this) instanceof WorldServer || ((Object) this) instanceof WorldClient;
+        return ((Object) this) instanceof WorldServer;
     }
 
     @Shadow
