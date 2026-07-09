@@ -11,11 +11,9 @@ import com.cardinalstar.cubicchunks.mixin.ext.EBSIDAccessor;
 @Mixin(ExtendedBlockStorage.class)
 public abstract class MixinEBSID_EID implements EBSIDAccessor {
 
-    @Shadow(remap = false)
     @Dynamic
     public abstract int eid$getID(int x, int y, int z);
 
-    @Shadow(remap = false)
     @Dynamic
     public abstract void eid$setID(int x, int y, int z, int id);
 

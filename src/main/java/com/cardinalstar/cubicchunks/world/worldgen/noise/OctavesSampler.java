@@ -69,22 +69,32 @@ public class OctavesSampler implements NoiseSampler {
     @Override
     public String compileKernel2D(KernelBuilder builder, String x, String y) {
         String result = builder.createName("octaves");
-        builder.logic.append("  float ").append(result).append(" = 0.0f;\n");
+        builder.logic.append("  float ")
+            .append(result)
+            .append(" = 0.0f;\n");
 
         for (int i = 0, octavesLength = octaves.length; i < octavesLength; i++) {
             NoiseSampler sampler = octaves[i];
             double scale = scales[i];
             double amplitude = amplitudes[i];
 
-            String value = sampler.compileKernel2D(
-                builder,
-                String.format("(%s) * %ff", x, scale),
-                String.format("(%s) * %ff", y, scale));
+            String value = sampler
+                .compileKernel2D(builder, String.format("(%s) * %ff", x, scale), String.format("(%s) * %ff", y, scale));
 
-            builder.logic.append("  ").append(result).append(" += ").append(value).append(" * ").append((float) amplitude).append("f;\n");
+            builder.logic.append("  ")
+                .append(result)
+                .append(" += ")
+                .append(value)
+                .append(" * ")
+                .append((float) amplitude)
+                .append("f;\n");
         }
 
-        builder.logic.append("  ").append(result).append(" *= ").append((float) this.norm).append("f;\n");
+        builder.logic.append("  ")
+            .append(result)
+            .append(" *= ")
+            .append((float) this.norm)
+            .append("f;\n");
 
         return result;
     }
@@ -92,7 +102,9 @@ public class OctavesSampler implements NoiseSampler {
     @Override
     public String compileKernel3D(KernelBuilder builder, String x, String y, String z) {
         String result = builder.createName("octaves");
-        builder.logic.append("  float ").append(result).append(" = 0.0f;\n");
+        builder.logic.append("  float ")
+            .append(result)
+            .append(" = 0.0f;\n");
 
         for (int i = 0, octavesLength = octaves.length; i < octavesLength; i++) {
             NoiseSampler sampler = octaves[i];
@@ -105,10 +117,20 @@ public class OctavesSampler implements NoiseSampler {
                 String.format("(%s) * %ff", y, scale),
                 String.format("(%s) * %ff", z, scale));
 
-            builder.logic.append("  ").append(result).append(" += ").append(value).append(" * ").append((float) amplitude).append("f;\n");
+            builder.logic.append("  ")
+                .append(result)
+                .append(" += ")
+                .append(value)
+                .append(" * ")
+                .append((float) amplitude)
+                .append("f;\n");
         }
 
-        builder.logic.append("  ").append(result).append(" *= ").append((float) this.norm).append("f;\n");
+        builder.logic.append("  ")
+            .append(result)
+            .append(" *= ")
+            .append((float) this.norm)
+            .append("f;\n");
 
         return result;
     }

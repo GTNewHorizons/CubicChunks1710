@@ -22,10 +22,10 @@ public class NoiseClimateAxis implements ClimateAxis {
     private final NoiseSampler noise;
 
     /**
-     * @param name          Axis name (e.g. "temperature")
-     * @param seed          RNG seed for the underlying SimplexNoiseSampler octaves
-     * @param octaves       Number of FBM octaves
-     * @param frequency     Base sampling frequency in 1/blocks (e.g. 1/4000)
+     * @param name      Axis name (e.g. "temperature")
+     * @param seed      RNG seed for the underlying SimplexNoiseSampler octaves
+     * @param octaves   Number of FBM octaves
+     * @param frequency Base sampling frequency in 1/blocks (e.g. 1/4000)
      */
     public NoiseClimateAxis(String name, long seed, int octaves, double frequency) {
         this.name = name;
@@ -49,12 +49,11 @@ public class NoiseClimateAxis implements ClimateAxis {
         String result = this.noise.compileKernel2D(builder, "x", "y");
 
         String function = """
-              float $name(float x, float y) {
-                  $logic
-                  return $result;
-              }
-              """
-            .replace("$name", functionName)
+            float $name(float x, float y) {
+                $logic
+                return $result;
+            }
+            """.replace("$name", functionName)
             .replace("$logic", builder.logic.toString())
             .replace("$result", result);
 

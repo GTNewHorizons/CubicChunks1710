@@ -11,17 +11,21 @@ import com.cardinalstar.cubicchunks.network.PacketEncoderUpdateVisualizedBoxes.P
 
 public class BoxVisualizer {
 
-    private static final int MAX_PACKET_SIZE = 3200,
-        BYTES_PER_BOX = 4 + 4 * 3 + 4 * 3,
+    private static final int MAX_PACKET_SIZE = 3200, BYTES_PER_BOX = 4 + 4 * 3 + 4 * 3,
         MAX_BOXES_PER_PACKET = MAX_PACKET_SIZE / BYTES_PER_BOX;
 
-    public static void sendBoxes(EntityPlayerMP player, Duration timeout, Collection<VisualizedBox> boxes, boolean disableDepth) {
+    public static void sendBoxes(EntityPlayerMP player, Duration timeout, Collection<VisualizedBox> boxes,
+        boolean disableDepth) {
         List<VisualizedBox> boxList = new ArrayList<>(boxes);
 
         for (int i = 0; i < boxList.size(); i += MAX_BOXES_PER_PACKET) {
             int toSend = Math.min(boxList.size() - i, MAX_BOXES_PER_PACKET);
 
-            PacketUpdateVisualizedBoxes packet = new PacketUpdateVisualizedBoxes(timeout.toMillis(), i > 0, disableDepth, boxList.subList(i, i + toSend));
+            PacketUpdateVisualizedBoxes packet = new PacketUpdateVisualizedBoxes(
+                timeout.toMillis(),
+                i > 0,
+                disableDepth,
+                boxList.subList(i, i + toSend));
 
             packet.sendToPlayer(player);
         }

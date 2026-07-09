@@ -4,6 +4,8 @@ package com.cardinalstar.cubicchunks.api.worldgen.hwaccel.buffer;
 /// Accepts an int and returns whatever type this accessor returns.
 public interface BufferAccessor {
 
+    BufferDataType getDataType();
+
     String access(String index);
 
 }

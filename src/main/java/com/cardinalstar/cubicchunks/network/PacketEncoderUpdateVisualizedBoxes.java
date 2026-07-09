@@ -14,7 +14,8 @@ import com.gtnewhorizon.gtnhlib.color.RGBColor;
 public class PacketEncoderUpdateVisualizedBoxes extends CCPacketEncoder<PacketUpdateVisualizedBoxes> {
 
     @Desugar
-    public record PacketUpdateVisualizedBoxes(long timeout, boolean append, boolean disableDepth, List<VisualizedBox> boxes) implements CCPacket {
+    public record PacketUpdateVisualizedBoxes(long timeout, boolean append, boolean disableDepth,
+        List<VisualizedBox> boxes) implements CCPacket {
 
         @Override
         public byte getPacketID() {

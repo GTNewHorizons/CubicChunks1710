@@ -6,6 +6,7 @@ import com.cardinalstar.cubicchunks.worldgen.ccenhanced.biome.CCBiomeGenBase;
 import com.cardinalstar.cubicchunks.worldgen.ccenhanced.biome.CCBiomeRegistry;
 import com.gtnewhorizon.gtnhlib.color.HSVColor;
 import com.gtnewhorizon.gtnhlib.util.data.BlockMeta;
+
 import cpw.mods.fml.relauncher.Side;
 import cpw.mods.fml.relauncher.SideOnly;
 
@@ -110,7 +111,8 @@ public final class CCBiomes {
         b.rootHeight = rootHeight;
         b.heightVariation = heightVariation;
         CCBiomeRegistry.register(b);
-        b.color = new HSVColor(climate[0] * 0.5f + 0.5f, climate[1] * 0.5f + 0.5f, climate[2] * 0.5f + 0.5f).toIntRGBA();
+        b.color = new HSVColor(climate[0] * 0.5f + 0.5f, climate[1] * 0.5f + 0.5f, climate[2] * 0.5f + 0.5f)
+            .toIntRGBA();
         return b;
     }
 }

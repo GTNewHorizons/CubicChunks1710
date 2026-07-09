@@ -23,7 +23,12 @@ public class LayeredWorld extends World {
     private final World next;
 
     public LayeredWorld(World next) {
-        super(new DummySaveHandler(), "DUMMY_DIMENSION", null, new WorldSettings(new WorldInfo(new NBTTagCompound())), new Profiler());
+        super(
+            new DummySaveHandler(),
+            "DUMMY_DIMENSION",
+            null,
+            new WorldSettings(new WorldInfo(new NBTTagCompound())),
+            new Profiler());
         this.next = next;
 
         this.rand = new XSTR();
@@ -45,44 +50,44 @@ public class LayeredWorld extends World {
         return true;
     }
 
-//    @Override
-//    public float getSunBrightnessFactor(float p_72967_1_) {
-//        return base.getSunBrightnessFactor(p_72967_1_);
-//    }
+    // @Override
+    // public float getSunBrightnessFactor(float p_72967_1_) {
+    // return base.getSunBrightnessFactor(p_72967_1_);
+    // }
 
-//    @Override
-//    public BiomeGenBase getBiomeGenForCoords(int aX, int aZ) {
-//        return base.getBiomeGenForCoords(aX, aZ);
-//    }
-//
-//    @Override
-//    public int getFullBlockLightValue(int aX, int aY, int aZ) {
-//        return base.getFullBlockLightValue(aX, aY, aZ);
-//    }
+    // @Override
+    // public BiomeGenBase getBiomeGenForCoords(int aX, int aZ) {
+    // return base.getBiomeGenForCoords(aX, aZ);
+    // }
+    //
+    // @Override
+    // public int getFullBlockLightValue(int aX, int aY, int aZ) {
+    // return base.getFullBlockLightValue(aX, aY, aZ);
+    // }
 
     @Override
     public Block getBlock(int aX, int aY, int aZ) {
         return Blocks.air;
     }
 
-//    @Override
-//    public int getBlockMetadata(int aX, int aY, int aZ) {
-//        if (aX == airX && aY == airY && aZ == airZ) return 0;
-//
-//        return world.getBlockMetadata(aX, aY, aZ);
-//    }
-//
-//    @Override
-//    public TileEntity getTileEntity(int aX, int aY, int aZ) {
-//        if (aX == airX && aY == airY && aZ == airZ) return null;
-//
-//        return world.getTileEntity(aX, aY, aZ);
-//    }
-//
-//    @Override
-//    public boolean canBlockSeeTheSky(int aX, int aY, int aZ) {
-//        return world.canBlockSeeTheSky(aX, aY, aZ);
-//    }
+    // @Override
+    // public int getBlockMetadata(int aX, int aY, int aZ) {
+    // if (aX == airX && aY == airY && aZ == airZ) return 0;
+    //
+    // return world.getBlockMetadata(aX, aY, aZ);
+    // }
+    //
+    // @Override
+    // public TileEntity getTileEntity(int aX, int aY, int aZ) {
+    // if (aX == airX && aY == airY && aZ == airZ) return null;
+    //
+    // return world.getTileEntity(aX, aY, aZ);
+    // }
+    //
+    // @Override
+    // public boolean canBlockSeeTheSky(int aX, int aY, int aZ) {
+    // return world.canBlockSeeTheSky(aX, aY, aZ);
+    // }
 
     @Override
     protected int func_152379_p() {

@@ -68,7 +68,8 @@ public class CCNBTUtils {
                 return 5 + ((NBTTagIntArray) tag).func_150302_c().length * 4;
             }
             case NBT.TAG_STRING -> {
-                return 1 + ((NBTTagString) tag).func_150285_a_().length() * 2;
+                return 1 + ((NBTTagString) tag).func_150285_a_()
+                    .length() * 2;
             }
             case NBT.TAG_LIST -> {
                 var list = ((AccessorNBTTagList) tag).getTagList();
@@ -112,7 +113,7 @@ public class CCNBTUtils {
 
         @Override
         public void write(int b) throws IOException {
-            pooled[0] = (byte)(b & 0xff);
+            pooled[0] = (byte) (b & 0xff);
             write(pooled, 0, 1);
         }
     }

@@ -1,6 +1,7 @@
 package com.cardinalstar.cubicchunks.codegen;
 
 public enum FieldType {
+
     i32,
     u32,
     i64,

@@ -1,8 +1,5 @@
 package com.cardinalstar.cubicchunks.worldgen.ccenhanced.climate;
 
-import static org.lwjgl.opengl.GL20.glUseProgram;
-import static org.lwjgl.opengl.GL43.glDispatchCompute;
-
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -11,29 +8,21 @@ import net.minecraft.world.ChunkCoordIntPair;
 
 import org.jetbrains.annotations.Nullable;
 
-import com.cardinalstar.cubicchunks.api.worldgen.hwaccel.ComputePlan;
 import com.cardinalstar.cubicchunks.api.worldgen.hwaccel.KernelBuilder;
 import com.cardinalstar.cubicchunks.api.worldgen.hwaccel.KernelExecutor;
-import com.cardinalstar.cubicchunks.api.worldgen.hwaccel.KernelSubmission;
-import com.cardinalstar.cubicchunks.api.worldgen.hwaccel.KernelSubmissionResult;
-import com.cardinalstar.cubicchunks.api.worldgen.hwaccel.KernelSubmissionToken;
-import com.cardinalstar.cubicchunks.api.worldgen.hwaccel.Noise2DUniformGLStruct;
-import com.cardinalstar.cubicchunks.api.worldgen.hwaccel.Noise2DUniformPrimitiveBuffer;
-import com.cardinalstar.cubicchunks.api.worldgen.hwaccel.buffer.BufferAllocator;
+import com.cardinalstar.cubicchunks.api.worldgen.hwaccel.StandardKernelExecutor;
 import com.cardinalstar.cubicchunks.api.worldgen.hwaccel.buffer.BufferDataType;
-import com.cardinalstar.cubicchunks.api.worldgen.hwaccel.buffer.BufferDescriptor;
-import com.cardinalstar.cubicchunks.api.worldgen.hwaccel.buffer.ConstantHardwareBuffer;
-import com.cardinalstar.cubicchunks.api.worldgen.hwaccel.buffer.GPUBuffer;
+import com.cardinalstar.cubicchunks.api.worldgen.hwaccel.buffer.BufferLayout;
 import com.google.common.collect.ImmutableMap;
 import com.gtnewhorizon.gtnhlib.hash.Fnv1a64;
 
 /**
- * Holds the ordered list of climate axes, applies per-axis domain warping, and produces
- * ClimatePoints for (x, z) world coordinates.
+ * Holds the ordered list of climate axes, applies per-axis domain warping, and produces ClimatePoints for (x, z) world
+ * coordinates.
  *
  * <p>
- * Axis indices (0=temperature, 1=humidity, 2=continentalness, 3=erosion). Adding a fifth
- * axis in a future update requires only appending to the axis list and extending the offset arrays.
+ * Axis indices (0=temperature, 1=humidity, 2=continentalness, 3=erosion). Adding a fifth axis in a future update
+ * requires only appending to the axis list and extending the offset arrays.
  */
 public class ClimateSystem {
 
@@ -75,8 +64,8 @@ public class ClimateSystem {
     }
 
     /**
-     * Sample the climate at world coordinates (x, z).
-     * Domain warping is applied to each axis independently using per-axis coordinate offsets.
+     * Sample the climate at world coordinates (x, z). Domain warping is applied to each axis independently using
+     * per-axis coordinate offsets.
      */
     public float[] sample(double x, double z, float @Nullable [] pooled) {
         if (pooled == null) pooled = new float[axes.size()];
@@ -87,131 +76,78 @@ public class ClimateSystem {
             // Sample warp displacement for this axis
             double wx = warp.sample(x + ox, z + oz);
             double wz = warp.sample(x + ox + 500.0, z + oz + 500.0);
-            pooled[i] = (float) axes.get(i).sample(x + wx * WARP_MAG, z + wz * WARP_MAG);
+            pooled[i] = (float) axes.get(i)
+                .sample(x + wx * WARP_MAG, z + wz * WARP_MAG);
         }
 
         return pooled;
     }
 
     /**
-     * Creates a kernel that samples one climate axis for a chunk, writing into the axis-major noise buffer
-     * at the slice for {@code axisIndex}. The first axis (0) allocates the output buffer; subsequent axes
-     * receive it as input {@code "noise"} and write their slice into the same buffer, returning it unchanged.
+     * Creates a kernel that samples one climate axis for a chunk, writing into the axis-major noise buffer at the slice
+     * for {@code axisIndex}. The first axis (0) allocates the output buffer; subsequent axes receive it as input
+     * {@code "noise"} and write their slice into the same buffer, returning it unchanged.
      */
     public KernelExecutor<ChunkCoordIntPair> createAxisKernel(int axisIndex) {
         return new AxisSamplerKernelExecutor(axisIndex, axes.get(axisIndex));
     }
 
-    private class AxisSamplerKernelExecutor implements KernelExecutor<ChunkCoordIntPair> {
+    private class AxisSamplerKernelExecutor extends StandardKernelExecutor<ChunkCoordIntPair> {
 
         private final int axisIndex;
-        private final int program;
-
-        private final ConstantHardwareBuffer constants;
+        private final ClimateAxis axis;
 
         public AxisSamplerKernelExecutor(int axisIndex, ClimateAxis axis) {
             this.axisIndex = axisIndex;
+            this.axis = axis;
+        }
 
-            KernelBuilder builder = new KernelBuilder();
+        @Override
+        protected String generateKernel(KernelBuilder builder) {
+            builder.addParameter(BufferDataType.i32, "offsetX");
+            builder.addParameter(BufferDataType.i32, "offsetZ");
+            builder.addOutputBuffer("noise", new BufferLayout(BufferDataType.f32, 16, 16));
 
             ClimateSystem.this.warp.compileShader(builder, "warp");
             axis.compileShader(builder, axis.getName());
 
-            float warpOffsetX = (float) WARP_OFFSET_X[axisIndex];
-            float warpOffsetZ = (float) WARP_OFFSET_Z[axisIndex];
-            int axisBase = axisIndex * 256;
+            builder.addMacro("WARP_OFFSET_X", (float) WARP_OFFSET_X[axisIndex]);
+            builder.addMacro("WARP_OFFSET_Z", (float) WARP_OFFSET_Z[axisIndex]);
+            builder.addMacro("AXIS_OUTPUT_OFFSET", axisIndex * 256);
 
-            String code =
-                """
-                #version 430 core
+            return """
+                #version 460
 
-                layout(local_size_x = 16, local_size_z = 16) in;
+                layout(local_size_x = 16, local_size_y = 16) in;
 
-                $uniform
+                layout(set = 0, binding = 0) readonly buffer Constants { uint constants[]; };
+                layout(set = 1, binding = 0) buffer Arena { uint arena[]; };
 
-                layout(std430, binding = 0) writeonly buffer Arena { float arena[]; };
-                layout(std430, binding = 1) readonly buffer Uniforms { Noise2DUniform uniforms[]; };
-                layout(std430, binding = 2) readonly buffer Constants { uint constants[]; };
+                $pc
 
                 $preamble
 
                 void main() {
-                    uint id = gl_WorkGroupID.x;
+                    uint x = gl_GlobalInvocationID.x;
+                    uint z = gl_GlobalInvocationID.y;
 
-                    uint x = gl_LocalInvocationID.x;
-                    uint z = gl_LocalInvocationID.z;
-
-                    int offsetX = uniforms[id].offsetX;
-                    int offsetZ = uniforms[id].offsetZ;
-                    uint outputOffset = uniforms[id].outputOffset;
-
-                    int gx = offsetX + int(x);
-                    int gz = offsetZ + int(z);
+                    int gx = GET_OFFSET_X + int(x);
+                    int gz = GET_OFFSET_Z + int(z);
 
                     $logic
 
-                    float warpX = warp(gx + $warpOffsetX, gz + $warpOffsetZ) * 200.0f;
-                    float warpZ = warp(gx + $warpOffsetX + 500.0f, gz + $warpOffsetZ + 500.0f) * 200.0f;
+                    float warpX = warp(gx + WARP_OFFSET_X, gz + WARP_OFFSET_Z) * 200.0f;
+                    float warpZ = warp(gx + WARP_OFFSET_X + 500.0f, gz + WARP_OFFSET_Z + 500.0f) * 200.0f;
 
-                    arena[(z << 4) + x + outputOffset] = $axisFunc(gx + warpX, gz + warpZ);
+                    SET_NOISE(AXIS_OUTPUT_OFFSET + ((z << 4) | x), $axisFunc(gx + warpX, gz + warpZ));
                 }
-                """
-                    .replace("$uniform", Noise2DUniformGLStruct.SOURCE)
-                    .replace("$preamble", builder.preamble.toString())
-                    .replace("$logic", builder.logic.toString())
-                    .replace("$warpOffsetX", warpOffsetX + "f")
-                    .replace("$warpOffsetZ", warpOffsetZ + "f")
-                    .replace("$axisBase", Integer.toString(axisBase))
-                    .replace("$axisFunc", axis.getName());
-
-            this.program = KernelExecutor.createProgram(code);
-            this.constants = builder.constants.finish();
+                """.replace("$logic", builder.logic.toString())
+                .replace("$axisFunc", axis.getName());
         }
 
         @Override
-        public Map<String, BufferDescriptor> getOutputs(
-            ComputePlan plan, KernelSubmissionToken submission, ChunkCoordIntPair key,
-            Map<String, BufferDescriptor> inputs
-        ) {
-            return ImmutableMap.of("noise", plan.describeBuffer(submission, BufferDataType.f32, 16, 16));
-        }
-
-        @Override
-        public KernelSubmissionResult[] submit(BufferAllocator alloc, KernelSubmission<ChunkCoordIntPair>[] submissions) {
-            glUseProgram(this.program);
-
-            Noise2DUniformPrimitiveBuffer uniforms = new Noise2DUniformPrimitiveBuffer(submissions.length);
-
-            KernelSubmissionResult[] results = new KernelSubmissionResult[submissions.length];
-
-            uniforms.forEachFast((i, view) -> {
-                var key = submissions[i].key();
-
-                GPUBuffer output = alloc.alloc(BufferDataType.f32, 16, 16);
-                results[i] = new KernelSubmissionResult(ImmutableMap.of("noise", output));
-
-                view.setOffsetX(key.chunkXPos << 4);
-                view.setOffsetZ(key.chunkZPos << 4);
-                view.setOutputOffset(output.getBufferOffset() / 4);
-
-                return true;
-            });
-
-            GPUBuffer uniformGPU = alloc.uniform(uniforms);
-
-            alloc.bindSSBO(0);
-            uniformGPU.bind(1);
-            constants.bindSSBO(2);
-
-            glDispatchCompute(submissions.length, 1, 1);
-
-            alloc.unbindSSBO(0);
-            uniformGPU.unbind(1);
-            constants.unbindSSBO(2);
-
-            glUseProgram(0);
-
-            return results;
+        protected Map<String, Number> getParameters(ChunkCoordIntPair key) {
+            return ImmutableMap.of("offsetX", key.chunkXPos << 4, "offsetZ", key.chunkZPos << 4);
         }
     }
 }

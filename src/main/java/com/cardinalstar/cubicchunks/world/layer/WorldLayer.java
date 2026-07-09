@@ -11,6 +11,7 @@ import com.cardinalstar.cubicchunks.util.BooleanArray2D;
 import com.cardinalstar.cubicchunks.util.BooleanArray3D;
 import com.cardinalstar.cubicchunks.util.HashMap2D;
 import com.cardinalstar.cubicchunks.util.HashMap3D;
+
 import it.unimi.dsi.fastutil.ints.Int2ObjectRBTreeMap;
 
 public class WorldLayer {
@@ -40,6 +41,7 @@ public class WorldLayer {
     }
 
     private static class PseudoChunk {
+
         public final int[] heightmap = new int[16 * 16];
         public final BooleanArray2D presencce = new BooleanArray2D(16, 16);
 
@@ -47,6 +49,7 @@ public class WorldLayer {
     }
 
     private static class PseudoEBS {
+
         public final Block[] blocks = new Block[16 * 16 * 16];
         public final int[] meta = new int[16 * 16 * 16];
         public final BooleanArray3D presence = new BooleanArray3D(16, 16, 16);

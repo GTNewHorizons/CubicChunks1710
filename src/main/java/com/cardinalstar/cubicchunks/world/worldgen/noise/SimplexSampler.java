@@ -1,19 +1,18 @@
 package com.cardinalstar.cubicchunks.world.worldgen.noise;
 
-import java.nio.ByteBuffer;
 import java.util.Random;
 
 import net.minecraft.util.MathHelper;
 
 import com.cardinalstar.cubicchunks.api.worldgen.hwaccel.KernelBuilder;
-import com.cardinalstar.cubicchunks.api.worldgen.hwaccel.buffer.BufferDataType;
+import com.cardinalstar.cubicchunks.api.worldgen.hwaccel.buffer.TransformingBufferAccessor;
 
 /// A standard simplex noise sampler.
 public class SimplexSampler implements NoiseSampler {
 
     protected static final int[][] GRADIENTS = new int[][] { { 1, 1, 0 }, { -1, 1, 0 }, { 1, -1, 0 }, { -1, -1, 0 },
         { 1, 0, 1 }, { -1, 0, 1 }, { 1, 0, -1 }, { -1, 0, -1 }, { 0, 1, 1 }, { 0, -1, 1 }, { 0, 1, -1 }, { 0, -1, -1 },
-        { 1, 1, 0 }, { 0, -1, 1 }, { -1, 1, 0 }, { 0, -1, -1 } };
+        { 1, 1, 0 }, { 0, -1, 1 }, { -1, 1, 0 }, { 0, -1, -1 }, };
     private static final double SQRT_3 = Math.sqrt(3.0D);
     private static final double SKEW_FACTOR_2D;
     private static final double UNSKEW_FACTOR_2D;
@@ -70,15 +69,8 @@ public class SimplexSampler implements NoiseSampler {
         double g = (double) j - e;
         double h = x - f;
         double k = y - g;
-        byte n;
-        byte o;
-        if (h > k) {
-            n = 1;
-            o = 0;
-        } else {
-            n = 0;
-            o = 1;
-        }
+        byte n = (byte) (h > k ? 1 : 0);
+        byte o = (byte) (h > k ? 0 : 1);
 
         double p = h - (double) n + UNSKEW_FACTOR_2D;
         double q = k - (double) o + UNSKEW_FACTOR_2D;
@@ -192,115 +184,72 @@ public class SimplexSampler implements NoiseSampler {
     public String compileKernel2D(KernelBuilder builder, String x, String y) {
         String funcName = builder.createName("simplex2d");
 
-        ByteBuffer permBytes = ByteBuffer.allocateDirect(permutations.length * 4);
-        permBytes.asIntBuffer().put(permutations);
+        String permsMacro = builder.createName("PERMS");
 
-        var perms = builder.constants.append(BufferDataType.i32, permBytes);
+        builder.addBufferMacros(
+            permsMacro,
+            new TransformingBufferAccessor(builder.addConstant(permutations), index -> "((" + index + ") & 255)"));
 
-        float skew = (float) SKEW_FACTOR_2D;
-        float unskew = (float) UNSKEW_FACTOR_2D;
+        String code = """
+            float grad$funcName(int hash, vec2 pos, float distance) {
+              const int GX[12] = int[12](1,-1,1,-1,1,-1,1,-1,0,0,0,0);
+              const int GY[12] = int[12](1,1,-1,-1,0,0,0,0,1,-1,1,-1);
 
-        // Gradients: GRADIENTS[][0] and [][1] for indices 0-11
-        builder.preamble
-            .append("float ").append(funcName).append("(float px, float py) {\n")
-            .append("  const int GX[12] = int[12](1,-1,1,-1,1,-1,1,-1,0,0,0,0);\n")
-            .append("  const int GY[12] = int[12](1,1,-1,-1,0,0,0,0,1,-1,1,-1);\n")
-            .append("  float d = (px + py) * ").append(skew).append("f;\n")
-            .append("  int i = int(floor(px + d));\n")
-            .append("  int j = int(floor(py + d));\n")
-            .append("  float e = float(i + j) * ").append(unskew).append("f;\n")
-            .append("  float h = px - (float(i) - e);\n")
-            .append("  float k = py - (float(j) - e);\n")
-            .append("  int n = h > k ? 1 : 0;\n")
-            .append("  int o = h > k ? 0 : 1;\n")
-            .append("  float p = h - float(n) + ").append(unskew).append("f;\n")
-            .append("  float q = k - float(o) + ").append(unskew).append("f;\n")
-            .append("  float r = h - 1.0f + 2.0f * ").append(unskew).append("f;\n")
-            .append("  float s = k - 1.0f + 2.0f * ").append(unskew).append("f;\n")
-            .append("  int t = i & 255;\n")
-            .append("  int u = j & 255;\n")
-            .append("  int v = ").append(perms.access("(t + " + perms.access("u") + ") & 255")).append(" % 12;\n")
-            .append("  int w = ").append(perms.access("(t + n + " + perms.access("(u + o) & 255") + ") & 255")).append(" % 12;\n")
-            .append("  int z = ").append(perms.access("(t + 1 + " + perms.access("(u + 1) & 255") + ") & 255")).append(" % 12;\n")
-            .append("  float t0 = max(0.0f, 0.5f - h*h - k*k);\n")
-            .append("  float n0 = t0*t0*t0*t0 * (float(GX[v])*h + float(GY[v])*k);\n")
-            .append("  float t1 = max(0.0f, 0.5f - p*p - q*q);\n")
-            .append("  float n1 = t1*t1*t1*t1 * (float(GX[w])*p + float(GY[w])*q);\n")
-            .append("  float t2 = max(0.0f, 0.5f - r*r - s*s);\n")
-            .append("  float n2 = t2*t2*t2*t2 * (float(GX[z])*r + float(GY[z])*s);\n")
-            .append("  return 70.0f * (n0 + n1 + n2);\n")
-            .append("}\n");
+              float d = distance - dot(pos, pos);
+              float d4 = d * d * d * d;
+              float f = d4 * (float(GX[hash % 12]) * pos.x + float(GY[hash % 12] * pos.y));
+
+              return d < 0.0f ? 0.0f : f;
+            }
+
+            float $funcName(float px, float py) {
+              float d = (px + py) * $skew;
+              int i = int(floor(px + d));
+              int j = int(floor(py + d));
+              float e = float(i + j) * $unskew;
+              float f = float(i) - e;
+              float g = float(j) - e;
+              float h = px - f;
+              float k = py - g;
+              int n = h > k ? 1 : 0;
+              int o = h > k ? 0 : 1;
+
+              float p = h - float(n) + $unskew;
+              float q = k - float(o) + $unskew;
+              float r = h - 1.0f + 2.0f * $unskew;
+              float s = k - 1.0f + 2.0f * $unskew;
+              int t = i & 255;
+              int u = j & 255;
+              int v = $perms(t + $perms(u)) % 12;
+              int w = $perms(t + n + $perms(u + o)) % 12;
+              int z = $perms(t + 1 + $perms(u + 1)) % 12;
+              float aa = grad$funcName(v, vec2(h, k), 0.5f);
+              float ab = grad$funcName(w, vec2(p, q), 0.5f);
+              float ac = grad$funcName(z, vec2(r. s), 0.5f);
+              return 70.0f * (aa + ab + ac);
+            }
+            """.replaceAll("\\$funcName", funcName)
+            .replaceAll("\\$skew", Float.toString((float) SKEW_FACTOR_2D))
+            .replaceAll("\\$unskew", Float.toString((float) UNSKEW_FACTOR_2D))
+            .replaceAll("\\$perms", "GET_" + permsMacro);
+
+        builder.preamble.append(code);
 
         String result = builder.createName("simplex");
-        builder.logic.append("  float ").append(result).append(" = ")
-            .append(funcName).append("(").append(x).append(", ").append(y).append(");\n");
+        builder.logic.append("  float ")
+            .append(result)
+            .append(" = ")
+            .append(funcName)
+            .append("(")
+            .append(x)
+            .append(", ")
+            .append(y)
+            .append(");\n");
         return result;
     }
 
     @Override
     public String compileKernel3D(KernelBuilder builder, String x, String y, String z) {
-        String funcName = builder.createName("simplex3d");
-
-        ByteBuffer permBytes = ByteBuffer.allocateDirect(permutations.length * 4);
-        permBytes.asIntBuffer().put(permutations);
-
-        var perms = builder.constants.append(BufferDataType.i32, permBytes);
-
-        // Gradients: GRADIENTS[][0..2] for indices 0-11
-        builder.preamble
-            .append("float ").append(funcName).append("(float px, float py, float pz) {\n")
-            .append("  const int GX[12] = int[12](1,-1,1,-1,1,-1,1,-1,0,0,0,0);\n")
-            .append("  const int GY[12] = int[12](1,1,-1,-1,0,0,0,0,1,-1,1,-1);\n")
-            .append("  const int GZ[12] = int[12](0,0,0,0,1,1,-1,-1,1,1,-1,-1);\n")
-            .append("  float sk = (px + py + pz) * 0.3333333333f;\n")
-            .append("  int i = int(floor(px + sk));\n")
-            .append("  int j = int(floor(py + sk));\n")
-            .append("  int k = int(floor(pz + sk));\n")
-            .append("  float g = float(i + j + k) * 0.1666666667f;\n")
-            .append("  float x0 = px - (float(i) - g);\n")
-            .append("  float y0 = py - (float(j) - g);\n")
-            .append("  float z0 = pz - (float(k) - g);\n")
-            // 6-way vertex ordering (mirrors the Java if/else chain exactly)
-            .append("  int i1, j1, k1, i2, j2, k2;\n")
-            .append("  if (x0 >= y0) {\n")
-            .append("    if (y0 >= z0)      { i1=1;j1=0;k1=0; i2=1;j2=1;k2=0; }\n")
-            .append("    else if (x0 >= z0) { i1=1;j1=0;k1=0; i2=1;j2=0;k2=1; }\n")
-            .append("    else               { i1=0;j1=0;k1=1; i2=1;j2=0;k2=1; }\n")
-            .append("  } else {\n")
-            .append("    if (y0 < z0)       { i1=0;j1=0;k1=1; i2=0;j2=1;k2=1; }\n")
-            .append("    else if (x0 < z0)  { i1=0;j1=1;k1=0; i2=0;j2=1;k2=1; }\n")
-            .append("    else               { i1=0;j1=1;k1=0; i2=1;j2=1;k2=0; }\n")
-            .append("  }\n")
-            .append("  float x1 = x0 - float(i1) + 0.1666666667f;\n")
-            .append("  float y1 = y0 - float(j1) + 0.1666666667f;\n")
-            .append("  float z1 = z0 - float(k1) + 0.1666666667f;\n")
-            .append("  float x2 = x0 - float(i2) + 0.3333333333f;\n")
-            .append("  float y2 = y0 - float(j2) + 0.3333333333f;\n")
-            .append("  float z2 = z0 - float(k2) + 0.3333333333f;\n")
-            .append("  float x3 = x0 - 0.5f;\n")
-            .append("  float y3 = y0 - 0.5f;\n")
-            .append("  float z3 = z0 - 0.5f;\n")
-            .append("  int ii = i & 255;\n")
-            .append("  int jj = j & 255;\n")
-            .append("  int kk = k & 255;\n")
-            .append("  int g0 = ").append(perms.access("(ii + " + perms.access("(jj + " + perms.access("kk") + ") & 255") + ") & 255")).append(" % 12;\n")
-            .append("  int g1 = ").append(perms.access("(ii + i1 + " + perms.access("(jj + j1 + " + perms.access("(kk + k1) & 255") + ") & 255") + ") & 255")).append(" % 12;\n")
-            .append("  int g2 = ").append(perms.access("(ii + i2 + " + perms.access("(jj + j2 + " + perms.access("(kk + k2) & 255") + ") & 255") + ") & 255")).append(" % 12;\n")
-            .append("  int g3 = ").append(perms.access("(ii + 1 + " + perms.access("(jj + 1 + " + perms.access("(kk + 1) & 255") + ") & 255") + ") & 255")).append(" % 12;\n")
-            .append("  float d0 = 0.6f - x0*x0 - y0*y0 - z0*z0;\n")
-            .append("  float n0 = (d0 < 0.0f) ? 0.0f : d0*d0*d0*d0 * (float(GX[g0])*x0 + float(GY[g0])*y0 + float(GZ[g0])*z0);\n")
-            .append("  float d1 = 0.6f - x1*x1 - y1*y1 - z1*z1;\n")
-            .append("  float n1 = (d1 < 0.0f) ? 0.0f : d1*d1*d1*d1 * (float(GX[g1])*x1 + float(GY[g1])*y1 + float(GZ[g1])*z1);\n")
-            .append("  float d2 = 0.6f - x2*x2 - y2*y2 - z2*z2;\n")
-            .append("  float n2 = (d2 < 0.0f) ? 0.0f : d2*d2*d2*d2 * (float(GX[g2])*x2 + float(GY[g2])*y2 + float(GZ[g2])*z2);\n")
-            .append("  float d3 = 0.6f - x3*x3 - y3*y3 - z3*z3;\n")
-            .append("  float n3 = (d3 < 0.0f) ? 0.0f : d3*d3*d3*d3 * (float(GX[g3])*x3 + float(GY[g3])*y3 + float(GZ[g3])*z3);\n")
-            .append("  return 32.0f * (n0 + n1 + n2 + n3);\n")
-            .append("}\n");
-
-        String result = builder.createName("simplex");
-        builder.logic.append("  float ").append(result).append(" = ")
-            .append(funcName).append("(").append(x).append(", ").append(y).append(", ").append(z).append(");\n");
-        return result;
+        throw new UnsupportedOperationException("Not yet implemented");
     }
 }

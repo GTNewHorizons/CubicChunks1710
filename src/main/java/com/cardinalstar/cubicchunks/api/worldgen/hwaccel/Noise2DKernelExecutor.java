@@ -1,118 +1,63 @@
 package com.cardinalstar.cubicchunks.api.worldgen.hwaccel;
 
-import static org.lwjgl.opengl.GL20.glUseProgram;
-import static org.lwjgl.opengl.GL43.glDispatchCompute;
-
 import java.util.Map;
 
 import net.minecraft.world.ChunkCoordIntPair;
 
-import com.cardinalstar.cubicchunks.api.worldgen.hwaccel.buffer.BufferAllocator;
+import org.jetbrains.annotations.NotNull;
+
 import com.cardinalstar.cubicchunks.api.worldgen.hwaccel.buffer.BufferDataType;
-import com.cardinalstar.cubicchunks.api.worldgen.hwaccel.buffer.BufferDescriptor;
-import com.cardinalstar.cubicchunks.api.worldgen.hwaccel.buffer.ConstantHardwareBuffer;
-import com.cardinalstar.cubicchunks.api.worldgen.hwaccel.buffer.GPUBuffer;
+import com.cardinalstar.cubicchunks.api.worldgen.hwaccel.buffer.BufferLayout;
 import com.cardinalstar.cubicchunks.world.worldgen.noise.NoiseSampler;
 import com.google.common.collect.ImmutableMap;
 
-public class Noise2DKernelExecutor implements KernelExecutor<ChunkCoordIntPair> {
+public class Noise2DKernelExecutor extends StandardKernelExecutor<ChunkCoordIntPair> {
 
-    private final int program;
+    @NotNull
+    private final NoiseSampler sampler;
 
-    private final ConstantHardwareBuffer constants;
+    public Noise2DKernelExecutor(@NotNull NoiseSampler sampler) {
+        this.sampler = sampler;
+    }
 
-    public Noise2DKernelExecutor(NoiseSampler sampler) {
-        KernelBuilder builder = new KernelBuilder();
+    @Override
+    protected String generateKernel(KernelBuilder builder) {
+        builder.addParameter(BufferDataType.f32, "offsetX");
+        builder.addParameter(BufferDataType.f32, "offsetY");
 
-        String result2d = sampler.compileKernel2D(builder, "gx", "gz");
+        builder.addOutputBuffer("noise", new BufferLayout(BufferDataType.f32, 16, 16));
 
-        String code2 =
-            """
-            #version 430 core
+        String result2d = sampler.compileKernel2D(builder, "gx", "gy");
 
-            layout(local_size_x = 16, local_size_z = 16) in;
+        return """
+            #version 460
 
-            $uniform
+            layout(local_size_x = 16, local_size_y = 16) in;
 
-            layout(std430, binding = 0) writeonly buffer Arena { float arena[]; };
-            layout(std430, binding = 1) readonly buffer Uniforms { Noise2DUniform uniforms[]; };
-            layout(std430, binding = 2) readonly buffer Constants { uint constants[]; };
+            layout(set = 0, binding = 0) readonly buffer Constants { uint constants[]; };
+            layout(set = 1, binding = 0) buffer Arena { uint arena[]; };
+
+            $pc
 
             $preamble
 
             void main() {
-                uint id = gl_WorkGroupID.x;
+                uint x = gl_GlobalInvocationID.x;
+                uint y = gl_GlobalInvocationID.y;
 
-                uint x = gl_LocalInvocationID.x;
-                uint z = gl_LocalInvocationID.z;
-
-                int offsetX = uniforms[id].offsetX;
-                int offsetZ = uniforms[id].offsetZ;
-                uint outputOffset = uniforms[id].outputOffset;
-
-                int gx = offsetX + int(x);
-                int gz = offsetZ + int(z);
+                float gx = GET_OFFSET_X + float(x);
+                float gy = GET_OFFSET_Y + float(y);
 
                 $logic
 
-                arena[(z << 4) + x + outputOffset] = $result;
+                SET_NOISE((y << 4u) | x, $result);
             }
-            """;
-
-        code2 = code2.replace("$preamble", builder.preamble.toString())
-            .replace("$logic", builder.logic.toString())
-            .replace("$result", result2d)
-            .replace("$uniform", Noise2DUniformGLStruct.SOURCE);
-
-        this.program = KernelExecutor.createProgram(code2);
-        this.constants = builder.constants.finish();
+            """.replace("$logic", builder.logic.toString())
+            .replace("$result", result2d);
     }
 
     @Override
-    public Map<String, BufferDescriptor> getOutputs(
-        ComputePlan plan,
-        KernelSubmissionToken submission,
-        ChunkCoordIntPair key,
-        Map<String, BufferDescriptor> inputs
-    ) {
-        return ImmutableMap.of("noise", plan.describeBuffer(submission, BufferDataType.f32, 16, 16));
-    }
-
-    @Override
-    public KernelSubmissionResult[] submit(BufferAllocator alloc, KernelSubmission<ChunkCoordIntPair>[] submissions) {
-        glUseProgram(this.program);
-
-        Noise2DUniformPrimitiveBuffer uniforms = new Noise2DUniformPrimitiveBuffer(submissions.length);
-
-        KernelSubmissionResult[] results = new KernelSubmissionResult[submissions.length];
-
-        uniforms.forEachFast((i, view) -> {
-            var key = submissions[i].key();
-
-            GPUBuffer output = alloc.alloc(BufferDataType.f32, 16, 16);
-            results[i] = new KernelSubmissionResult(ImmutableMap.of("noise", output));
-
-            view.setOffsetX(key.chunkXPos << 4);
-            view.setOffsetZ(key.chunkZPos << 4);
-            view.setOutputOffset(output.getBufferOffset() / 4);
-
-            return true;
-        });
-
-        GPUBuffer uniformGPU = alloc.uniform(uniforms);
-
-        alloc.bindSSBO(0);
-        uniformGPU.bind(1);
-        constants.bindSSBO(2);
-
-        glDispatchCompute(submissions.length, 1, 1);
-
-        alloc.unbindSSBO(0);
-        uniformGPU.unbind(1);
-        constants.unbindSSBO(2);
-
-        glUseProgram(0);
-
-        return results;
+    protected Map<String, Number> getParameters(ChunkCoordIntPair key) {
+        return ImmutableMap.of("offsetX", (float) (key.chunkXPos << 4), "offsetY", (float) (key.chunkZPos << 4));
     }
 }

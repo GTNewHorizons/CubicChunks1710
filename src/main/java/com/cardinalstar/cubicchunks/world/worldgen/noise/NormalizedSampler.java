@@ -55,10 +55,20 @@ public class NormalizedSampler implements NoiseSampler {
         String inner = base.compileKernel2D(builder, x, y);
         String clamped = builder.createName("norm_in");
         String result = builder.createName("normalized");
-        builder.logic
-            .append("  float ").append(clamped).append(" = clamp(").append(inner).append(", -1.0f, 1.0f);\n")
-            .append("  float ").append(result).append(" = sign(").append(clamped)
-            .append(") * pow(abs(").append(clamped).append("), ").append((float) REMAP_EXPONENT).append("f);\n");
+        builder.logic.append("  float ")
+            .append(clamped)
+            .append(" = clamp(")
+            .append(inner)
+            .append(", -1.0f, 1.0f);\n")
+            .append("  float ")
+            .append(result)
+            .append(" = sign(")
+            .append(clamped)
+            .append(") * pow(abs(")
+            .append(clamped)
+            .append("), ")
+            .append((float) REMAP_EXPONENT)
+            .append("f);\n");
         return result;
     }
 
@@ -67,10 +77,20 @@ public class NormalizedSampler implements NoiseSampler {
         String inner = base.compileKernel3D(builder, x, y, z);
         String clamped = builder.createName("norm_in");
         String result = builder.createName("normalized");
-        builder.logic
-            .append("  float ").append(clamped).append(" = clamp(").append(inner).append(", -1.0f, 1.0f);\n")
-            .append("  float ").append(result).append(" = sign(").append(clamped)
-            .append(") * pow(abs(").append(clamped).append("), ").append((float) REMAP_EXPONENT).append("f);\n");
+        builder.logic.append("  float ")
+            .append(clamped)
+            .append(" = clamp(")
+            .append(inner)
+            .append(", -1.0f, 1.0f);\n")
+            .append("  float ")
+            .append(result)
+            .append(" = sign(")
+            .append(clamped)
+            .append(") * pow(abs(")
+            .append(clamped)
+            .append("), ")
+            .append((float) REMAP_EXPONENT)
+            .append("f);\n");
         return result;
     }
 }

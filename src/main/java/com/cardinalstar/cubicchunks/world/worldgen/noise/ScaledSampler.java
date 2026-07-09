@@ -34,11 +34,16 @@ public class ScaledSampler implements NoiseSampler {
 
     @Override
     public String compileKernel2D(KernelBuilder builder, String x, String y) {
-        return base.compileKernel2D(builder, String.format("(%s) * %ff", x, scaleX), String.format("(%s) * %ff", y, scaleY));
+        return base
+            .compileKernel2D(builder, String.format("(%s) * %ff", x, scaleX), String.format("(%s) * %ff", y, scaleY));
     }
 
     @Override
     public String compileKernel3D(KernelBuilder builder, String x, String y, String z) {
-        return base.compileKernel3D(builder, String.format("(%s) * %ff", x, scaleX), String.format("(%s) * %ff", y, scaleY), String.format("(%s) * %ff", z, scaleZ));
+        return base.compileKernel3D(
+            builder,
+            String.format("(%s) * %ff", x, scaleX),
+            String.format("(%s) * %ff", y, scaleY),
+            String.format("(%s) * %ff", z, scaleZ));
     }
 }

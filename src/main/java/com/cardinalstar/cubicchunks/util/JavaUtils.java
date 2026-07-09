@@ -18,7 +18,9 @@ public class JavaUtils {
 
     /// Inner class to avoid class loading
     private static class Java9 {
-        public static final MethodHandle ON_SPIN_WAIT = DataUtils.exposeMethod(Thread.class, MethodType.methodType(void.class), "onSpinWait");
+
+        public static final MethodHandle ON_SPIN_WAIT = DataUtils
+            .exposeMethod(Thread.class, MethodType.methodType(void.class), "onSpinWait");
     }
 
 }

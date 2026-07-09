@@ -1,14 +1,12 @@
 package com.cardinalstar.cubicchunks.worldgen.ccenhanced;
 
-import static org.lwjgl.opengl.GL20.glUseProgram;
-import static org.lwjgl.opengl.GL43.glDispatchCompute;
+import static org.lwjgl.vulkan.VK10.vkCmdDispatch;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Random;
 
 import javax.annotation.Nullable;
@@ -25,22 +23,20 @@ import net.minecraft.world.chunk.Chunk;
 import net.minecraft.world.chunk.storage.ExtendedBlockStorage;
 
 import org.jetbrains.annotations.NotNull;
+import org.lwjgl.vulkan.VkCommandBuffer;
 
 import com.cardinalstar.cubicchunks.api.ICube;
 import com.cardinalstar.cubicchunks.api.worldgen.GenerationResult;
 import com.cardinalstar.cubicchunks.api.worldgen.IWorldGenerator;
 import com.cardinalstar.cubicchunks.api.worldgen.hwaccel.AcceleratableWorldGenerator;
 import com.cardinalstar.cubicchunks.api.worldgen.hwaccel.ComputePlan;
+import com.cardinalstar.cubicchunks.api.worldgen.hwaccel.KernelBuilder;
 import com.cardinalstar.cubicchunks.api.worldgen.hwaccel.KernelContext;
 import com.cardinalstar.cubicchunks.api.worldgen.hwaccel.KernelExecutor;
-import com.cardinalstar.cubicchunks.api.worldgen.hwaccel.KernelSubmission;
-import com.cardinalstar.cubicchunks.api.worldgen.hwaccel.KernelSubmissionResult;
-import com.cardinalstar.cubicchunks.api.worldgen.hwaccel.KernelSubmissionToken;
 import com.cardinalstar.cubicchunks.api.worldgen.hwaccel.Noise2DKernelExecutor;
-import com.cardinalstar.cubicchunks.api.worldgen.hwaccel.buffer.BufferAllocator;
+import com.cardinalstar.cubicchunks.api.worldgen.hwaccel.StandardKernelExecutor;
 import com.cardinalstar.cubicchunks.api.worldgen.hwaccel.buffer.BufferDataType;
-import com.cardinalstar.cubicchunks.api.worldgen.hwaccel.buffer.BufferDescriptor;
-import com.cardinalstar.cubicchunks.api.worldgen.hwaccel.buffer.GPUBuffer;
+import com.cardinalstar.cubicchunks.api.worldgen.hwaccel.buffer.BufferLayout;
 import com.cardinalstar.cubicchunks.mixin.api.ICubicWorldInternal.Server;
 import com.cardinalstar.cubicchunks.mixin.ext.EBSIDAccessor;
 import com.cardinalstar.cubicchunks.server.CubeProviderServer;
@@ -65,6 +61,7 @@ import com.cardinalstar.cubicchunks.worldgen.ccenhanced.terrain.ColumnContext;
 import com.falsepattern.endlessids.mixin.helpers.ChunkBiomeHook;
 import com.google.common.collect.ImmutableMap;
 import com.gtnewhorizon.gtnhlib.hash.Fnv1a64;
+
 import it.unimi.dsi.fastutil.ints.IntArrayList;
 import it.unimi.dsi.fastutil.ints.IntOpenHashSet;
 
@@ -119,7 +116,7 @@ public class CCEnhancedWorldGenerator implements IWorldGenerator, AcceleratableW
         ColumnContext ctx = getOrComputeContext(chunk, columnX, columnZ);
 
         BiomeLookupResult[] grid = biomeCache.getGrid(columnX, columnZ);
-//        fillBiomeArray(chunk, grid);
+        // fillBiomeArray(chunk, grid);
 
         ExtendedBlockStorage[] ebsArr = new ExtendedBlockStorage[16];
         for (int cubeY = 0; cubeY < 16; cubeY++) {
@@ -156,7 +153,7 @@ public class CCEnhancedWorldGenerator implements IWorldGenerator, AcceleratableW
             ColumnContext ctx = getOrComputeContext(chunk, cubeX, cubeZ);
 
             BiomeLookupResult[] grid = biomeCache.getGrid(cubeX, cubeZ);
-//            fillBiomeArray(chunk, grid);
+            // fillBiomeArray(chunk, grid);
 
             ExtendedBlockStorage[] ebsArr = new ExtendedBlockStorage[16];
             for (int cy = 0; cy < 16; cy++) {
@@ -266,31 +263,46 @@ public class CCEnhancedWorldGenerator implements IWorldGenerator, AcceleratableW
     private BlockGenKernelExecutor blockKernel;
 
     @Override
-    public ComputePlan plan(
-        @Nullable Chunk column, int columnX, int columnZ,
-        IntArrayList cubeYLevels
-    ) {
+    public ComputePlan plan(@Nullable Chunk column, int columnX, int columnZ, IntArrayList cubeYLevels) {
         if (!kernelsInitialized) {
             long worldSeed = world.getSeed();
             long hvSeed = Fnv1a64.hashStep(Fnv1a64.hashStep(Fnv1a64.initialState(), worldSeed), 100L);
             List<CCBiomeGenBase> biomes = CCBiomeRegistry.getBiomes();
-            KernelContext.getScheduler().runAndWait(() -> {
-                kernelsInitialized = true;
 
-                tempKernel = climateSystem.createAxisKernel(ClimateSystem.TEMPERATURE);
-                humidityKernel = climateSystem.createAxisKernel(ClimateSystem.HUMIDITY);
-                contKernel = climateSystem.createAxisKernel(ClimateSystem.CONTINENTALNESS);
-                erosionKernel = climateSystem.createAxisKernel(ClimateSystem.EROSION);
+            kernelsInitialized = true;
 
-                distancesKernel = new BiomeDistanceKernelExecutor(biomes.toArray(new CCBiomeGenBase[0]));
-                lookupKernel = new BiomeLookupKernelExecutor(biomes.size());
+            tempKernel = climateSystem.createAxisKernel(ClimateSystem.TEMPERATURE);
+            humidityKernel = climateSystem.createAxisKernel(ClimateSystem.HUMIDITY);
+            contKernel = climateSystem.createAxisKernel(ClimateSystem.CONTINENTALNESS);
+            erosionKernel = climateSystem.createAxisKernel(ClimateSystem.EROSION);
 
-                hvNoiseKernel = new Noise2DKernelExecutor(
-                    new ScaledSampler(new OctavesSampler(new Random(hvSeed), 4), 1.0 / 400.0));
+            distancesKernel = new BiomeDistanceKernelExecutor(biomes.toArray(new CCBiomeGenBase[0]));
+            lookupKernel = new BiomeLookupKernelExecutor(biomes.size());
 
-                heightMapKernel = new HeightMapKernelExecutor(biomes);
-                blockKernel = new BlockGenKernelExecutor();
-            });
+            hvNoiseKernel = new Noise2DKernelExecutor(
+                new ScaledSampler(new OctavesSampler(new Random(hvSeed), 4), 1.0 / 400.0));
+
+            heightMapKernel = new HeightMapKernelExecutor(biomes);
+            blockKernel = new BlockGenKernelExecutor();
+
+            KernelContext.getScheduler()
+                .compileExecutor(tempKernel);
+            KernelContext.getScheduler()
+                .compileExecutor(humidityKernel);
+            KernelContext.getScheduler()
+                .compileExecutor(contKernel);
+            KernelContext.getScheduler()
+                .compileExecutor(erosionKernel);
+            KernelContext.getScheduler()
+                .compileExecutor(distancesKernel);
+            KernelContext.getScheduler()
+                .compileExecutor(lookupKernel);
+            KernelContext.getScheduler()
+                .compileExecutor(hvNoiseKernel);
+            KernelContext.getScheduler()
+                .compileExecutor(heightMapKernel);
+            KernelContext.getScheduler()
+                .compileExecutor(blockKernel);
         }
 
         ComputePlan plan = new ComputePlan();
@@ -298,24 +310,37 @@ public class CCEnhancedWorldGenerator implements IWorldGenerator, AcceleratableW
         // Steps 1–3: four per-axis climate kernels write into one shared buffer, then distances → lookup
         ChunkCoordIntPair chunkCoord = new ChunkCoordIntPair(columnX, columnZ);
 
-        var temperature = plan.submit(tempKernel, chunkCoord).get("noise");
-        var humidity = plan.submit(humidityKernel, chunkCoord).get("noise");
-        var continentalness = plan.submit(contKernel, chunkCoord).get("noise");
-        var erosion = plan.submit(erosionKernel, chunkCoord).get("noise");
+        var temperature = plan.submit(tempKernel, chunkCoord)
+            .get("noise");
+        var humidity = plan.submit(humidityKernel, chunkCoord)
+            .get("noise");
+        var continentalness = plan.submit(contKernel, chunkCoord)
+            .get("noise");
+        var erosion = plan.submit(erosionKernel, chunkCoord)
+            .get("noise");
 
-        var distances = plan.submit(distancesKernel, null, ImmutableMap.of("temperature", temperature, "humidity", humidity, "continentalness", continentalness, "erosion", erosion));
+        var distances = plan.submit(
+            distancesKernel,
+            ImmutableMap.of(
+                "temperature",
+                temperature,
+                "humidity",
+                humidity,
+                "continentalness",
+                continentalness,
+                "erosion",
+                erosion));
 
-        var lookup = plan.submit(lookupKernel, null, ImmutableMap.of("distances", distances.get("distances")));
+        // var lookup = plan.submit(lookupKernel, ImmutableMap.of("distance", distances.get("distance")));
 
         // Step 4: HV noise (independent of climate pipeline)
         var hvNoise = plan.submit(hvNoiseKernel, chunkCoord);
 
         // Step 5: height map — blends all biomes via Gaussian falloff over raw distances,
         // avoiding top-N membership discontinuities at biome boundaries.
-        var heightData = plan.submit(heightMapKernel, null, ImmutableMap.of(
-            "distances", distances.get("distances"),
-            "hvNoise", hvNoise.get("noise")
-        ));
+        var heightData = plan.submit(
+            heightMapKernel,
+            ImmutableMap.of("distance", distances.get("distance"), "hvNoise", hvNoise.get("noise")));
 
         IntOpenHashSet cubesToGenerate = new IntOpenHashSet(cubeYLevels);
 
@@ -334,7 +359,10 @@ public class CCEnhancedWorldGenerator implements IWorldGenerator, AcceleratableW
         }
 
         for (Integer cubeY : cubesToGenerate) {
-            var blockData = plan.submit(blockKernel, new CubePos(columnX, cubeY, columnZ), ImmutableMap.of("heightMap", heightData.get("heightMap")));
+            var blockData = plan.submit(
+                blockKernel,
+                new CubePos(columnX, cubeY, columnZ),
+                ImmutableMap.of("height", heightData.get("height")));
 
             Cube cube = new Cube(column, cubeY);
 
@@ -345,17 +373,17 @@ public class CCEnhancedWorldGenerator implements IWorldGenerator, AcceleratableW
     }
 
     private void processColumn(Map<String, ByteBuffer> inputs, Chunk column) {
-//        var biomes = inputs.get("closestBiomes").asIntBuffer();
-//
-//        for (int z = 0; z < 16; z++) {
-//            for (int x = 0; x < 16; x++) {
-//                int biomeIndex = biomes.get(((z << 4) | x) * 4);
-//
-//                CCBiomeGenBase biome = CCBiomeRegistry.getBiome(biomeIndex);
-//
-//                putBiome(column, x, z, biome);
-//            }
-//        }
+        // var biomes = inputs.get("closestBiomes").asIntBuffer();
+        //
+        // for (int z = 0; z < 16; z++) {
+        // for (int x = 0; x < 16; x++) {
+        // int biomeIndex = biomes.get(((z << 4) | x) * 4);
+        //
+        // CCBiomeGenBase biome = CCBiomeRegistry.getBiome(biomeIndex);
+        //
+        // putBiome(column, x, z, biome);
+        // }
+        // }
 
         getCubeLoader().addColumn(column);
     }
@@ -373,7 +401,8 @@ public class CCEnhancedWorldGenerator implements IWorldGenerator, AcceleratableW
     }
 
     private void processCube(Map<String, ByteBuffer> inputs, Cube cube) {
-        var rawBlockData = inputs.get("blocks").asIntBuffer();
+        var rawBlockData = inputs.get("block")
+            .asIntBuffer();
 
         ExtendedBlockStorage ebs = cube.getOrCreateStorage();
 
@@ -384,8 +413,8 @@ public class CCEnhancedWorldGenerator implements IWorldGenerator, AcceleratableW
         int grass = Block.getIdFromBlock(Blocks.grass);
         int log = Block.getIdFromBlock(Blocks.log);
 
-        for (int y = 0; y < 16; y++) {
-            for (int z = 0; z < 16; z++) {
+        for (int z = 0; z < 16; z++) {
+            for (int y = 0; y < 16; y++) {
                 for (int x = 0; x < 16; x++) {
                     int block = rawBlockData.get((z << 8) | (y << 4) | x);
 
@@ -404,100 +433,58 @@ public class CCEnhancedWorldGenerator implements IWorldGenerator, AcceleratableW
         getCubeLoader().addCube(cube);
     }
 
-    private static class BlockGenKernelExecutor implements KernelExecutor<CubePos> {
+    private static class BlockGenKernelExecutor extends StandardKernelExecutor<CubePos> {
 
-        private final int program;
+        @Override
+        protected String generateKernel(KernelBuilder builder) {
+            builder.addParameter(BufferDataType.i32, "cubeY");
 
-        public BlockGenKernelExecutor() {
-            String code = """
-            #version 430 core
+            builder.addInputBuffer("height", new BufferLayout(BufferDataType.f32, 16, 16));
 
-            layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+            builder.addOutputBuffer("block", new BufferLayout(BufferDataType.u32, 16, 16, 16));
 
-            $uniform
+            return """
+                #version 460
 
-            layout(std430, binding = 0) buffer Arena { uint arena[]; };
-            layout(std430, binding = 1) readonly buffer Uniforms { BlockPickerUniform uniforms[]; };
+                layout(local_size_x = 16, local_size_y = 16) in;
 
-            void main() {
-                uint id = gl_WorkGroupID.x;
+                layout(set = 0, binding = 0) readonly buffer Constants { uint constants[]; };
+                layout(set = 1, binding = 0) buffer Arena { uint arena[]; };
 
-                uint lx = gl_LocalInvocationID.x;
-                uint ly = gl_LocalInvocationID.y;
-                uint lz = gl_LocalInvocationID.z + gl_WorkGroupID.z;
+                $preamble
 
-                int cubeY = uniforms[id].cubeY;
-                uint heightmapOffset = uniforms[id].heightmapOffset;
-                uint blockOffset = uniforms[id].blockOffset;
+                $pc
 
-                int gy = int(ly) + (cubeY << 4);
+                void main() {
+                    uint x = gl_GlobalInvocationID.x;
+                    uint y = gl_GlobalInvocationID.y;
+                    uint z = gl_GlobalInvocationID.z;
 
-                int topBlock = int(uintBitsToFloat(arena[heightmapOffset + ((lz << 4) | lx)]));
+                    uint blockColumn = (z << 4) | x;
 
-                uint block = 0; // air
+                    int gy = int(y) + (GET_CUBE_Y << 4);
 
-                block = gy < topBlock ? 2 : block; // dirt
-                block = gy < topBlock - 3 ? 1 : block; // stone overrides dirt for deep blocks
-                block = gy == topBlock ? 3 : block; // grass
+                    int topBlock = 60;
 
-                arena[blockOffset + ((lz << 8) | (ly << 4) | lx)] = block;
-            }
-            """
-                .replace("$uniform", BlockPickerUniformGLStruct.SOURCE);
+                    uint block = 0; // air
 
-            this.program = KernelExecutor.createProgram(code);
+                    block = gy < topBlock ? 2 : block; // dirt
+                    block = gy < topBlock - 3 ? 1 : block; // stone overrides dirt for deep blocks
+                    block = gy == topBlock ? 3 : block; // grass
+
+                    SET_BLOCK(((z << 8u) | (y << 4u) | x), z > 0 ? z + 1 : block);
+                }
+                """;
         }
 
         @Override
-        public Map<String, BufferDescriptor> getOutputs(
-            ComputePlan plan,
-            KernelSubmissionToken submission,
-            CubePos cubePos,
-            Map<String, BufferDescriptor> inputs
-        ) {
-            var heightMap = inputs.get("heightMap");
-            Objects.requireNonNull(heightMap, "expected heightMap input buffer");
-            heightMap.assertLayout(BufferDataType.f32, 16, 16);
-
-            return ImmutableMap.of("blocks", plan.describeBuffer(submission, BufferDataType.u32, 16, 16, 16));
+        protected Map<String, Number> getParameters(CubePos cubePos) {
+            return ImmutableMap.of("cubeY", cubePos.getY());
         }
 
         @Override
-        public KernelSubmissionResult[] submit(BufferAllocator alloc, KernelSubmission<CubePos>[] submissions) {
-            glUseProgram(this.program);
-
-            BlockPickerUniformPrimitiveBuffer uniforms = new BlockPickerUniformPrimitiveBuffer(submissions.length);
-
-            KernelSubmissionResult[] results = new KernelSubmissionResult[submissions.length];
-
-            uniforms.forEachFast((i, view) -> {
-                var key = submissions[i].key();
-
-                GPUBuffer input = submissions[i].inputs().get("heightMap");
-
-                GPUBuffer output = alloc.alloc(BufferDataType.u32, 16, 16, 16);
-                results[i] = new KernelSubmissionResult(ImmutableMap.of("blocks", output));
-
-                view.setCubeY(key.getY());
-                view.setHeightmapOffset(input.getBufferOffset() / 4);
-                view.setBlockOffset(output.getBufferOffset() / 4);
-
-                return true;
-            });
-
-            GPUBuffer uniformGPU = alloc.uniform(uniforms);
-
-            alloc.bindSSBO(0);
-            uniformGPU.bind(1);
-
-            glDispatchCompute(submissions.length, 1, 16);
-
-            alloc.unbindSSBO(0);
-            uniformGPU.unbind(1);
-
-            glUseProgram(0);
-
-            return results;
+        protected void dispatch(VkCommandBuffer commands) {
+            vkCmdDispatch(commands, 1, 1, 16);
         }
     }
 }

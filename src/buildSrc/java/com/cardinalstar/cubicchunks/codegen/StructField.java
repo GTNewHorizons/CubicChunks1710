@@ -19,6 +19,7 @@ public class StructField {
     }
 
     public String getPascalCase() {
-        return name.substring(0, 1).toUpperCase(Locale.ROOT) + name.substring(1);
+        return name.substring(0, 1)
+            .toUpperCase(Locale.ROOT) + name.substring(1);
     }
 }

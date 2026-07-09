@@ -71,6 +71,7 @@ import com.cardinalstar.cubicchunks.world.cube.ICubeProviderInternal;
 import com.cardinalstar.cubicchunks.world.savedata.WorldFormatSavedData;
 import com.google.common.collect.ListMultimap;
 import com.google.common.collect.MultimapBuilder;
+
 import it.unimi.dsi.fastutil.ints.Int2ObjectRBTreeMap;
 import it.unimi.dsi.fastutil.ints.IntArrayList;
 import it.unimi.dsi.fastutil.ints.IntComparator;
@@ -337,9 +338,7 @@ public class CubeProviderServer extends ChunkProviderServer
         acc += post - pre;
 
         if (counter++ == 20) {
-            CubicChunks.LOGGER.info(
-                "Worldgen {}ms",
-                (acc / 1e6) / counter);
+            CubicChunks.LOGGER.info("Worldgen {}ms", (acc / 1e6) / counter);
 
             acc = 0;
             counter = 0;

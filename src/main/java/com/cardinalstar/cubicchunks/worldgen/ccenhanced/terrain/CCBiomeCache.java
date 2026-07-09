@@ -4,6 +4,7 @@ import com.cardinalstar.cubicchunks.util.Coords;
 import com.cardinalstar.cubicchunks.worldgen.ccenhanced.biome.BiomeLookupResult;
 import com.cardinalstar.cubicchunks.worldgen.ccenhanced.biome.CCBiomeRegistry;
 import com.cardinalstar.cubicchunks.worldgen.ccenhanced.climate.ClimateSystem;
+
 import it.unimi.dsi.fastutil.longs.Long2ObjectLinkedOpenHashMap;
 
 /**
@@ -27,7 +28,9 @@ public class CCBiomeCache {
     private final ClimateSystem climate;
 
     // Access-order LinkedHashMap used as an LRU cache. Key: chunkX<<32|chunkZ (unsigned).
-    private final Long2ObjectLinkedOpenHashMap<BiomeLookupResult[]> cache = new Long2ObjectLinkedOpenHashMap<>(CACHE_CAPACITY, 0.75f);
+    private final Long2ObjectLinkedOpenHashMap<BiomeLookupResult[]> cache = new Long2ObjectLinkedOpenHashMap<>(
+        CACHE_CAPACITY,
+        0.75f);
 
     public CCBiomeCache(ClimateSystem climate) {
         this.climate = climate;

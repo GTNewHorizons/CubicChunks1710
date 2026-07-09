@@ -1,77 +1,36 @@
 package com.cardinalstar.cubicchunks.api.worldgen.hwaccel;
 
-import static org.lwjgl.opengl.GL20.GL_COMPILE_STATUS;
-import static org.lwjgl.opengl.GL20.GL_LINK_STATUS;
-import static org.lwjgl.opengl.GL20.glAttachShader;
-import static org.lwjgl.opengl.GL20.glCompileShader;
-import static org.lwjgl.opengl.GL20.glCreateProgram;
-import static org.lwjgl.opengl.GL20.glCreateShader;
-import static org.lwjgl.opengl.GL20.glGetProgramInfoLog;
-import static org.lwjgl.opengl.GL20.glGetProgrami;
-import static org.lwjgl.opengl.GL20.glGetShaderInfoLog;
-import static org.lwjgl.opengl.GL20.glGetShaderi;
-import static org.lwjgl.opengl.GL20.glLinkProgram;
-import static org.lwjgl.opengl.GL20.glShaderSource;
-import static org.lwjgl.opengl.GL43.GL_COMPUTE_SHADER;
-
+import java.io.Closeable;
 import java.util.Map;
 
-import net.minecraft.util.MathHelper;
+import org.lwjgl.vulkan.VkCommandBuffer;
 
-import com.cardinalstar.cubicchunks.CubicChunks;
 import com.cardinalstar.cubicchunks.api.worldgen.hwaccel.buffer.BufferAllocator;
 import com.cardinalstar.cubicchunks.api.worldgen.hwaccel.buffer.BufferDescriptor;
+import com.cardinalstar.cubicchunks.api.worldgen.hwaccel.buffer.ConstantBuffer;
+import com.cardinalstar.cubicchunks.async.CallingThread;
+import com.cardinalstar.cubicchunks.async.ThreadType;
 
-public interface KernelExecutor<Key> {
+import me.eigenraven.lwjgl3ify.api.Lwjgl3Aware;
 
-    Map<String, BufferDescriptor> getOutputs(ComputePlan plan, KernelSubmissionToken submission, Key key, Map<String, BufferDescriptor> inputs);
+@Lwjgl3Aware
+public interface KernelExecutor<Key> extends Closeable {
 
-    KernelSubmissionResult[] submit(BufferAllocator alloc, KernelSubmission<Key>[] submissions);
+    @CallingThread(ThreadType.WORKER)
+    @Override
+    void close();
 
-    static int createProgram(String code) {
-        int shader = glCreateShader(GL_COMPUTE_SHADER);
-        glShaderSource(shader, code);
-        glCompileShader(shader);
+    @CallingThread(ThreadType.WORKER)
+    boolean isCompiled();
 
-        if (glGetShaderi(shader, GL_COMPILE_STATUS) == 0) {
-            String log = glGetShaderInfoLog(shader, 32000);
+    @CallingThread(ThreadType.WORKER)
+    void compile(ConstantBuffer constants);
 
-            String[] lines = code.split("\n\r?");
+    @CallingThread(ThreadType.SERVER)
+    Map<String, BufferDescriptor> getOutputs(ComputePlan plan, KernelSubmissionToken submission, Key key,
+        Map<String, BufferDescriptor> inputs);
 
-            int zeroes = MathHelper.ceiling_double_int(Math.log10(lines.length));
-
-            for (int i = 0; i < lines.length; i++) {
-                lines[i] = String.format("%0" + zeroes + "d:", i + 1) + lines[i];
-            }
-
-            CubicChunks.LOGGER.error("Shader code:\n{}", String.join("\n", lines));
-
-            CubicChunks.LOGGER.error("Could not compile shader: {}", log, new Exception());
-            throw new RuntimeException("Could not compile shader");
-        }
-
-        int program = glCreateProgram();
-
-        glAttachShader(program, shader);
-        glLinkProgram(program);
-
-        if (glGetProgrami(program, GL_LINK_STATUS) == 0) {
-            String log = glGetProgramInfoLog(program, 32000);
-
-            String[] lines = code.split("\n\r?");
-
-            int zeroes = MathHelper.ceiling_double_int(Math.log10(lines.length));
-
-            for (int i = 0; i < lines.length; i++) {
-                lines[i] = String.format("%0" + zeroes + "d:", i + 1) + lines[i];
-            }
-
-            CubicChunks.LOGGER.error("Shader code:\n{}", String.join("\n", lines));
-
-            CubicChunks.LOGGER.error("Could not link shader: {}", log, new Exception());
-            throw new RuntimeException("Could not link shader");
-        }
-
-        return program;
-    }
+    @CallingThread(ThreadType.WORKER)
+    KernelSubmissionResult[] submit(VkCommandBuffer commands, BufferAllocator alloc,
+        KernelSubmission<Key>[] submissions);
 }

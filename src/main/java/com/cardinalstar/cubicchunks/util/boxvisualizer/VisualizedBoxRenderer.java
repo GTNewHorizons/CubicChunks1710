@@ -15,6 +15,7 @@ import com.gtnewhorizon.gtnhlib.client.renderer.TessellatorManager;
 import com.gtnewhorizon.gtnhlib.client.renderer.vbo.VertexBuffer;
 import com.gtnewhorizon.gtnhlib.client.renderer.vertex.DefaultVertexFormat;
 import com.gtnewhorizon.gtnhlib.eventbus.EventBusSubscriber;
+
 import cpw.mods.fml.common.eventhandler.SubscribeEvent;
 import cpw.mods.fml.relauncher.Side;
 import cpw.mods.fml.relauncher.SideOnly;
@@ -60,7 +61,8 @@ public class VisualizedBoxRenderer {
         tessellator.startDrawingQuads();
 
         for (VisualizedBox box : boxes) {
-            tessellator.setColorRGBA(box.color.getRed(), box.color.getGreen(), box.color.getBlue(), box.color.getAlpha());
+            tessellator
+                .setColorRGBA(box.color.getRed(), box.color.getGreen(), box.color.getBlue(), box.color.getAlpha());
 
             drawBox(tessellator, xd, yd, zd, box.bounds);
         }
@@ -69,7 +71,13 @@ public class VisualizedBoxRenderer {
 
         ByteBuffer quads = TessellatorManager.stopCapturingToBuffer(DefaultVertexFormat.POSITION_COLOR_TEXTURE);
 
-        QuadSorter.sortStandardFormat(DefaultVertexFormat.POSITION_COLOR_TEXTURE, quads.asFloatBuffer(), quads.capacity(), (float) xd, (float) yd, (float) zd);
+        QuadSorter.sortStandardFormat(
+            DefaultVertexFormat.POSITION_COLOR_TEXTURE,
+            quads.asFloatBuffer(),
+            quads.capacity(),
+            (float) xd,
+            (float) yd,
+            (float) zd);
 
         GL11.glPushAttrib(GL11.GL_ENABLE_BIT | GL11.GL_COLOR_BUFFER_BIT);
 
@@ -87,13 +95,7 @@ public class VisualizedBoxRenderer {
         GL11.glPopAttrib();
     }
 
-    private static void drawBox(
-        Tessellator tes,
-        double eyeX,
-        double eyeY,
-        double eyeZ,
-        AxisAlignedBB bounds
-    ) {
+    private static void drawBox(Tessellator tes, double eyeX, double eyeY, double eyeZ, AxisAlignedBB bounds) {
         double X = bounds.minX - eyeX;
         double Y = bounds.minY - eyeY;
         double Z = bounds.minZ - eyeZ;

@@ -186,8 +186,10 @@ public class LightingManager implements ILightingManager {
         if (!world.isRemote) {
             CubicPlayerManager playerManager = getPlayerManager();
             if (playerManager != null) {
-                int minX = cube.getCoords().getMinBlockX();
-                int minZ = cube.getCoords().getMinBlockZ();
+                int minX = cube.getCoords()
+                    .getMinBlockX();
+                int minZ = cube.getCoords()
+                    .getMinBlockZ();
                 for (int dx = 0; dx < 16; dx++) {
                     for (int dz = 0; dz < 16; dz++) {
                         playerManager.heightUpdated(minX + dx, minZ + dz);

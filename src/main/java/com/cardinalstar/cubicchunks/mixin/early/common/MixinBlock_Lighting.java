@@ -21,7 +21,11 @@ public class MixinBlock_Lighting implements BlockExt_Lighting {
         cc$unsafeLightMode = enable;
     }
 
-    @Redirect(method = "getLightValue(Lnet/minecraft/world/IBlockAccess;III)I", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/IBlockAccess;getBlock(III)Lnet/minecraft/block/Block;"))
+    @Redirect(
+        method = "getLightValue(Lnet/minecraft/world/IBlockAccess;III)I",
+        at = @At(
+            value = "INVOKE",
+            target = "Lnet/minecraft/world/IBlockAccess;getBlock(III)Lnet/minecraft/block/Block;"))
     public Block cc$noopGetBlock(IBlockAccess instance, int x, int y, int z) {
         return cc$unsafeLightMode ? (Block) (Object) this : instance.getBlock(x, y, z);
     }

@@ -21,8 +21,12 @@ public class VisualizedBox {
 
     public VisualizedBox expand(double amount) {
         bounds = AxisAlignedBB.getBoundingBox(
-            bounds.minX - amount, bounds.minY - amount, bounds.minZ - amount,
-            bounds.maxX + amount, bounds.maxY + amount, bounds.maxZ + amount);
+            bounds.minX - amount,
+            bounds.minY - amount,
+            bounds.minZ - amount,
+            bounds.maxX + amount,
+            bounds.maxY + amount,
+            bounds.maxZ + amount);
 
         return this;
     }

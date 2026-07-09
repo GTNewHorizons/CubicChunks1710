@@ -462,11 +462,12 @@ public class CubeLoaderServer implements ICubeLoader {
         ColumnInfo info = columns.get(column.xPosition, column.zPosition);
 
         if (info != null && info.column != null) {
-            CubicChunks.LOGGER
-                .warn("addColumn tried to replace column at {},{}! (in-memory source: {}, attempted replacement source: {})",
-                    column.xPosition, column.zPosition,
-                    info.source,
-                    ObjectSource.Added);
+            CubicChunks.LOGGER.warn(
+                "addColumn tried to replace column at {},{}! (in-memory source: {}, attempted replacement source: {})",
+                column.xPosition,
+                column.zPosition,
+                info.source,
+                ObjectSource.Added);
             return;
         }
 
@@ -486,11 +487,13 @@ public class CubeLoaderServer implements ICubeLoader {
         CubeInfo info = cubes.get(cube.getX(), cube.getY(), cube.getZ());
 
         if (info != null && info.cube != null) {
-            CubicChunks.LOGGER
-                .warn("addCube tried to replace cube at {},{},{}! (in-memory source: {}, attempted replacement source: {})",
-                    cube.getX(), cube.getY(), cube.getZ(),
-                    info.source,
-                    ObjectSource.Added);
+            CubicChunks.LOGGER.warn(
+                "addCube tried to replace cube at {},{},{}! (in-memory source: {}, attempted replacement source: {})",
+                cube.getX(),
+                cube.getY(),
+                cube.getZ(),
+                info.source,
+                ObjectSource.Added);
             return;
         }
 
@@ -514,11 +517,12 @@ public class CubeLoaderServer implements ICubeLoader {
                 ColumnInfo info = columns.get(column.xPosition, column.zPosition);
 
                 if (info != null && info.column != null) {
-                    CubicChunks.LOGGER
-                        .warn("Worldgen side-effect tried to replace column at {},{}! (in-memory source: {}, attempted replacement source: {})",
-                            column.xPosition, column.zPosition,
-                            info.source,
-                            ObjectSource.GeneratedSideEffect);
+                    CubicChunks.LOGGER.warn(
+                        "Worldgen side-effect tried to replace column at {},{}! (in-memory source: {}, attempted replacement source: {})",
+                        column.xPosition,
+                        column.zPosition,
+                        info.source,
+                        ObjectSource.GeneratedSideEffect);
                     continue;
                 }
 
@@ -539,11 +543,13 @@ public class CubeLoaderServer implements ICubeLoader {
                 CubeInfo info = cubes.get(cube.getX(), cube.getY(), cube.getZ());
 
                 if (info != null && info.cube != null) {
-                    CubicChunks.LOGGER
-                        .warn("Worldgen side-effect tried to replace cube at {},{},{}! (in-memory source: {}, attempted replacement source: {})",
-                            cube.getX(), cube.getY(), cube.getZ(),
-                            info.source,
-                            ObjectSource.GeneratedSideEffect);
+                    CubicChunks.LOGGER.warn(
+                        "Worldgen side-effect tried to replace cube at {},{},{}! (in-memory source: {}, attempted replacement source: {})",
+                        cube.getX(),
+                        cube.getY(),
+                        cube.getZ(),
+                        info.source,
+                        ObjectSource.GeneratedSideEffect);
                     continue;
                 }
 
@@ -896,7 +902,8 @@ public class CubeLoaderServer implements ICubeLoader {
             if (!generated) return false;
 
             if (!isInitedTo(CubeInitLevel.Populated)) {
-                // If this cube hasn't been populated at all, populate it. This generates any required cubes recursively.
+                // If this cube hasn't been populated at all, populate it. This generates any required cubes
+                // recursively.
                 generator.populate(cube);
             }
 

@@ -40,6 +40,7 @@ import com.cardinalstar.cubicchunks.server.chunkio.ICubeLoader;
 import com.cardinalstar.cubicchunks.util.MathUtil;
 import com.cardinalstar.cubicchunks.world.core.IColumnInternal;
 import com.cardinalstar.cubicchunks.world.cube.Cube;
+
 import it.unimi.dsi.fastutil.ints.IntIntMutablePair;
 
 /**
@@ -168,11 +169,13 @@ public class FirstLightProcessor {
                 // If the current cube is above the highest occluding block in the column, everything is fully lit.
                 int cubeY = cube.getY();
 
-                // If the given cube lies underneath the occluding block, then the update must start at the occluding block.
+                // If the given cube lies underneath the occluding block, then the update must start at the occluding
+                // block.
                 if (cubeY < blockToCube(stagingTopBlock)) {
                     // This is the top block within this block column, excluding the staging height map (which means the
                     // blocks in this cube are ignored)
-                    int opacityTopBlock = column.getOpacityIndex().getTopBlockY(lX, lZ);
+                    int opacityTopBlock = column.getOpacityIndex()
+                        .getTopBlockY(lX, lZ);
 
                     minMax.left(opacityTopBlock);
                     minMax.right(stagingTopBlock);
@@ -187,8 +190,7 @@ public class FirstLightProcessor {
         }
 
         // Iterate over all affected cubes.
-        Iterable<? extends Cube> cubes = column
-            .getLoadedCubes(blockToCube(minMinHeight), blockToCube(maxMaxHeight));
+        Iterable<? extends Cube> cubes = column.getLoadedCubes(blockToCube(minMinHeight), blockToCube(maxMaxHeight));
 
         for (Cube affectedCube : cubes) {
             int bY_Affected = affectedCube.getY() << 4;
@@ -199,7 +201,7 @@ public class FirstLightProcessor {
                     int minBlockY = minBlockYArr[(lZ << 4) | lX];
                     int maxBlockY = maxBlockYArr[(lZ << 4) | lX];
 
-                    //  is below the existing top of the block
+                    // is below the existing top of the block
                     if (minBlockY > maxBlockY) {
                         continue;
                     }
@@ -214,13 +216,7 @@ public class FirstLightProcessor {
                     }
 
                     // Update the block column in this cube.
-                    diffuseSkylightInBlockColumn(
-                        lm,
-                        affectedCube,
-                        lX + bX,
-                        lZ + bZ,
-                        minBlockY,
-                        maxBlockY);
+                    diffuseSkylightInBlockColumn(lm, affectedCube, lX + bX, lZ + bZ, minBlockY, maxBlockY);
                 }
             }
         }
@@ -238,8 +234,8 @@ public class FirstLightProcessor {
      * @param minBlockY the lower bound of the section to be updated
      * @param maxBlockY the upper bound of the section to be updated
      */
-    private void diffuseSkylightInBlockColumn(ILightingManager lm, ICube cube, int posX, int posZ,
-        int minBlockY, int maxBlockY) {
+    private void diffuseSkylightInBlockColumn(ILightingManager lm, ICube cube, int posX, int posZ, int minBlockY,
+        int maxBlockY) {
         int cubeMinBlockY = cubeToMinBlock(cube.getY());
         int cubeMaxBlockY = cubeToMaxBlock(cube.getY());
 
@@ -263,7 +259,8 @@ public class FirstLightProcessor {
         int localZ = posZ & 0xF;
 
         for (int blockY = maxBlockYInCube; blockY >= minBlockYInCube; --blockY) {
-            // Opaque blocks don't need update. Nothing can emit skylight, and skylight can't get into them nor out of them.
+            // Opaque blocks don't need update. Nothing can emit skylight, and skylight can't get into them nor out of
+            // them.
             Block block = storage.getBlockByExtId(localX, blockY & 0xF, localZ);
 
             if (block == Blocks.air || block.getLightOpacity(world, posX, blockY, posZ) < 15) {

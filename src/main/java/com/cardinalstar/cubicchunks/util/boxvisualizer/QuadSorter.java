@@ -7,15 +7,17 @@ import org.joml.Math;
 
 import com.google.common.primitives.Floats;
 import com.gtnewhorizon.gtnhlib.client.renderer.vertex.VertexFormat;
+
 import it.unimi.dsi.fastutil.ints.IntArrays;
 
 public class QuadSorter {
 
-    public static void sortStandardFormat(VertexFormat format, FloatBuffer buffer, int bufferLen, float x, float y, float z) {
+    public static void sortStandardFormat(VertexFormat format, FloatBuffer buffer, int bufferLen, float x, float y,
+        float z) {
         // Quad stride by Float size
         int quadStride = format.getVertexSize();
 
-        int quadCount = bufferLen/quadStride/4;
+        int quadCount = bufferLen / quadStride / 4;
 
         float[] distanceArray = new float[quadCount];
         int[] indicesArray = new int[quadCount];
@@ -71,7 +73,8 @@ public class QuadSorter {
         }
     }
 
-    private static float getDistanceSqSFP(FloatBuffer buffer, float xCenter, float yCenter, float zCenter, int stride, int start) {
+    private static float getDistanceSqSFP(FloatBuffer buffer, float xCenter, float yCenter, float zCenter, int stride,
+        int start) {
         int vertexBase = start;
         final float x1 = buffer.get(vertexBase);
         final float y1 = buffer.get(vertexBase + 1);
@@ -87,10 +90,10 @@ public class QuadSorter {
         final float y3 = buffer.get(vertexBase + 1);
         final float z3 = buffer.get(vertexBase + 2);
 
-//        vertexBase += stride;
-//        final float x4 = buffer.get(vertexBase);
-//        final float y4 = buffer.get(vertexBase + 1);
-//        final float z4 = buffer.get(vertexBase + 2);
+        // vertexBase += stride;
+        // final float x4 = buffer.get(vertexBase);
+        // final float y4 = buffer.get(vertexBase + 1);
+        // final float z4 = buffer.get(vertexBase + 2);
 
         final float xa = x2 - x1;
         final float ya = y2 - y1;
@@ -112,10 +115,10 @@ public class QuadSorter {
 
         return nx * xCenter + ny * yCenter + nz * zCenter;
 
-//        final float xDist = ((x1 + x2 + x3 + x4) * 0.25F) - xCenter;
-//        final float yDist = ((y1 + y2 + y3 + y4) * 0.25F) - yCenter;
-//        final float zDist = ((z1 + z2 + z3 + z4) * 0.25F) - zCenter;
-//
-//        return (xDist * xDist) + (yDist * yDist) + (zDist * zDist);
+        // final float xDist = ((x1 + x2 + x3 + x4) * 0.25F) - xCenter;
+        // final float yDist = ((y1 + y2 + y3 + y4) * 0.25F) - yCenter;
+        // final float zDist = ((z1 + z2 + z3 + z4) * 0.25F) - zCenter;
+        //
+        // return (xDist * xDist) + (yDist * yDist) + (zDist * zDist);
     }
 }

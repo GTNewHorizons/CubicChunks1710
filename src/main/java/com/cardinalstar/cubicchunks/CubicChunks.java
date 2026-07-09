@@ -57,6 +57,7 @@ import com.cardinalstar.cubicchunks.worldgen.ccenhanced.CCEnhancedWorldType;
 import com.falsepattern.chunk.api.DataRegistry;
 import com.gtnewhorizon.gtnhlib.config.ConfigException;
 import com.gtnewhorizon.gtnhlib.config.ConfigurationManager;
+
 import cpw.mods.fml.common.FMLCommonHandler;
 import cpw.mods.fml.common.ICrashCallable;
 import cpw.mods.fml.common.Loader;
@@ -126,7 +127,8 @@ public class CubicChunks {
 
         LOGGER.debug("Registered world types");
 
-        if (FMLCommonHandler.instance().getSide() == Side.CLIENT) {
+        if (FMLCommonHandler.instance()
+            .getSide() == Side.CLIENT) {
             KernelContext.initClient();
         } else {
             KernelContext.initServer();

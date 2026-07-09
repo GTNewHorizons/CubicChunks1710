@@ -89,10 +89,8 @@ public class CCBiomeRegistry {
 
         for (int i = 0; i < dists.length; i++) indices[i] = i;
 
-        it.unimi.dsi.fastutil.Arrays.mergeSort(
-            0, dists.length,
-            (a, b) -> Float.compare(dists[indices[a]], dists[indices[b]]),
-            (a, b) -> {
+        it.unimi.dsi.fastutil.Arrays
+            .mergeSort(0, dists.length, (a, b) -> Float.compare(dists[indices[a]], dists[indices[b]]), (a, b) -> {
                 int temp = indices[a];
                 indices[a] = indices[b];
                 indices[b] = temp;

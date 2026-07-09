@@ -124,6 +124,14 @@ public class DataUtils {
         return null;
     }
 
+    public static <T> boolean contains(T[] array, T object) {
+        for (T val : array) {
+            if (Objects.equals(val, object)) return true;
+        }
+
+        return false;
+    }
+
     @SuppressWarnings("unchecked")
     public static <T, R extends T> R findInstance(Collection<T> list, Class<R> clazz) {
         for (T value : list) {

@@ -44,7 +44,9 @@ public class Struct {
         String viewName = this.name + "PrimitiveView";
         String bufferName = this.name + "PrimitiveBuffer";
 
-        code.append("package ").append(pkg).append(";\n");
+        code.append("package ")
+            .append(pkg)
+            .append(";\n");
         code.append("\n");
         code.append("import com.cardinalstar.cubicchunks.api.worldgen.hwaccel.PrimitiveBuffer;\n");
         code.append("import com.cardinalstar.cubicchunks.util.ObjectPooler;\n");
@@ -63,15 +65,21 @@ public class Struct {
             .append(viewName)
             .append("> {\n");
         code.append("\n");
-        code.append("    public static final int INT_STRIDE = ").append(this.stride).append(";\n");
+        code.append("    public static final int INT_STRIDE = ")
+            .append(this.stride)
+            .append(";\n");
         code.append("\n");
         code.append("    private final byte[] rawData;\n");
         code.append("    private final ByteBuffer bytes;\n");
         code.append("    private final IntBuffer data;\n");
         code.append("    private final int size;\n");
-        code.append("    private final ObjectPooler<").append(viewName).append("> pool;\n");
+        code.append("    private final ObjectPooler<")
+            .append(viewName)
+            .append("> pool;\n");
         code.append("\n");
-        code.append("    public ").append(bufferName).append("(int size) {\n");
+        code.append("    public ")
+            .append(bufferName)
+            .append("(int size) {\n");
         code.append("        this.size = size;\n");
         code.append("        this.rawData = new byte[size * INT_STRIDE * 4];\n");
         code.append("        this.bytes = ByteBuffer.wrap(this.rawData).order(ByteOrder.nativeOrder());\n");
@@ -79,8 +87,12 @@ public class Struct {
         code.append("        this.pool = new ObjectPooler<>(this::newView);\n");
         code.append("    }\n");
         code.append("\n");
-        code.append("    private ").append(viewName).append(" newView() {\n");
-        code.append("        return new ").append(viewName).append("(pool, this.data);\n");
+        code.append("    private ")
+            .append(viewName)
+            .append(" newView() {\n");
+        code.append("        return new ")
+            .append(viewName)
+            .append("(pool, this.data);\n");
         code.append("    }\n");
         code.append("\n");
         code.append("    @Override\n");
@@ -99,14 +111,20 @@ public class Struct {
         code.append("    }\n");
         code.append("\n");
         code.append("    @Override\n");
-        code.append("    public ").append(viewName).append(" get(int index) {\n");
-        code.append("        ").append(viewName).append(" view = this.pool.getInstance();\n");
+        code.append("    public ")
+            .append(viewName)
+            .append(" get(int index) {\n");
+        code.append("        ")
+            .append(viewName)
+            .append(" view = this.pool.getInstance();\n");
         code.append("        view.initialize(index);\n");
         code.append("        return view;\n");
         code.append("    }\n");
         code.append("\n");
         code.append("    @Override\n");
-        code.append("    public void forEachSlow(TIntObjectProcedure<").append(viewName).append("> fn) {\n");
+        code.append("    public void forEachSlow(TIntObjectProcedure<")
+            .append(viewName)
+            .append("> fn) {\n");
         code.append("        for (int i = 0; i < this.size; i++) {\n");
         code.append("            ")
             .append(viewName)
@@ -119,8 +137,14 @@ public class Struct {
         code.append("    }\n");
         code.append("\n");
         code.append("    @Override\n");
-        code.append("    public void forEachFast(TIntObjectProcedure<").append(viewName).append("> fn) {\n");
-        code.append("        ").append(viewName).append(" view = new ").append(viewName).append("(null, this.data);\n");
+        code.append("    public void forEachFast(TIntObjectProcedure<")
+            .append(viewName)
+            .append("> fn) {\n");
+        code.append("        ")
+            .append(viewName)
+            .append(" view = new ")
+            .append(viewName)
+            .append("(null, this.data);\n");
         code.append("        for (int i = 0; i < this.size; i++) {\n");
         code.append("            view.initialize(i);\n");
         code.append("            fn.execute(i, view);\n");
@@ -128,8 +152,12 @@ public class Struct {
         code.append("    }\n");
         code.append("\n");
         code.append("    @Override\n");
-        code.append("    public Iterator<").append(viewName).append("> iteratorSlow() {\n");
-        code.append("        return new Iterator<").append(viewName).append(">() {\n");
+        code.append("    public Iterator<")
+            .append(viewName)
+            .append("> iteratorSlow() {\n");
+        code.append("        return new Iterator<")
+            .append(viewName)
+            .append(">() {\n");
         code.append("            private int i = 0;\n");
         code.append("\n");
         code.append("            @Override\n");
@@ -138,7 +166,9 @@ public class Struct {
         code.append("            }\n");
         code.append("\n");
         code.append("            @Override\n");
-        code.append("            public ").append(viewName).append(" next() {\n");
+        code.append("            public ")
+            .append(viewName)
+            .append(" next() {\n");
         code.append("                if (!hasNext()) throw new NoSuchElementException();\n");
         code.append("                ")
             .append(viewName)
@@ -152,8 +182,12 @@ public class Struct {
         code.append("    }\n");
         code.append("\n");
         code.append("    @Override\n");
-        code.append("    public Iterator<").append(viewName).append("> iteratorFast() {\n");
-        code.append("        return new Iterator<").append(viewName).append(">() {\n");
+        code.append("    public Iterator<")
+            .append(viewName)
+            .append("> iteratorFast() {\n");
+        code.append("        return new Iterator<")
+            .append(viewName)
+            .append(">() {\n");
         code.append("            private int i = 0;\n");
         code.append("            private final ")
             .append(viewName)
@@ -167,7 +201,9 @@ public class Struct {
         code.append("            }\n");
         code.append("\n");
         code.append("            @Override\n");
-        code.append("            public ").append(viewName).append(" next() {\n");
+        code.append("            public ")
+            .append(viewName)
+            .append(" next() {\n");
         code.append("                if (!hasNext()) throw new NoSuchElementException();\n");
         code.append("                view.initialize(i++);\n");
         code.append("                return view;\n");
@@ -178,7 +214,8 @@ public class Struct {
         code.append("    @Override\n");
         code.append("    public void upload(ByteBuffer dest) {\n");
         code.append("        if (dest.remaining() != this.rawData.length) {\n");
-        code.append("            throw new IllegalArgumentException(\"Byte length mismatch: expected \" + this.rawData.length + \" but got \" + dest.remaining());\n");
+        code.append(
+            "            throw new IllegalArgumentException(\"Byte length mismatch: expected \" + this.rawData.length + \" but got \" + dest.remaining());\n");
         code.append("        }\n");
         code.append("        dest.put(this.rawData, 0, this.rawData.length);\n");
         code.append("    }\n");
@@ -186,14 +223,16 @@ public class Struct {
         code.append("    @Override\n");
         code.append("    public void download(ByteBuffer source) {\n");
         code.append("        if (source.remaining() != this.rawData.length) {\n");
-        code.append("            throw new IllegalArgumentException(\"Byte length mismatch: expected \" + this.rawData.length + \" but got \" + source.remaining());\n");
+        code.append(
+            "            throw new IllegalArgumentException(\"Byte length mismatch: expected \" + this.rawData.length + \" but got \" + source.remaining());\n");
         code.append("        }\n");
         code.append("        source.get(this.rawData, 0, this.rawData.length);\n");
         code.append("    }\n");
         code.append("\n");
         code.append("}\n");
 
-        Path src = Paths.get("build", "generated", "sources", "structs").toAbsolutePath();
+        Path src = Paths.get("build", "generated", "sources", "structs")
+            .toAbsolutePath();
         String[] pkg = this.pkg.split("\\.");
 
         Path next = Paths.get(pkg[0], Arrays.copyOfRange(pkg, 1, pkg.length));
@@ -202,7 +241,11 @@ public class Struct {
 
         Path file = Paths.get(name + "PrimitiveBuffer.java");
 
-        Files.write(src.resolve(next).resolve(file), code.toString().getBytes(StandardCharsets.UTF_8));
+        Files.write(
+            src.resolve(next)
+                .resolve(file),
+            code.toString()
+                .getBytes(StandardCharsets.UTF_8));
     }
 
     public void writePrimitiveView() throws IOException {
@@ -210,20 +253,30 @@ public class Struct {
 
         String name = this.name + "PrimitiveView";
 
-        code.append("package ").append(pkg).append(";\n");
+        code.append("package ")
+            .append(pkg)
+            .append(";\n");
         code.append("\n");
         code.append("import com.cardinalstar.cubicchunks.api.worldgen.hwaccel.PrimitiveView;\n");
         code.append("import com.cardinalstar.cubicchunks.util.ObjectPooler;\n");
         code.append("\n");
         code.append("import java.nio.IntBuffer;\n");
         code.append("@SuppressWarnings({ \"UnnecessaryLocalVariable\", \"PointlessArithmeticExpression\" })\n");
-        code.append("public final class ").append(name).append(" implements PrimitiveView {\n");
+        code.append("public final class ")
+            .append(name)
+            .append(" implements PrimitiveView {\n");
         code.append("    private int index;\n");
-        code.append("    private final ObjectPooler<").append(name).append("> pool;\n");
+        code.append("    private final ObjectPooler<")
+            .append(name)
+            .append("> pool;\n");
         code.append("    private boolean alive;\n");
         code.append("    private final IntBuffer data;\n");
         code.append("\n");
-        code.append("    ").append(name).append("(ObjectPooler<").append(name).append("> pool, IntBuffer data) {\n");
+        code.append("    ")
+            .append(name)
+            .append("(ObjectPooler<")
+            .append(name)
+            .append("> pool, IntBuffer data) {\n");
         code.append("        this.pool = pool;\n");
         code.append("        this.data = data;\n");
         code.append("    }\n");
@@ -342,7 +395,8 @@ public class Struct {
 
         code.append("}\n");
 
-        Path src = Paths.get("build", "generated", "sources", "structs").toAbsolutePath();
+        Path src = Paths.get("build", "generated", "sources", "structs")
+            .toAbsolutePath();
         String[] pkg = this.pkg.split("\\.");
 
         Path next = Paths.get(pkg[0], Arrays.copyOfRange(pkg, 1, pkg.length));
@@ -351,7 +405,11 @@ public class Struct {
 
         Path file = Paths.get(name + ".java");
 
-        Files.write(src.resolve(next).resolve(file), code.toString().getBytes(StandardCharsets.UTF_8));
+        Files.write(
+            src.resolve(next)
+                .resolve(file),
+            code.toString()
+                .getBytes(StandardCharsets.UTF_8));
     }
 
     public void writeGLStruct() throws IOException {
@@ -360,16 +418,24 @@ public class Struct {
         // Build GLSL struct, inserting uint padding fields where std430 alignment
         // would create a gap vs the Java sequential (word-packed) layout.
         StringBuilder glsl = new StringBuilder();
-        glsl.append("struct ").append(this.name).append(" {\n");
+        glsl.append("struct ")
+            .append(this.name)
+            .append(" {\n");
 
         int cursor = 0;
         int padCount = 0;
         for (StructField field : this.fields) {
             int padBytes = field.glByteOffset - cursor;
             for (int i = 0; i < padBytes / 4; i++) {
-                glsl.append("    uint _pad").append(padCount++).append(";\n");
+                glsl.append("    uint _pad")
+                    .append(padCount++)
+                    .append(";\n");
             }
-            glsl.append("    ").append(field.type.glslType()).append(" ").append(field.name).append(";\n");
+            glsl.append("    ")
+                .append(field.type.glslType())
+                .append(" ")
+                .append(field.name)
+                .append(";\n");
             cursor = field.glByteOffset + field.type.byteSize();
         }
 
@@ -378,25 +444,34 @@ public class Struct {
         // Wrap in a Java class with a text block SOURCE field.
         // Indent content by 12 spaces so the closing """ at 12 spaces strips it cleanly.
         StringBuilder code = new StringBuilder();
-        code.append("package ").append(pkg).append(";\n");
+        code.append("package ")
+            .append(pkg)
+            .append(";\n");
         code.append("\n");
-        code.append("public final class ").append(glStructName).append(" {\n");
+        code.append("public final class ")
+            .append(glStructName)
+            .append(" {\n");
         code.append("    public static final String SOURCE = \"\"\"\n");
 
-        for (String line : glsl.toString().split("\n")) {
-            code.append("            ").append(line).append("\n");
+        for (String line : glsl.toString()
+            .split("\n")) {
+            code.append("            ")
+                .append(line)
+                .append("\n");
         }
 
         code.append("            \"\"\";\n");
         code.append("}\n");
 
-        Path src = Paths.get("build", "generated", "sources", "structs").toAbsolutePath();
+        Path src = Paths.get("build", "generated", "sources", "structs")
+            .toAbsolutePath();
         String[] pkg = this.pkg.split("\\.");
         Path next = Paths.get(pkg[0], Arrays.copyOfRange(pkg, 1, pkg.length));
         Files.createDirectories(src.resolve(next));
         Files.write(
-            src.resolve(next).resolve(Paths.get(glStructName + ".java")), code.toString()
-                .getBytes(StandardCharsets.UTF_8)
-        );
+            src.resolve(next)
+                .resolve(Paths.get(glStructName + ".java")),
+            code.toString()
+                .getBytes(StandardCharsets.UTF_8));
     }
 }

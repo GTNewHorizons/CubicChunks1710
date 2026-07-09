@@ -24,6 +24,7 @@ import cpw.mods.fml.common.gameevent.TickEvent.ServerTickEvent;
 public class CubeStatusVisualizer {
 
     public enum CubeStatus {
+
         Enqueued(RGBColor.fromRGBA(0x64292832)),
         None(RGBColor.fromRGBA(0x64326432)),
         Generated(RGBColor.fromRGBA(0x32C83232)),
@@ -57,7 +58,8 @@ public class CubeStatusVisualizer {
         if (!CubicChunksConfig.enableChunkStatusDebugging) {
             if (wasSent) {
                 wasSent = false;
-                for (EntityPlayerMP player : MinecraftServer.getServer().getConfigurationManager().playerEntityList) {
+                for (EntityPlayerMP player : MinecraftServer.getServer()
+                    .getConfigurationManager().playerEntityList) {
                     BoxVisualizer.sendBoxes(player, Duration.ofMinutes(0), new ArrayList<>(), true);
                 }
             }
@@ -71,17 +73,20 @@ public class CubeStatusVisualizer {
             if (status == CubeStatus.Synced) return;
 
             AxisAlignedBB boundingBox = AxisAlignedBB.getBoundingBox(
-                pos.getMinBlockX() - 0.5, pos.getMinBlockY() + 0.5, pos.getMinBlockZ() - 0.5, pos.getMaxBlockX() - 0.5,
-                pos.getMaxBlockY()
-                    - 0.5, pos.getMaxBlockZ() - 0.5
-            );
+                pos.getMinBlockX() - 0.5,
+                pos.getMinBlockY() + 0.5,
+                pos.getMinBlockZ() - 0.5,
+                pos.getMaxBlockX() - 0.5,
+                pos.getMaxBlockY() - 0.5,
+                pos.getMaxBlockZ() - 0.5);
 
             boxes.add(new VisualizedBox(status.color, boundingBox));
         });
 
         wasSent = true;
 
-        for (EntityPlayerMP player : MinecraftServer.getServer().getConfigurationManager().playerEntityList) {
+        for (EntityPlayerMP player : MinecraftServer.getServer()
+            .getConfigurationManager().playerEntityList) {
             BoxVisualizer.sendBoxes(player, Duration.ofMinutes(5), boxes, false);
         }
     }

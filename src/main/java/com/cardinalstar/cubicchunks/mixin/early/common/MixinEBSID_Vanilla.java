@@ -36,7 +36,7 @@ public class MixinEBSID_Vanilla implements EBSIDAccessor {
 
     @Override
     public void setBlockID(int x, int y, int z, int id, boolean tickRandomly) {
-        this.blockLSBArray[y << 8 | z << 4 | x] = (byte)(id & 255);
+        this.blockLSBArray[y << 8 | z << 4 | x] = (byte) (id & 255);
 
         if (id > 255) {
             if (this.blockMSBArray == null) {

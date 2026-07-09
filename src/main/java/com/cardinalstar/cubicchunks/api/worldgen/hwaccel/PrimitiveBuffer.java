@@ -30,7 +30,8 @@ public interface PrimitiveBuffer<View extends PrimitiveView> {
     /// Scans over this buffer and calls the function once per stored object. Each [View] is a new object.
     void forEachSlow(TIntObjectProcedure<View> fn);
 
-    /// Scans over this buffer and calls the function once per stored object. The [View] is one object that is suitably mutated.
+    /// Scans over this buffer and calls the function once per stored object. The [View] is one object that is suitably
+    /// mutated.
     void forEachFast(TIntObjectProcedure<View> fn);
 
     /// Iterates over all contained objects. Allocates a new [View] for each object.
