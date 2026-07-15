@@ -632,7 +632,13 @@ public class CubeLoaderServer implements ICubeLoader {
         public void onColumnUnloaded() {
             column.onChunkUnload();
             callback.onColumnUnloaded(column);
-            cubeIO.saveColumn(pos, column);
+            column.onChunkUnload();
+
+            try {
+                cubeIO.saveColumn(pos, column);
+            } finally {
+                callback.onColumnUnloaded(column);
+            }
         }
     }
 
