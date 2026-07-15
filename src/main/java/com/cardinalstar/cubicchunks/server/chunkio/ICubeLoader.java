@@ -55,4 +55,8 @@ public interface ICubeLoader extends Flushable, Closeable {
     void saveCube(Cube cube);
 
     void doGC();
+
+    void addColumn(Chunk column);
+
+    void addCube(Cube cube);
 }

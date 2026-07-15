@@ -1,4 +1,4 @@
-package com.cardinalstar.cubicchunks.world.worldgen.modern;
+package com.cardinalstar.cubicchunks.world.worldgen.caves;
 
 import java.util.Random;
 
@@ -15,7 +15,7 @@ import com.cardinalstar.cubicchunks.world.worldgen.data.NoisePrecalculator;
 import com.cardinalstar.cubicchunks.world.worldgen.data.SamplerFactory;
 import com.cardinalstar.cubicchunks.world.worldgen.noise.NoiseSampler;
 import com.cardinalstar.cubicchunks.world.worldgen.noise.OctavesSampler;
-import com.cardinalstar.cubicchunks.world.worldgen.noise.ScaledNoise;
+import com.cardinalstar.cubicchunks.world.worldgen.noise.ScaledSampler;
 
 public class NoodleCaveGenerator implements ICubeGenerator {
 
@@ -34,14 +34,14 @@ public class NoodleCaveGenerator implements ICubeGenerator {
 
             @Override
             public NoiseSampler createSampler(Random rng) {
-                return new ScaledNoise(new OctavesSampler(rng, 1), SCALE);
+                return new ScaledSampler(new OctavesSampler(rng, 1), SCALE);
             }
         },
         B {
 
             @Override
             public NoiseSampler createSampler(Random rng) {
-                return new ScaledNoise(new OctavesSampler(rng, 2), SCALE);
+                return new ScaledSampler(new OctavesSampler(rng, 2), SCALE);
             }
         };
     }

@@ -4,11 +4,15 @@ import java.util.Random;
 
 import net.minecraft.util.MathHelper;
 
-public class SimplexNoiseSampler implements NoiseSampler {
+import com.cardinalstar.cubicchunks.api.worldgen.hwaccel.KernelBuilder;
+import com.cardinalstar.cubicchunks.api.worldgen.hwaccel.buffer.TransformingBufferAccessor;
+
+/// A standard simplex noise sampler.
+public class SimplexSampler implements NoiseSampler {
 
     protected static final int[][] GRADIENTS = new int[][] { { 1, 1, 0 }, { -1, 1, 0 }, { 1, -1, 0 }, { -1, -1, 0 },
         { 1, 0, 1 }, { -1, 0, 1 }, { 1, 0, -1 }, { -1, 0, -1 }, { 0, 1, 1 }, { 0, -1, 1 }, { 0, 1, -1 }, { 0, -1, -1 },
-        { 1, 1, 0 }, { 0, -1, 1 }, { -1, 1, 0 }, { 0, -1, -1 } };
+        { 1, 1, 0 }, { 0, -1, 1 }, { -1, 1, 0 }, { 0, -1, -1 }, };
     private static final double SQRT_3 = Math.sqrt(3.0D);
     private static final double SKEW_FACTOR_2D;
     private static final double UNSKEW_FACTOR_2D;
@@ -17,7 +21,7 @@ public class SimplexNoiseSampler implements NoiseSampler {
     public final double originY;
     public final double originZ;
 
-    public SimplexNoiseSampler(Random random) {
+    public SimplexSampler(Random random) {
         this.originX = random.nextDouble() * 256.0D;
         this.originY = random.nextDouble() * 256.0D;
         this.originZ = random.nextDouble() * 256.0D;
@@ -65,15 +69,8 @@ public class SimplexNoiseSampler implements NoiseSampler {
         double g = (double) j - e;
         double h = x - f;
         double k = y - g;
-        byte n;
-        byte o;
-        if (h > k) {
-            n = 1;
-            o = 0;
-        } else {
-            n = 0;
-            o = 1;
-        }
+        byte n = (byte) (h > k ? 1 : 0);
+        byte o = (byte) (h > k ? 0 : 1);
 
         double p = h - (double) n + UNSKEW_FACTOR_2D;
         double q = k - (double) o + UNSKEW_FACTOR_2D;
@@ -181,5 +178,78 @@ public class SimplexNoiseSampler implements NoiseSampler {
     static {
         SKEW_FACTOR_2D = 0.5D * (SQRT_3 - 1.0D);
         UNSKEW_FACTOR_2D = (3.0D - SQRT_3) / 6.0D;
+    }
+
+    @Override
+    public String compileKernel2D(KernelBuilder builder, String x, String y) {
+        String funcName = builder.createName("simplex2d");
+
+        String permsMacro = builder.createName("PERMS");
+
+        builder.addBufferMacros(
+            permsMacro,
+            new TransformingBufferAccessor(builder.addConstant(permutations), index -> "((" + index + ") & 255)"));
+
+        String code = """
+            float grad$funcName(int hash, vec2 pos, float distance) {
+              const int GX[12] = int[12](1,-1,1,-1,1,-1,1,-1,0,0,0,0);
+              const int GY[12] = int[12](1,1,-1,-1,0,0,0,0,1,-1,1,-1);
+
+              float d = distance - dot(pos, pos);
+              float d4 = d * d * d * d;
+              float f = d4 * (float(GX[hash % 12]) * pos.x + float(GY[hash % 12] * pos.y));
+
+              return d < 0.0f ? 0.0f : f;
+            }
+
+            float $funcName(float px, float py) {
+              float d = (px + py) * $skew;
+              int i = int(floor(px + d));
+              int j = int(floor(py + d));
+              float e = float(i + j) * $unskew;
+              float f = float(i) - e;
+              float g = float(j) - e;
+              float h = px - f;
+              float k = py - g;
+              int n = h > k ? 1 : 0;
+              int o = h > k ? 0 : 1;
+
+              float p = h - float(n) + $unskew;
+              float q = k - float(o) + $unskew;
+              float r = h - 1.0f + 2.0f * $unskew;
+              float s = k - 1.0f + 2.0f * $unskew;
+              int t = i & 255;
+              int u = j & 255;
+              int v = $perms(t + $perms(u)) % 12;
+              int w = $perms(t + n + $perms(u + o)) % 12;
+              int z = $perms(t + 1 + $perms(u + 1)) % 12;
+              float aa = grad$funcName(v, vec2(h, k), 0.5f);
+              float ab = grad$funcName(w, vec2(p, q), 0.5f);
+              float ac = grad$funcName(z, vec2(r. s), 0.5f);
+              return 70.0f * (aa + ab + ac);
+            }
+            """.replaceAll("\\$funcName", funcName)
+            .replaceAll("\\$skew", Float.toString((float) SKEW_FACTOR_2D))
+            .replaceAll("\\$unskew", Float.toString((float) UNSKEW_FACTOR_2D))
+            .replaceAll("\\$perms", "GET_" + permsMacro);
+
+        builder.preamble.append(code);
+
+        String result = builder.createName("simplex");
+        builder.logic.append("  float ")
+            .append(result)
+            .append(" = ")
+            .append(funcName)
+            .append("(")
+            .append(x)
+            .append(", ")
+            .append(y)
+            .append(");\n");
+        return result;
+    }
+
+    @Override
+    public String compileKernel3D(KernelBuilder builder, String x, String y, String z) {
+        throw new UnsupportedOperationException("Not yet implemented");
     }
 }

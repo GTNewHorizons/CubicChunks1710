@@ -624,7 +624,6 @@ public class Cube implements ICube {
         EVENT_BUS.post(new CubeEvent.Load(world, this));
     }
 
-    @SuppressWarnings("deprecation")
     public void trackSurface() {
         IHeightMap opindex = ((IColumn) column).getOpacityIndex();
         int miny = getCoords().getMinBlockY();

@@ -45,7 +45,6 @@ import com.cardinalstar.cubicchunks.server.CubicPlayerManager;
 import com.cardinalstar.cubicchunks.util.Coords;
 import com.cardinalstar.cubicchunks.world.core.IColumnInternal;
 import com.cardinalstar.cubicchunks.world.cube.Cube;
-import com.gtnewhorizon.gtnhlib.blockpos.BlockPos;
 
 // TODO: extract interfaces when it's done
 @ParametersAreNonnullByDefault
@@ -185,16 +184,17 @@ public class LightingManager implements ILightingManager {
     @Override
     public void onTrackCubeSurface(ICube cube) {
         if (!world.isRemote) {
-            BlockPos min = cube.getCoords()
-                .getMinBlockPos();
-            BlockPos max = cube.getCoords()
-                .getMaxBlockPos();
-            for (BlockPos pos : BlockPos
-                .getAllInBox(min.getX(), min.getY(), min.getZ(), max.getX(), max.getY(), max.getZ())) {
-
-                CubicPlayerManager playerManager = getPlayerManager();
-
-                if (playerManager != null) playerManager.heightUpdated(pos.getX(), pos.getZ());
+            CubicPlayerManager playerManager = getPlayerManager();
+            if (playerManager != null) {
+                int minX = cube.getCoords()
+                    .getMinBlockX();
+                int minZ = cube.getCoords()
+                    .getMinBlockZ();
+                for (int dx = 0; dx < 16; dx++) {
+                    for (int dz = 0; dz < 16; dz++) {
+                        playerManager.heightUpdated(minX + dx, minZ + dz);
+                    }
+                }
             }
             tryScheduleOnLoadHeightChangeRelight(cube);
         }

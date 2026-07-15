@@ -82,8 +82,12 @@ public class CubicChunksConfig {
     public static int verticalCubeLoadDistance = 8;
 
     @Config.LangKey("cubicchunks.config.enable_chunk_debugging")
-    @Config.Comment("Displays coloured boxes over cubes at Y=8 for debugging purposes.")
+    @Config.Comment("Displays coloured boxes over non-empty cubes for debugging purposes.")
     public static boolean enableChunkStatusDebugging = false;
+
+    @Config.LangKey("cubicchunks.config.dump_compute_code")
+    @Config.Comment("Dumps compute shader code.")
+    public static boolean dumpComputeShaderCode = false;
 
     @Config.LangKey("cubicchunks.config.relight_checks_per_tick_per_column")
     @Config.Comment("In an attempt to fix lighting glitches over time, cubic chunks will keep updating light in specified amount of blocks per "

@@ -209,12 +209,14 @@ public class CubicPlayerManager extends PlayerManager implements CubeLoaderCallb
             }
         }
 
-        CubeStatusVisualizer.put(cube.getCoords(), switch (newLevel) {
-            case None -> CubeStatus.None;
-            case Generated -> CubeStatus.Generated;
-            case Populated -> CubeStatus.Populated;
-            case Lit -> CubeStatus.Lit;
-        });
+        if (!cube.isEmpty()) {
+            CubeStatusVisualizer.put(cube.getCoords(), switch (newLevel) {
+                case None -> CubeStatus.None;
+                case Generated -> CubeStatus.Generated;
+                case Populated -> CubeStatus.Populated;
+                case Lit -> CubeStatus.Lit;
+            });
+        }
     }
 
     @Override
@@ -243,10 +245,19 @@ public class CubicPlayerManager extends PlayerManager implements CubeLoaderCallb
             for (var player : players.getPlayerArray()) {
                 player.sync.onBlockMarkedDirty(x, y, z);
             }
+
+            CubeStatusVisualizer.put(cube.getCoords(), CubeStatus.Dirty);
         }
     }
 
     // Note these arguments are in global block coordinates
+
+    public void onSurfaceTracked(Cube cube) {
+        for (var player : players.getPlayerArray()) {
+            player.sync.onSurfaceTracked(cube);
+        }
+    }
+
     public void heightUpdated(int x, int z) {
         Chunk column = provider.getLoadedColumn(x >> 4, z >> 4);
 

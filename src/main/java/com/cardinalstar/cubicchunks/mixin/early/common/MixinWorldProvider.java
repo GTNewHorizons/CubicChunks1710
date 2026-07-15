@@ -103,6 +103,10 @@ public abstract class MixinWorldProvider implements ICubicWorldProvider {
             return ccWorldType.createCubeGenerator(worldObj);
         }
 
+        if (worldObj.provider instanceof com.cardinalstar.cubicchunks.api.world.ICubicWorldProvider cubicWorldProvider) {
+            return cubicWorldProvider.createWorldGenerator(worldObj);
+        }
+
         return new VanillaWorldGenerator(
             worldObj.provider.createChunkGenerator(),
             worldObj,

@@ -457,14 +457,72 @@ public class CubeLoaderServer implements ICubeLoader {
         }
     }
 
+    @Override
+    public void addColumn(Chunk column) {
+        ColumnInfo info = columns.get(column.xPosition, column.zPosition);
+
+        if (info != null && info.column != null) {
+            CubicChunks.LOGGER.warn(
+                "addColumn tried to replace column at {},{}! (in-memory source: {}, attempted replacement source: {})",
+                column.xPosition,
+                column.zPosition,
+                info.source,
+                ObjectSource.Added);
+            return;
+        }
+
+        if (info == null) {
+            info = new ColumnInfo(column.xPosition, column.zPosition);
+            columns.put(info);
+        }
+
+        info.source = ObjectSource.Added;
+        info.column = column;
+
+        info.onColumnLoaded();
+    }
+
+    @Override
+    public void addCube(Cube cube) {
+        CubeInfo info = cubes.get(cube.getX(), cube.getY(), cube.getZ());
+
+        if (info != null && info.cube != null) {
+            CubicChunks.LOGGER.warn(
+                "addCube tried to replace cube at {},{},{}! (in-memory source: {}, attempted replacement source: {})",
+                cube.getX(),
+                cube.getY(),
+                cube.getZ(),
+                info.source,
+                ObjectSource.Added);
+            return;
+        }
+
+        if (info == null) {
+            info = new CubeInfo(cube.getX(), cube.getY(), cube.getZ());
+            cubes.put(info);
+        }
+
+        info.source = ObjectSource.Added;
+        info.cube = cube;
+        cube.setMeta(CUBE_INFO, info);
+
+        info.ensureColumn(Requirement.GET_CACHED);
+
+        info.onCubeLoaded();
+    }
+
     private void handleSideEffects(GenerationResult<?> result, boolean doColumns, boolean doCubes) {
         if (doColumns) {
             for (Chunk column : result.columnSideEffects) {
                 ColumnInfo info = columns.get(column.xPosition, column.zPosition);
 
                 if (info != null && info.column != null) {
-                    CubicChunks.LOGGER
-                        .warn("Worldgen side-effect replaced column at {},{}!", column.xPosition, column.zPosition);
+                    CubicChunks.LOGGER.warn(
+                        "Worldgen side-effect tried to replace column at {},{}! (in-memory source: {}, attempted replacement source: {})",
+                        column.xPosition,
+                        column.zPosition,
+                        info.source,
+                        ObjectSource.GeneratedSideEffect);
                     continue;
                 }
 
@@ -485,8 +543,13 @@ public class CubeLoaderServer implements ICubeLoader {
                 CubeInfo info = cubes.get(cube.getX(), cube.getY(), cube.getZ());
 
                 if (info != null && info.cube != null) {
-                    CubicChunks.LOGGER
-                        .warn("Worldgen side-effect replaced cube at {},{},{}!", cube.getX(), cube.getY(), cube.getZ());
+                    CubicChunks.LOGGER.warn(
+                        "Worldgen side-effect tried to replace cube at {},{},{}! (in-memory source: {}, attempted replacement source: {})",
+                        cube.getX(),
+                        cube.getY(),
+                        cube.getZ(),
+                        info.source,
+                        ObjectSource.GeneratedSideEffect);
                     continue;
                 }
 
@@ -510,6 +573,7 @@ public class CubeLoaderServer implements ICubeLoader {
         None,
         Disk,
         Generated,
+        Added,
         GeneratedSideEffect,
         Boundary
     }
@@ -714,10 +778,11 @@ public class CubeLoaderServer implements ICubeLoader {
 
             if (this.column == null) {
                 CubicChunks.LOGGER.error(
-                    "Tried to load a cube that did not have a saved column: it will be regenerated ({},{},{})",
+                    "Tried to load a cube that did not have a saved column: it will be regenerated ({},{},{}, source={})",
                     getX(),
                     getY(),
                     getZ(),
+                    this.source,
                     new Exception());
                 this.cube = null;
                 this.tag = null;
@@ -725,6 +790,8 @@ public class CubeLoaderServer implements ICubeLoader {
             }
 
             this.cube = new BoundaryCube(this.column.column, this.getY());
+            this.source = ObjectSource.Boundary;
+
             onCubeLoaded();
         }
 
@@ -747,10 +814,11 @@ public class CubeLoaderServer implements ICubeLoader {
 
             if (this.column == null) {
                 CubicChunks.LOGGER.error(
-                    "Tried to load a cube that did not have a saved column: it will be regenerated ({},{},{})",
+                    "Tried to load a cube that did not have a saved column: it will be regenerated ({},{},{}, source={})",
                     getX(),
                     getY(),
                     getZ(),
+                    this.source,
                     new Exception());
                 this.cube = null;
                 this.tag = null;
@@ -834,8 +902,11 @@ public class CubeLoaderServer implements ICubeLoader {
             if (requestedInitLevel == CubeInitLevel.Generated) return generated;
             if (!generated) return false;
 
-            // If this cube hasn't been populated at all, populate it. This generates any required cubes recursively.
-            generator.populate(cube);
+            if (!isInitedTo(CubeInitLevel.Populated)) {
+                // If this cube hasn't been populated at all, populate it. This generates any required cubes
+                // recursively.
+                generator.populate(cube);
+            }
 
             boolean populated = isInitedTo(CubeInitLevel.Populated);
 

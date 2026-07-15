@@ -25,6 +25,7 @@ import java.util.List;
 
 import javax.annotation.ParametersAreNonnullByDefault;
 
+import net.jpountz.lz4.LZ4Factory;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.world.World;
@@ -90,7 +91,11 @@ public class PacketEncoderCube extends CCPacketEncoder<PacketCube> {
     public void writePacket(CCPacketBuffer buffer, PacketCube packet) {
         buffer.writeCubePos(packet.cubePos);
 
-        buffer.writeByteArray(packet.data);
+        buffer.writeVarIntToBuffer(packet.data.length);
+        buffer.writeByteArray(
+            LZ4Factory.fastestInstance()
+                .fastCompressor()
+                .compress(packet.data));
 
         buffer.writeList(packet.tileEntityTags, CCPacketBuffer::writeCompoundTag);
     }
@@ -99,11 +104,16 @@ public class PacketEncoderCube extends CCPacketEncoder<PacketCube> {
     public PacketCube readPacket(CCPacketBuffer buf) {
         CubePos pos = buf.readCubePos();
 
+        byte[] decompressed = new byte[buf.readVarIntFromBuffer()];
         byte[] data = buf.readByteArray();
+
+        LZ4Factory.fastestInstance()
+            .fastDecompressor()
+            .decompress(data, decompressed);
 
         List<NBTTagCompound> tileEntityTags = buf.readList(CCPacketBuffer::readCompoundTag);
 
-        return new PacketCube(pos, data, tileEntityTags);
+        return new PacketCube(pos, decompressed, tileEntityTags);
     }
 
     @Override

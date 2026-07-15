@@ -94,6 +94,24 @@ public enum Mixins implements IMixins {
             .addCommonMixins("common.MixinWorld_DeferInit", "common.MixinWorld_DeferInit$MixinWorldServer")
             .setPhase(Phase.EARLY)
             .setApplyIf(() -> true)),
+    ACCESSOR_NBT(new MixinBuilder("Add accessors for NBT tag internals.")
+        .addCommonMixins("common.AccessorNBTTagList", "common.AccessorNBTTagCompound")
+        .setPhase(Phase.EARLY)
+        .setApplyIf(() -> true)),
+    UNSAFE_LIGHTING(new MixinBuilder("Disable some pointless operations while performing light checks")
+        .addCommonMixins("common.MixinBlock_Lighting")
+        .setPhase(Phase.EARLY)
+        .setApplyIf(() -> true)),
+    EBS_ID_ACCEL_VANILLA(new MixinBuilder("Adds hooks for updating EBS block ID without block lookup (vanilla-only)")
+        .addCommonMixins("common.MixinEBSID_Vanilla")
+        .setPhase(Phase.EARLY)
+        .addExcludedMod(Mods.EndlessIDs)
+        .setApplyIf(() -> true)),
+    EBS_ID_ACCEL_EID(new MixinBuilder("Adds hooks for updating EBS block ID without block lookup (endless ids-only)")
+        .addCommonMixins("common.MixinEBSID_EID")
+        .setPhase(Phase.EARLY)
+        .addRequiredMod(Mods.EndlessIDs)
+        .setApplyIf(() -> true)),
 
     // CHUNK
     MIXIN_CHUNK(new MixinBuilder("Various modifications to inject cubes, height map patches, etc into Chunks.")
@@ -305,7 +323,13 @@ public enum Mixins implements IMixins {
             .addCommonMixins("mod.MixinBlockPosUtil")
             .setPhase(Phase.LATE)
             .addRequiredMod(Mods.ChunkAPI)
-            .setApplyIf(() -> true))
+            .setApplyIf(() -> true)),
+    MIXIN_COORD_PACKER_CELERITAS(
+        new MixinBuilder("Overwrite Angelica/Celeritas PositionUtil packing methods with CC-compatible ones")
+            .addCommonMixins("mod.MixinPositionUtil")
+            .setPhase(Phase.EARLY)
+            .addRequiredMod(Mods.Angelica)
+            .setApplyIf(() -> true)),
     //
     ;
 
