@@ -53,14 +53,7 @@ public class LightingHooks {
     private static void scheduleRelightChecksForColumn(final World world, final EnumSkyBlock lightType, final int x,
         final int z, final int yMin, final int yMax) {
 
-        scheduleRelightChecksForColumn(
-            world,
-            world.getChunkFromBlockCoords(blockToCube(x), blockToCube(z)),
-            lightType,
-            x,
-            z,
-            yMin,
-            yMax);
+        scheduleRelightChecksForColumn(world, world.getChunkFromBlockCoords(x, z), lightType, x, z, yMin, yMax);
     }
 
     private static void scheduleRelightChecksForColumn(final World world, final Chunk chunk,

@@ -247,6 +247,13 @@ public class CubicPlayerManager extends PlayerManager implements CubeLoaderCallb
     }
 
     // Note these arguments are in global block coordinates
+
+    public void onSurfaceTracked(Cube cube) {
+        for (var player : players.getPlayerArray()) {
+            player.sync.onSurfaceTracked(cube);
+        }
+    }
+
     public void heightUpdated(int x, int z) {
         Chunk column = provider.getLoadedColumn(x >> 4, z >> 4);
 

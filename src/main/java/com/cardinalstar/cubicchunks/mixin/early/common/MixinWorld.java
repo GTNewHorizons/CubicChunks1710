@@ -25,6 +25,7 @@ import static com.cardinalstar.cubicchunks.util.Coords.blockToLocal;
 
 import java.util.List;
 import java.util.Random;
+import java.util.Set;
 import java.util.function.Predicate;
 
 import javax.annotation.Nullable;
@@ -37,6 +38,7 @@ import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.profiler.Profiler;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.AxisAlignedBB;
+import net.minecraft.world.ChunkCoordIntPair;
 import net.minecraft.world.EnumSkyBlock;
 import net.minecraft.world.GameRules;
 import net.minecraft.world.IBlockAccess;
@@ -87,6 +89,8 @@ import com.cardinalstar.cubicchunks.world.cube.ICubeProvider;
 import com.cardinalstar.cubicchunks.world.cube.ICubeProviderInternal;
 import com.google.common.collect.ImmutableList;
 import com.gtnewhorizon.gtnhlib.blockpos.BlockPos;
+import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
+import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.llamalad7.mixinextras.sugar.Local;
 
 /**
@@ -515,5 +519,16 @@ public abstract class MixinWorld implements ICubicWorldInternal {
 
     private boolean shouldSkipWorld(World world) {
         return !allowedServerWorldClasses.contains(world.getClass());
+    }
+
+    @WrapOperation(
+        method = "setActivePlayerChunksAndCheckLight",
+        at = @At(value = "INVOKE", target = "Ljava/util/Set;add(Ljava/lang/Object;)Z"))
+    public boolean skipUnloadedChunks(Set<ChunkCoordIntPair> instance, Object coord2, Operation<Boolean> original) {
+        ChunkCoordIntPair coord = (ChunkCoordIntPair) coord2;
+
+        if (!this.chunkExists(coord.chunkXPos, coord.chunkZPos)) return false;
+
+        return instance.add(coord);
     }
 }

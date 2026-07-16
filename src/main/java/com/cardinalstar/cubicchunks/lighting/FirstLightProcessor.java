@@ -24,25 +24,23 @@ import static com.cardinalstar.cubicchunks.util.Coords.blockToCube;
 import static com.cardinalstar.cubicchunks.util.Coords.cubeToMaxBlock;
 import static com.cardinalstar.cubicchunks.util.Coords.cubeToMinBlock;
 
-import javax.annotation.Nullable;
+import java.util.Arrays;
+
 import javax.annotation.ParametersAreNonnullByDefault;
 
+import net.minecraft.block.Block;
+import net.minecraft.init.Blocks;
 import net.minecraft.world.EnumSkyBlock;
-import net.minecraft.world.IBlockAccess;
+import net.minecraft.world.World;
+import net.minecraft.world.chunk.storage.ExtendedBlockStorage;
 
-import org.apache.commons.lang3.tuple.ImmutablePair;
-import org.apache.commons.lang3.tuple.Pair;
-import org.joml.Vector3ic;
-
-import com.cardinalstar.cubicchunks.api.IColumn;
 import com.cardinalstar.cubicchunks.api.ICube;
-import com.cardinalstar.cubicchunks.api.util.Box;
+import com.cardinalstar.cubicchunks.mixin.api.BlockExt_Lighting;
 import com.cardinalstar.cubicchunks.mixin.api.ICubicWorldInternal;
 import com.cardinalstar.cubicchunks.server.chunkio.ICubeLoader;
 import com.cardinalstar.cubicchunks.util.MathUtil;
 import com.cardinalstar.cubicchunks.world.core.IColumnInternal;
 import com.cardinalstar.cubicchunks.world.cube.Cube;
-import com.gtnewhorizon.gtnhlib.blockpos.BlockPos;
 
 /**
  * Notes on world.checkLightFor(): Decreasing light value: Light is recalculated starting from 0 ONLY for blocks where
@@ -57,12 +55,6 @@ import com.gtnewhorizon.gtnhlib.blockpos.BlockPos;
 @ParametersAreNonnullByDefault
 public class FirstLightProcessor {
 
-    // Iteration state data
-    // Cache position to avoid allocation of new object each time
-    private int curPosX = 0;
-    private int curPosY = 0;
-    private int curPosZ = 0;
-
     /**
      * Diffuses skylight in the given cube and all cubes affected by this update.
      *
@@ -70,39 +62,64 @@ public class FirstLightProcessor {
      */
     public void diffuseSkylight(ICube cube) {
         ILightingManager lm = ((ICubicWorldInternal) cube.getWorld()).getLightingManager();
-        BlockPos minPos = cube.getCoords()
-            .getMinBlockPos();
-        BlockPos maxPos = cube.getCoords()
-            .getMaxBlockPos();
 
         ICubeLoader loader = ((ICubicWorldInternal.Server) cube.getWorld()).getCubeCache()
             .getCubeLoader();
 
-        loader.cacheCubes(cube.getX(), cube.getY(), cube.getZ(), 1, 1, 1);
+        World world = cube.getWorld();
 
-        Box allBlocks = new Box(minPos.x, minPos.y, minPos.z, maxPos.x, maxPos.y, maxPos.z);
-        for (Vector3ic v : allBlocks) {
-            if (cube.getBlock(v.x(), v.y(), v.z())
-                .getLightValue(cube.getWorld(), v.x(), v.y(), v.z()) > 0) {
-                lm.checkLightFor(EnumSkyBlock.Block, v.x(), v.y(), v.z());
+        int cX = cube.getX();
+        int cY = cube.getY();
+        int cZ = cube.getZ();
+
+        int bX = cX << 4;
+        int bY = cY << 4;
+        int bZ = cZ << 4;
+
+        int bYMax = bY + 15;
+
+        boolean isCubeEmpty = cube.isEmpty();
+
+        loader.cacheCubes(cX, cY, cZ, 1, 2, 1);
+
+        ExtendedBlockStorage storage = cube.getStorage();
+
+        if (!isCubeEmpty) {
+            assert storage != null;
+
+            for (int lX = 0; lX < 16; lX++) {
+                for (int lY = 0; lY < 16; lY++) {
+                    for (int lZ = 0; lZ < 16; lZ++) {
+                        Block block = storage.getBlockByExtId(lX, lY, lZ);
+
+                        try {
+                            // Enable unsafe lighting here to disable a World.getBlock call within getLightValue
+                            // I don't know why that call exists, but the block is always correct at this point since we
+                            // just fetched it
+                            ((BlockExt_Lighting) block).cc$setUnsafeLightMode(true);
+
+                            if (block != Blocks.air && block.getLightValue(world, bX + lX, bY + lY, bZ + lZ) > 0) {
+                                lm.checkLightFor(EnumSkyBlock.Block, bX + lX, bY + lY, bZ + lZ);
+                            }
+                        } finally {
+                            ((BlockExt_Lighting) block).cc$setUnsafeLightMode(false);
+                        }
+                    }
+                }
             }
         }
 
-        loader.uncacheCubes();
-
         if (cube.getWorld().provider.hasNoSky) {
+            loader.uncacheCubes();
+
             return;
         }
 
         // Cache min/max Y, generating them may be expensive
-        int[][] minBlockYArr = new int[Cube.SIZE][Cube.SIZE];
-        int[][] maxBlockYArr = new int[Cube.SIZE][Cube.SIZE];
-
-        int minBlockX = cubeToMinBlock(cube.getX());
-        int maxBlockX = cubeToMaxBlock(cube.getX());
-
-        int minBlockZ = cubeToMinBlock(cube.getZ());
-        int maxBlockZ = cubeToMaxBlock(cube.getZ());
+        int[] minBlockYArr = new int[Cube.SIZE * Cube.SIZE];
+        int[] maxBlockYArr = new int[Cube.SIZE * Cube.SIZE];
+        Arrays.fill(minBlockYArr, Integer.MAX_VALUE);
+        Arrays.fill(maxBlockYArr, Integer.MIN_VALUE);
 
         // the lowest minHeight and the highest maxHeight values
         // used to make the cube iteration the outer loop, so light propagator can do mass light updates
@@ -113,194 +130,151 @@ public class FirstLightProcessor {
         // we can skip the column later.
 
         IColumnInternal column = cube.getColumn();
-        for (int localX = 0; localX < Cube.SIZE; ++localX) {
-            for (int localZ = 0; localZ < Cube.SIZE; ++localZ) {
-                int height = column.getTopYWithStaging(localX, localZ);
-                int maxY = cube.getCoords()
-                    .getMaxBlockY();
-                int maxCubeBlockY = cube.getCoords()
-                    .getMaxBlockY();
 
-                int minCubeBlockX = cube.getCoords()
-                    .getMinBlockX();
-                int minCubeBlockZ = cube.getCoords()
-                    .getMinBlockZ();
+        for (int lX = 0; lX < Cube.SIZE; ++lX) {
+            for (int lZ = 0; lZ < Cube.SIZE; ++lZ) {
+                // This is the top block within this block column, including the current cube.
+                int stagingTopBlock = column.getTopYWithStaging(lX, lZ);
 
-                curPosX = minCubeBlockX + localX;
-                curPosY = 0;
-                curPosZ = minCubeBlockZ + localZ;
+                int minInstantFill = Integer.MIN_VALUE;
+                int maxInstantFill = Integer.MIN_VALUE;
 
-                int minInstantFill = Integer.MIN_VALUE, maxInstantFill = Integer.MIN_VALUE;
-                if (cube.getStorage() != null && localX != 0
-                    && localX != 15
-                    && localZ != 0
-                    && localZ != 15
-                    && maxCubeBlockY > height) {
-                    int h1 = column.getTopYWithStaging(localX + 1, localZ);
-                    int h2 = column.getTopYWithStaging(localX - 1, localZ);
-                    int h3 = column.getTopYWithStaging(localX, localZ + 1);
-                    int h4 = column.getTopYWithStaging(localX, localZ - 1);
+                boolean isEdge = lX == 0 || lX == 15 || lZ == 0 || lZ == 15;
+
+                if (!isCubeEmpty && !isEdge && bYMax > stagingTopBlock) {
+                    int h1 = column.getTopYWithStaging(lX + 1, lZ);
+                    int h2 = column.getTopYWithStaging(lX - 1, lZ);
+                    int h3 = column.getTopYWithStaging(lX, lZ + 1);
+                    int h4 = column.getTopYWithStaging(lX, lZ - 1);
+
                     int maxNeighbor = MathUtil.max(h1, h2, h3, h4) + 1;
-                    int maxCurr = height + 2;
-                    minInstantFill = MathUtil.max(
-                        maxCurr,
-                        maxNeighbor,
-                        cube.getCoords()
-                            .getMinBlockY());
-                    maxInstantFill = maxCubeBlockY;
+
+                    minInstantFill = MathUtil.max(stagingTopBlock + 2, maxNeighbor, bY);
+                    maxInstantFill = bYMax;
                 }
-                if (height < maxY) {
-                    int minCubeBlockY = cube.getCoords()
-                        .getMinBlockY();
-                    int minY = Math.max(height, minCubeBlockY);
-                    for (int yPos = minY; yPos <= maxY; yPos++) {
-                        curPosY = yPos;
+
+                if (stagingTopBlock < bYMax) {
+                    int minY = Math.max(stagingTopBlock, bY);
+
+                    for (int yPos = minY; yPos <= bYMax; yPos++) {
                         if (yPos >= minInstantFill && yPos <= maxInstantFill) {
-                            cube.setLightFor(EnumSkyBlock.Sky, curPosX, curPosY, curPosZ, 15);
+                            cube.setLightFor(EnumSkyBlock.Sky, bX + lX, yPos, bZ + lZ, 15);
                         } else {
-                            lm.checkLightFor(EnumSkyBlock.Sky, curPosX, curPosY, curPosZ);
+                            if (isEdge) {
+                                cube.setLightFor(EnumSkyBlock.Sky, bX + lX, yPos, bZ + lZ, 0);
+                            }
+                            lm.checkLightFor(EnumSkyBlock.Sky, bX + lX, yPos, bZ + lZ);
                         }
                     }
                 }
 
-                Pair<Integer, Integer> minMax = getMinMaxLightUpdateY(cube, localX, localZ);
-                int min = minMax == null ? Integer.MAX_VALUE : minMax.getLeft();
-                int max = minMax == null ? Integer.MIN_VALUE : minMax.getRight();
-                minBlockYArr[localX][localZ] = min;
-                maxBlockYArr[localX][localZ] = max;
-                minMinHeight = Math.min(min, minMinHeight);
-                maxMaxHeight = Math.max(max, maxMaxHeight);
+                // If the current cube is above the highest occluding block in the column, everything is fully lit.
+                int cubeY = cube.getY();
+
+                // If the given cube lies underneath the occluding block, then the update must start at the occluding
+                // block.
+                if (cubeY <= blockToCube(stagingTopBlock)) {
+                    // This is the top block within this block column, excluding the staging height map (which means the
+                    // blocks in this cube are ignored)
+                    int opacityTopBlock = column.getOpacityIndex()
+                        .getTopBlockY(lX, lZ);
+
+                    // Always include this cube's own block range so cave/overhang cubes whose
+                    // opacityTopBlock is at the committed surface (above this cube) are still
+                    // processed. Without this, generation-order can cause the range to collapse
+                    // to [surfaceY, surfaceY] which never intersects a deep cave cube.
+                    int minHeight = Math.min(opacityTopBlock, bY);
+
+                    minBlockYArr[(lZ << 4) | lX] = minHeight;
+                    maxBlockYArr[(lZ << 4) | lX] = stagingTopBlock;
+
+                    minMinHeight = Math.min(minHeight, minMinHeight);
+                    maxMaxHeight = Math.max(stagingTopBlock, maxMaxHeight);
+                }
             }
         }
 
         // Iterate over all affected cubes.
-        Iterable<? extends ICube> cubes = column
-            .getLoadedCubes(blockToCube(maxMaxHeight), blockToCube(/* minMinHeight */Integer.MIN_VALUE));
-        for (ICube otherCube : cubes) {
-            int minCubeBlockY = otherCube.getCoords()
-                .getMinBlockY();
-            int maxCubeBlockY = otherCube.getCoords()
-                .getMaxBlockY();
-            for (int blockX = minBlockX; blockX <= maxBlockX; blockX++) {
-                for (int blockZ = minBlockZ; blockZ <= maxBlockZ; blockZ++) {
-                    int minBlockY = minBlockYArr[blockX - minBlockX][blockZ - minBlockZ];
-                    int maxBlockY = maxBlockYArr[blockX - minBlockX][blockZ - minBlockZ];
+        Iterable<? extends Cube> cubes = column.getLoadedCubes(blockToCube(minMinHeight), blockToCube(maxMaxHeight));
 
-                    // If no update is needed, skip the block column.
+        for (Cube affectedCube : cubes) {
+            int bY_Affected = affectedCube.getY() << 4;
+            int bYMax_Affected = bY_Affected + 15;
+
+            for (int lX = 0; lX < 16; lX++) {
+                for (int lZ = 0; lZ < 16; lZ++) {
+                    int minBlockY = minBlockYArr[(lZ << 4) | lX];
+                    int maxBlockY = maxBlockYArr[(lZ << 4) | lX];
+
+                    // is below the existing top of the block
                     if (minBlockY > maxBlockY) {
                         continue;
                     }
+
                     // if not in this cube, skip
-                    if (!MathUtil.rangesIntersect(minBlockY, maxBlockY, minCubeBlockY, maxCubeBlockY)) {
+                    if (!MathUtil.rangesIntersect(minBlockY, maxBlockY, bY_Affected, bYMax_Affected)) {
                         continue;
                     }
 
-                    if (otherCube != cube && !otherCube.isInitialLightingDone()) {
+                    if (affectedCube != cube && !affectedCube.isInitialLightingDone()) {
                         continue;
                     }
 
-                    this.curPosX = blockX;
-                    this.curPosZ = blockZ;
                     // Update the block column in this cube.
-                    if (!diffuseSkylightInBlockColumn(
-                        lm,
-                        otherCube,
-                        this.curPosX,
-                        this.curPosY,
-                        this.curPosZ,
-                        minBlockY,
-                        maxBlockY)) {
-                        throw new IllegalStateException(
-                            "Check light failed at (" + this.curPosX
-                                + ", "
-                                + this.curPosY
-                                + ", "
-                                + this.curPosZ
-                                + ")"
-                                + "!");
-                    }
+                    diffuseSkylightInBlockColumn(lm, affectedCube, lX + bX, lZ + bZ, minBlockY, maxBlockY);
                 }
             }
         }
+
+        loader.uncacheCubes();
     }
 
     /**
-     * Diffuses skylight inside of the given cube in the block column specified by the given MutableBlockPos. The
-     * update is limited vertically by minBlockY and maxBlockY.
+     * Diffuses skylight inside of the given cube in the block column specified by posX/posZ.
+     * The update is limited vertically by minBlockY and maxBlockY.
      *
      * @param cube      the cube inside of which the skylight is to be diffused
      * @param posX      the x position of the block column to be updated
-     * @param posY      the y position of the block column to be updated
      * @param posZ      the z position of the block column to be updated
      * @param minBlockY the lower bound of the section to be updated
      * @param maxBlockY the upper bound of the section to be updated
-     *
-     * @return true if the update was successful, false otherwise
      */
-    private boolean diffuseSkylightInBlockColumn(ILightingManager lm, ICube cube, int posX, int posY, int posZ,
-        int minBlockY, int maxBlockY) {
+    private void diffuseSkylightInBlockColumn(ILightingManager lm, ICube cube, int posX, int posZ, int minBlockY,
+        int maxBlockY) {
         int cubeMinBlockY = cubeToMinBlock(cube.getY());
         int cubeMaxBlockY = cubeToMaxBlock(cube.getY());
 
         int maxBlockYInCube = Math.min(cubeMaxBlockY, maxBlockY);
         int minBlockYInCube = Math.max(cubeMinBlockY, minBlockY);
 
+        ExtendedBlockStorage storage = cube.getStorage();
+
+        if (storage == null) {
+            // All air — opacity 0 < 15, always needs skylight update
+            for (int blockY = maxBlockYInCube; blockY >= minBlockYInCube; --blockY) {
+                lm.checkLightFor(EnumSkyBlock.Sky, posX, blockY, posZ);
+            }
+
+            return;
+        }
+
+        World world = cube.getWorld();
+
+        int localX = posX & 0xF;
+        int localZ = posZ & 0xF;
+
         for (int blockY = maxBlockYInCube; blockY >= minBlockYInCube; --blockY) {
-            posY = blockY;
-            if (needsSkylightUpdate(cube, posX, posY, posZ)) {
-                lm.checkLightFor(EnumSkyBlock.Sky, posX, posY, posZ);
+            Block block = storage.getBlockByExtId(localX, blockY & 0xF, localZ);
+
+            if (block == Blocks.air || block.getLightOpacity(world, posX, blockY, posZ) < 15) {
+                // Semi-transparent or air: let Phosphor compute the correct sky value.
+                lm.checkLightFor(EnumSkyBlock.Sky, posX, blockY, posZ);
+            } else {
+                // Fully opaque: cannot receive or emit sky light. initSkylightForSection may have
+                // set sky=15 here when staging was empty at EBS creation; zero it directly so
+                // adjacent air blocks don't read a wrong neighbor value and brighten incorrectly.
+                cube.setLightFor(EnumSkyBlock.Sky, posX, blockY, posZ, 0);
             }
         }
-
-        return true;
-    }
-
-    /**
-     * Determines if the block at the given position requires a skylight update.
-     *
-     * @param x the block's global x position
-     * @param y the block's global y position
-     * @param z the block's global z position
-     * @return true if the specified block needs a skylight update, false otherwise
-     */
-    private static boolean needsSkylightUpdate(ICube cube, int x, int y, int z) {
-        // Opaque blocks don't need update. Nothing can emit skylight, and skylight can't get into them nor out of them.
-        IBlockAccess world = cube.getWorld();
-        return cube.getBlock(x, y, z)
-            .getLightOpacity(world, x, y, z) < 15;
-    }
-
-    /**
-     * Determines which vertical section of the specified block column in the given cube requires a lighting update
-     * based on the current occlusion in the cube's column.
-     *
-     * @param cube   the cube inside of which the skylight is to be updated
-     * @param localX the local x-coordinate of the block column
-     * @param localZ the local z-coordinate of the block column
-     *
-     * @return a pair containing the minimum and the maximum y-coordinate to be updated in the given cube
-     */
-    @Nullable
-    private static ImmutablePair<Integer, Integer> getMinMaxLightUpdateY(ICube cube, int localX, int localZ) {
-
-        IColumn column = cube.getColumn();
-        int heightMax = ((IColumnInternal) column).getTopYWithStaging(localX, localZ);// ==Y of the top block
-
-        // If the given cube is above the highest occluding block in the column, everything is fully lit.
-        int cubeY = cube.getY();
-        if (blockToCube(heightMax) < cubeY) {
-            return null;
-        }
-        // If the given cube lies underneath the occluding block,
-        // then only blocks in this cube need updating, already handled
-        // if (cubeY < blockToCube(heightMax)) {
-        // return null;
-        // }
-
-        // ... otherwise, the update must start at the occluding block.
-        int previousMaxHeight = column.getOpacityIndex()
-            .getTopBlockY(localX, localZ);
-        // noinspection SuspiciousNameCombination
-        return new ImmutablePair<>(previousMaxHeight, heightMax);
     }
 }
