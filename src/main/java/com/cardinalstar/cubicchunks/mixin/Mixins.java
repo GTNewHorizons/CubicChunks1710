@@ -309,6 +309,11 @@ public enum Mixins implements IMixins {
             .addCommonMixins("mod.MixinBlockPosUtil")
             .setPhase(Phase.LATE)
             .addRequiredMod(Mods.ChunkAPI)
+            .setApplyIf(() -> true)),
+    MIXIN_AE2_PLATFORM_SEND_CHUNK(
+        new MixinBuilder("Route AE2 chunk section resends through the cubic synchronization protocol")
+            .addCommonMixins("mod.MixinAE2Platform")
+            .setPhase(Phase.EARLY)
             .setApplyIf(() -> true))
     //
     ;
