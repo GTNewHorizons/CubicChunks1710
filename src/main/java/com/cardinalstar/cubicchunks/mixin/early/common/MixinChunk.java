@@ -63,6 +63,7 @@ import org.spongepowered.asm.mixin.injection.Slice;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
+import com.cardinalstar.cubicchunks.CubicChunks;
 import com.cardinalstar.cubicchunks.CubicChunksConfig;
 import com.cardinalstar.cubicchunks.api.IColumn;
 import com.cardinalstar.cubicchunks.api.ICube;
@@ -110,6 +111,8 @@ public abstract class MixinChunk implements IColumn, IColumnInternal {
 
     @Shadow
     public int[] heightMap;
+    @Shadow
+    public int[] precipitationHeightMap;
     @Shadow
     public World worldObj;
     @Shadow
@@ -837,13 +840,40 @@ public abstract class MixinChunk implements IColumn, IColumnInternal {
     // getPrecipitationHeight
     // ==============================================
 
-    // TODO WATCH THIS ONE
     @Inject(method = "getPrecipitationHeight", at = @At(value = "HEAD"), cancellable = true)
     private void getPrecipitationHeight_CubicChunks_Replace(int x, int z, CallbackInfoReturnable<Integer> cbi) {
         if (isColumn) {
-            // TODO: precipitationHeightMap
-            int ret = this.getHeightValue(blockToLocal(x), 0, blockToLocal(z));
-            cbi.setReturnValue(ret);
+            int localX = blockToLocal(x);
+            int localZ = blockToLocal(z);
+            int index = localX | localZ << 4;
+
+            if (precipitationHeightMap[index] == -999) {
+                precipitationHeightMap[index] = -1;
+
+                for (Cube cube : cubeMap.cubes(
+                    blockToCube(CubicChunks.MAX_SUPPORTED_BLOCK_Y),
+                    blockToCube(CubicChunks.MIN_SUPPORTED_BLOCK_Y))) {
+                    if (cube.getStorage() == null) {
+                        continue;
+                    }
+
+                    for (int localY = Cube.SIZE - 1; localY >= 0; localY--) {
+                        Block block = cube.getBlock(localX, localY, localZ);
+                        if (block.getMaterial()
+                            .blocksMovement()
+                            || block.getMaterial()
+                                .isLiquid()) {
+                            precipitationHeightMap[index] = cube.getCoords()
+                                .getMinBlockY() + localY
+                                + 1;
+                            cbi.setReturnValue(precipitationHeightMap[index]);
+                            return;
+                        }
+                    }
+                }
+            }
+
+            cbi.setReturnValue(precipitationHeightMap[index]);
         }
     }
 
@@ -985,6 +1015,8 @@ public abstract class MixinChunk implements IColumn, IColumnInternal {
     @Override
     public void addCube(Cube cube) {
         this.cubeMap.put(cube);
+
+        Arrays.fill(this.precipitationHeightMap, -999);
 
         cube.installIntoChunk();
     }
