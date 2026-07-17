@@ -1,6 +1,5 @@
 package com.cardinalstar.cubicchunks.mixin.early.mod;
 
-import net.minecraft.server.management.PlayerManager;
 import net.minecraft.world.WorldServer;
 import net.minecraft.world.chunk.Chunk;
 
@@ -22,11 +21,7 @@ public abstract class MixinAE2Platform {
             return;
         }
 
-        PlayerManager playerManager = world.getPlayerManager();
-
-        if (playerManager instanceof CubicPlayerManager cubicPlayerManager) {
-            cubicPlayerManager.resendChunkSections(chunk, sectionMask);
-            ci.cancel();
-        }
+        ((CubicPlayerManager) world.getPlayerManager()).resendChunkSections(chunk, sectionMask);
+        ci.cancel();
     }
 }
