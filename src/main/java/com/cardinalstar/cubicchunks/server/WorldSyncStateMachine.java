@@ -107,16 +107,7 @@ public class WorldSyncStateMachine {
                 columnData.syncedCubeCount++;
                 syncedCubes.add(pos);
 
-                PacketEncoderCube.createPacket(cube)
-                    .sendToPlayer(player.player);
-
-                cube.cubeTileEntityMap.forEach((tePos, te) -> {
-                    Packet desc = te.getDescriptionPacket();
-
-                    if (desc != null) {
-                        player.player.playerNetServerHandler.sendPacket(desc);
-                    }
-                });
+                sendCubeData(cube);
 
                 dirtyBlocks.remove(pos.getX(), pos.getY(), pos.getZ());
 
@@ -209,5 +200,26 @@ public class WorldSyncStateMachine {
     public void onBlockMarkedDirty(int x, int y, int z) {
         dirtyBlocks.computeIfAbsent(x >> 4, y >> 4, z >> 4, (x1, y1, z1) -> new ShortOpenHashSet())
             .add((short) AddressTools.getLocalAddress(x, y, z));
+    }
+
+    public void resendCube(Cube cube) {
+        CubePos pos = cube.getCoords();
+
+        if (syncedCubes.contains(pos) && player.isWatchingCube(pos.getX(), pos.getY(), pos.getZ())) {
+            sendCubeData(cube);
+        }
+    }
+
+    private void sendCubeData(Cube cube) {
+        PacketEncoderCube.createPacket(cube)
+            .sendToPlayer(player.player);
+
+        cube.cubeTileEntityMap.forEach((tePos, te) -> {
+            Packet desc = te.getDescriptionPacket();
+
+            if (desc != null) {
+                player.player.playerNetServerHandler.sendPacket(desc);
+            }
+        });
     }
 }

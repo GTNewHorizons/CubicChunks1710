@@ -246,6 +246,21 @@ public class CubicPlayerManager extends PlayerManager implements CubeLoaderCallb
         }
     }
 
+    public void resendChunkSections(Chunk column, int sectionMask) {
+        while (sectionMask != 0) {
+            int cubeY = Integer.numberOfTrailingZeros(sectionMask);
+            sectionMask &= ~(1 << cubeY);
+
+            Cube cube = provider.getLoadedCube(column.xPosition, cubeY, column.zPosition);
+
+            if (cube != null) {
+                for (var player : players.getPlayerArray()) {
+                    player.sync.resendCube(cube);
+                }
+            }
+        }
+    }
+
     // Note these arguments are in global block coordinates
 
     public void onSurfaceTracked(Cube cube) {
