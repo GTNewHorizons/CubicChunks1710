@@ -24,6 +24,7 @@ import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.world.World;
 import net.minecraft.world.WorldServer;
+import net.minecraftforge.event.world.ChunkDataEvent;
 import net.minecraftforge.event.world.WorldEvent;
 
 import com.cardinalstar.cubicchunks.server.CubicPlayerManager;
@@ -54,16 +55,29 @@ public class CubeEvent extends WorldEvent {
         }
     }
 
-    /// Invoked after a cube's tile entities are deserialized from NBT and added to
-    /// {@link Cube#cubeTileEntityMap}, but <em>before</em> they are registered with the world.
-    /// Listeners may modify {@link Cube#cubeTileEntityMap} to convert or replace tile entities.
-    public static class TileEntitiesLoad extends CubeEvent {
+    /// Cube equivalent of [ChunkDataEvent.Load].
+    public static class DataLoad extends CubeEvent {
 
         public final Cube cube;
+        public final NBTTagCompound tag;
 
-        public TileEntitiesLoad(World world, Cube cube) {
+        public DataLoad(World world, Cube cube, NBTTagCompound tag) {
             super(world, cube.getCoords());
             this.cube = cube;
+            this.tag = tag;
+        }
+    }
+
+    /// Cube equivalent of [ChunkDataEvent.Save].
+    public static class DataSave extends CubeEvent {
+
+        public final Cube cube;
+        public final NBTTagCompound tag;
+
+        public DataSave(World world, Cube cube, NBTTagCompound tag) {
+            super(world, cube.getCoords());
+            this.cube = cube;
+            this.tag = tag;
         }
     }
 

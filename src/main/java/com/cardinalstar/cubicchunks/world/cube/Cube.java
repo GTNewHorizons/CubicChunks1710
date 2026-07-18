@@ -611,8 +611,6 @@ public class Cube implements ICube {
         }
         isCubeLoaded = true;
 
-        // allow mods to convert/replace tile entities before world registration
-        EVENT_BUS.post(new CubeEvent.TileEntitiesLoad(world, this));
         // tell the world about tile entities
         this.world.func_147448_a(this.cubeTileEntityMap.values());
         this.world.addLoadedEntities(this.entities);

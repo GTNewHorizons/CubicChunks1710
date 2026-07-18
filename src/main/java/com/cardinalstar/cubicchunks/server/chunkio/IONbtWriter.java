@@ -43,6 +43,9 @@ import org.apache.logging.log4j.Level;
 import com.cardinalstar.cubicchunks.CubicChunks;
 import com.cardinalstar.cubicchunks.api.IColumn;
 import com.cardinalstar.cubicchunks.api.IHeightMap;
+import com.cardinalstar.cubicchunks.api.event.CubeEvent;
+import com.cardinalstar.cubicchunks.api.event.CubeEvent.DataLoad;
+import com.cardinalstar.cubicchunks.api.event.CubeEvent.DataSave;
 import com.cardinalstar.cubicchunks.lighting.ILightingManager;
 import com.cardinalstar.cubicchunks.mixin.api.ICubicWorldInternal;
 import com.cardinalstar.cubicchunks.network.CCPacketBuffer;
@@ -107,6 +110,8 @@ class IONbtWriter {
         writeScheduledTicks(cube, level);
         writeLightingInfo(cube, level);
         writeBiomes(cube, level);
+
+        EVENT_BUS.post(new DataSave(cube.getWorld(), cube, cubeNbt));
 
         return cubeNbt;
     }
