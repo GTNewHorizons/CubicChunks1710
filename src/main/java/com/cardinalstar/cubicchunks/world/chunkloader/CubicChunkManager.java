@@ -275,11 +275,11 @@ public class CubicChunkManager {
     public static void onForgeChunkManagerUnforceChunk(ForgeChunkManager.UnforceChunkEvent event) {
         ForgeChunkManager.Ticket ticket = event.ticket;
         World world = ticket.world;
+        // Null when vanilla mods force chunks via ForgeChunkManager directly, since onForgeChunkManagerForceChunk
+        // does not yet populate the cube map (see TODO there). Nothing to unforce in that case.
         IntSet forcedCubes = ((ICubicTicketInternal) ticket).getAllForcedChunkCubes()
             .get(event.location);
         if (forcedCubes == null) {
-            CubicChunks.LOGGER
-                .warn("CubicChunkManager: Unforcing chunk with no information about forced cubes at " + event.location);
             return;
         }
         for (int cubeY : forcedCubes) {

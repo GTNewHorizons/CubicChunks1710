@@ -300,6 +300,15 @@ public enum Mixins implements IMixins {
     // =============================================================
     // Mod Mixins
     // =============================================================
+    MIXIN_FORGE_CHUNK_MANAGER_TICKET(new MixinBuilder("Add cubic chunk ticket data to ForgeChunkManager$Ticket")
+        .addCommonMixins("common.forge.MixinTicket")
+        .setPhase(Phase.EARLY)
+        .setApplyIf(() -> true)),
+    MIXIN_FORGE_CHUNK_MANAGER(new MixinBuilder("Add cubic chunk hooks to ForgeChunkManager loadWorld/saveWorld")
+        .addCommonMixins("common.forge.MixinForgeChunkManager")
+        .setPhase(Phase.EARLY)
+        .setApplyIf(() -> true)),
+
     MIXIN_COORD_PACKER_HODGE(new MixinBuilder("Overwrite GTNHLib CoordinatePacker algorithm with a CC-compatible one")
         .addCommonMixins("mod.MixinCoordinatePacker")
         .setPhase(Phase.EARLY)
