@@ -110,7 +110,7 @@ public class CubeProviderClient extends ChunkProviderClient implements ICubeProv
 
         if (init != null) init.accept(column);
 
-        //noinspection ConstantValue
+        // noinspection ConstantValue
         if (isNew) {
             // fire a forge event... make mods happy :)
             EVENT_BUS.post(new ChunkEvent.Load(column));
