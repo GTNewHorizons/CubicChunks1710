@@ -54,6 +54,19 @@ public class CubeEvent extends WorldEvent {
         }
     }
 
+    /// Invoked after a cube's tile entities are deserialized from NBT and added to
+    /// {@link Cube#cubeTileEntityMap}, but <em>before</em> they are registered with the world.
+    /// Listeners may modify {@link Cube#cubeTileEntityMap} to convert or replace tile entities.
+    public static class TileEntitiesLoad extends CubeEvent {
+
+        public final Cube cube;
+
+        public TileEntitiesLoad(World world, Cube cube) {
+            super(world, cube.getCoords());
+            this.cube = cube;
+        }
+    }
+
     /// Invoked immediately before a cube is removed from the world.
     public static class Unload extends CubeEvent {
 
