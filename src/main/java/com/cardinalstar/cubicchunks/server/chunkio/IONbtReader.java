@@ -20,6 +20,8 @@
  */
 package com.cardinalstar.cubicchunks.server.chunkio;
 
+import static net.minecraftforge.common.MinecraftForge.EVENT_BUS;
+
 import java.io.IOException;
 import java.util.Arrays;
 
@@ -43,6 +45,7 @@ import net.minecraftforge.common.util.Constants.NBT;
 import com.cardinalstar.cubicchunks.CubicChunks;
 import com.cardinalstar.cubicchunks.api.IColumn;
 import com.cardinalstar.cubicchunks.api.IHeightMap;
+import com.cardinalstar.cubicchunks.api.event.CubeEvent.DataLoad;
 import com.cardinalstar.cubicchunks.lighting.ILightingManager;
 import com.cardinalstar.cubicchunks.mixin.api.ICubicWorldInternal;
 import com.cardinalstar.cubicchunks.network.CCPacketBuffer;
@@ -210,6 +213,8 @@ public class IONbtReader {
 
         cube.getColumn()
             .preCacheCube(cube);
+
+        EVENT_BUS.post(new DataLoad(world, cube, nbt));
 
         return cube;
     }

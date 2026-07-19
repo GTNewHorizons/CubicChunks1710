@@ -54,6 +54,32 @@ public class CubeEvent extends WorldEvent {
         }
     }
 
+    /// Cube equivalent of [ChunkDataEvent.Load].
+    public static class DataLoad extends CubeEvent {
+
+        public final Cube cube;
+        public final NBTTagCompound tag;
+
+        public DataLoad(World world, Cube cube, NBTTagCompound tag) {
+            super(world, cube.getCoords());
+            this.cube = cube;
+            this.tag = tag;
+        }
+    }
+
+    /// Cube equivalent of [ChunkDataEvent.Save].
+    public static class DataSave extends CubeEvent {
+
+        public final Cube cube;
+        public final NBTTagCompound tag;
+
+        public DataSave(World world, Cube cube, NBTTagCompound tag) {
+            super(world, cube.getCoords());
+            this.cube = cube;
+            this.tag = tag;
+        }
+    }
+
     /// Invoked immediately before a cube is removed from the world.
     public static class Unload extends CubeEvent {
 
