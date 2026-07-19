@@ -545,9 +545,7 @@ public abstract class MixinWorld_HeightLimit implements ICubicWorld {
         @Local(argsOnly = true, ordinal = 1) int y, @Local(argsOnly = true, ordinal = 2) int z) {
         ICube cube = ((IColumn) column).getCube(Coords.blockToCube(y));
 
-        if (cube == null || cube.isEmpty()) return false;
-
-        return cube.isPopulated();
+        return cube != null && cube.isPopulated();
     }
 
     @Redirect(
