@@ -25,7 +25,6 @@ import java.util.Set;
 
 import javax.annotation.ParametersAreNonnullByDefault;
 
-import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.world.ChunkCoordIntPair;
 
 import com.cardinalstar.cubicchunks.api.ICubicTicket;

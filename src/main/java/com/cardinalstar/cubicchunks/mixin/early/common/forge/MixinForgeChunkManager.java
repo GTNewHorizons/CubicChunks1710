@@ -20,21 +20,15 @@
  */
 package com.cardinalstar.cubicchunks.mixin.early.common.forge;
 
-import java.util.Map;
-
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.world.World;
 import net.minecraftforge.common.ForgeChunkManager;
 import net.minecraftforge.common.ForgeChunkManager.Ticket;
 import net.minecraftforge.common.ForgeChunkManager.Type;
 
-import org.objectweb.asm.Opcodes;
 import org.spongepowered.asm.mixin.Mixin;
-import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.Redirect;
-import org.spongepowered.asm.mixin.injection.Slice;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 import com.cardinalstar.cubicchunks.world.chunkloader.CubicChunkManager;
@@ -49,8 +43,8 @@ public abstract class MixinForgeChunkManager {
         method = "loadWorld",
         at = @At(value = "NEW", target = "net/minecraftforge/common/ForgeChunkManager$Ticket"),
         remap = false)
-    private static ForgeChunkManager.Ticket redirectTicketNew(
-        String modId, Type type, World world, Operation<Ticket> original, @Local(name = "ticket") NBTTagCompound tag) {
+    private static ForgeChunkManager.Ticket redirectTicketNew(String modId, Type type, World world,
+        Operation<Ticket> original, @Local(name = "ticket") NBTTagCompound tag) {
         Ticket ticket = original.call(modId, type, world);
 
         CubicChunkManager.onDeserializeTicket(tag, ticket);
