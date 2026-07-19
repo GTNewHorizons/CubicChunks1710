@@ -51,9 +51,6 @@ public interface ICubicTicketInternal extends ICubicTicket, ITicket {
     void setAllForcedChunkCubes(Map<ChunkCoordIntPair, IntSet> cubePosMap);
 
     // setters and getters for private data, because no ATs for forge classes
-    void setModData(NBTTagCompound modData);
-
-    void setPlayer(String player);
 
     void setEntityChunkX(int chunkX);
 

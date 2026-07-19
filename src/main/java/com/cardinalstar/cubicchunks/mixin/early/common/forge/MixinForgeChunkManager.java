@@ -45,51 +45,16 @@ import com.llamalad7.mixinextras.sugar.Local;
 @Mixin(ForgeChunkManager.class)
 public abstract class MixinForgeChunkManager {
 
-    @Shadow(remap = false)
-    private static int dormantChunkCacheSize;
-
-    // Only insert into dormantChunkCache when dormant chunk caching is actually enabled.
-    // Forge does this unconditionally, which creates a cache entry even when the feature is off.
-    @WrapOperation(
-        method = "loadWorld",
-        at = @At(
-            value = "INVOKE",
-            target = "Ljava/util/Map;put(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;"),
-        slice = @Slice(
-            from = @At(
-                value = "FIELD",
-                target = "Lnet/minecraftforge/common/ForgeChunkManager;dormantChunkCacheSize:I",
-                remap = false,
-                opcode = Opcodes.GETSTATIC)),
-        remap = false)
-    private static Object guardDormantCachePut(Map<Object, Object> map, Object world, Object cache,
-        Operation<Object> op) {
-        if (dormantChunkCacheSize != 0) {
-            return op.call(map, world, cache);
-        }
-        return null;
-    }
-
-    // Route ticket construction through CubicChunkManager.makeTicket() because the Ticket
-    // constructor is package-private and unreachable from outside net.minecraftforge.common.
-    @Redirect(
-        method = "loadWorld",
-        at = @At(value = "NEW", target = "net/minecraftforge/common/ForgeChunkManager$Ticket"),
-        remap = false)
-    private static ForgeChunkManager.Ticket redirectTicketNew(String modId, ForgeChunkManager.Type type, World world) {
-        return CubicChunkManager.makeTicket(modId, type, world);
-    }
-
-    // After each ticket is created, read back the cubic chunks NBT data (cube Y coordinates).
     @WrapOperation(
         method = "loadWorld",
         at = @At(value = "NEW", target = "net/minecraftforge/common/ForgeChunkManager$Ticket"),
         remap = false)
-    private static Ticket injectDeserializeTicket(String modId, Type type, World world, Operation<Ticket> original,
-        @Local(name = "ticket") NBTTagCompound tag) {
+    private static ForgeChunkManager.Ticket redirectTicketNew(
+        String modId, Type type, World world, Operation<Ticket> original, @Local(name = "ticket") NBTTagCompound tag) {
         Ticket ticket = original.call(modId, type, world);
 
         CubicChunkManager.onDeserializeTicket(tag, ticket);
+
         return ticket;
     }
 

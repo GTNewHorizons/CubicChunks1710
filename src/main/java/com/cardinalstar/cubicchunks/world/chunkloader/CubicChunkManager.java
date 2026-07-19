@@ -73,9 +73,6 @@ public class CubicChunkManager {
      * When serializing forced chunks, we also store this map in a file, and load it when a world is loaded.
      */
 
-    private static final MethodHandle ticketConstructor = ReflectionUtil
-        .constructHandle(ForgeChunkManager.Ticket.class, String.class, ForgeChunkManager.Type.class, World.class);
-
     /**
      * Force the supplied chunk coordinate to be loaded by the supplied ticket. If the ticket's maxDepth is
      * exceeded, the least
@@ -155,22 +152,6 @@ public class CubicChunkManager {
     }
 
     // internals
-
-    private static ModContainer getContainer(Object mod) {
-        ModContainer container = Loader.instance()
-            .getModObjectList()
-            .inverse()
-            .get(mod);
-        return container;
-    }
-
-    public static ForgeChunkManager.Ticket makeTicket(String str, ForgeChunkManager.Type type, World world) {
-        try {
-            return cast(ticketConstructor.invoke(str, type, world));
-        } catch (Throwable throwable) {
-            throw new RuntimeException(throwable);
-        }
-    }
 
     public static void onDeserializeTicket(NBTTagCompound ticketNBT, ForgeChunkManager.Ticket ticket) {
         NBTTagCompound cubicNBT = ticketNBT.getCompoundTag("cubicchunks");

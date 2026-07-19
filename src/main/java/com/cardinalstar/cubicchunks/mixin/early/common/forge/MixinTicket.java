@@ -57,14 +57,6 @@ public abstract class MixinTicket implements ICubicTicketInternal {
 
     @Override
     @Accessor
-    public abstract void setModData(NBTTagCompound modData);
-
-    @Override
-    @Accessor
-    public abstract void setPlayer(String player);
-
-    @Override
-    @Accessor
     public abstract void setEntityChunkX(int chunkX);
 
     @Override
