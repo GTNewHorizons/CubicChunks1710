@@ -94,10 +94,6 @@ public enum Mixins implements IMixins {
             .addCommonMixins("common.MixinWorld_DeferInit", "common.MixinWorld_DeferInit$MixinWorldServer")
             .setPhase(Phase.EARLY)
             .setApplyIf(() -> true)),
-    UNSAFE_LIGHTING(new MixinBuilder("Disable some pointless operations while performing light checks")
-        .addCommonMixins("common.MixinBlock_Lighting")
-        .setPhase(Phase.EARLY)
-        .setApplyIf(() -> true)),
 
     // CHUNK
     MIXIN_CHUNK(new MixinBuilder("Various modifications to inject cubes, height map patches, etc into Chunks.")
