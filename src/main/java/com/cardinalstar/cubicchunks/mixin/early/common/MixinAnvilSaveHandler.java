@@ -32,7 +32,6 @@ import org.spongepowered.asm.mixin.injection.Redirect;
 
 import com.cardinalstar.cubicchunks.server.CubicAnvilChunkLoader;
 import com.cardinalstar.cubicchunks.world.ICubicWorld;
-import com.cardinalstar.cubicchunks.world.ICubicWorldProvider;
 import com.cardinalstar.cubicchunks.world.cube.ICubeProviderInternal;
 
 @Mixin(AnvilSaveHandler.class)
@@ -43,9 +42,9 @@ public abstract class MixinAnvilSaveHandler {
         at = @At(value = "NEW", target = "(Ljava/io/File;)Lnet/minecraft/world/chunk/storage/AnvilChunkLoader;"),
         remap = false)
     private AnvilChunkLoader getChunkLoader(File file, WorldProvider provider) {
-        ICubicWorld world = ((ICubicWorld) ((ICubicWorldProvider) provider).getWorld());
+        ICubicWorld world = (ICubicWorld) provider.worldObj;
 
         // Use a supplier because we're in the process of overwriting the vanilla chunk provider.
-        return new CubicAnvilChunkLoader(file, () -> ((ICubeProviderInternal.Server) world.getCubeCache()));
+        return new CubicAnvilChunkLoader(file, () -> (ICubeProviderInternal.Server) world.getCubeCache());
     }
 }

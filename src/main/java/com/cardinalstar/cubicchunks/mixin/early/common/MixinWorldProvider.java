@@ -20,15 +20,12 @@
  */
 package com.cardinalstar.cubicchunks.mixin.early.common;
 
-import javax.annotation.Nullable;
 import javax.annotation.ParametersAreNonnullByDefault;
 
 import net.minecraft.init.Blocks;
 import net.minecraft.util.ChunkCoordinates;
 import net.minecraft.world.World;
 import net.minecraft.world.WorldProvider;
-import net.minecraft.world.WorldType;
-import net.minecraft.world.chunk.IChunkProvider;
 
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Overwrite;
@@ -38,31 +35,16 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 import com.cardinalstar.cubicchunks.api.world.ICubicWorldType;
-import com.cardinalstar.cubicchunks.api.worldgen.BuiltinWorldDecorators;
-import com.cardinalstar.cubicchunks.api.worldgen.IWorldGenerator;
 import com.cardinalstar.cubicchunks.world.ICubicWorld;
-import com.cardinalstar.cubicchunks.world.ICubicWorldProvider;
 import com.cardinalstar.cubicchunks.world.SpawnPlaceFinder;
-import com.cardinalstar.cubicchunks.worldgen.VanillaWorldGenerator;
 import com.gtnewhorizon.gtnhlib.blockpos.BlockPos;
 
 @ParametersAreNonnullByDefault
 @Mixin(WorldProvider.class)
-public abstract class MixinWorldProvider implements ICubicWorldProvider {
+public abstract class MixinWorldProvider {
 
     @Shadow
     public World worldObj;
-
-    @Shadow
-    public boolean isHellWorld;
-
-    @Shadow
-    public abstract IChunkProvider createChunkGenerator();
-
-    @Shadow(remap = false)
-    public abstract int getActualHeight();
-
-    private boolean getActualHeightForceOriginalFlag = false;
 
     /**
      * @return world height
@@ -83,32 +65,6 @@ public abstract class MixinWorldProvider implements ICubicWorldProvider {
         cir.setReturnValue(((ICubicWorld) worldObj).getMaxGenerationHeight());
     }
 
-    @Override
-    public int getOriginalActualHeight() {
-        try {
-            getActualHeightForceOriginalFlag = true;
-            return getActualHeight();
-        } finally {
-            getActualHeightForceOriginalFlag = false;
-        }
-    }
-
-    @Nullable
-    @Override
-    public IWorldGenerator createCubeGenerator() {
-        WorldType terrainType = worldObj.getWorldInfo()
-            .getTerrainType();
-
-        if (terrainType instanceof ICubicWorldType ccWorldType && ccWorldType.hasCubicGeneratorForWorld(worldObj)) {
-            return ccWorldType.createCubeGenerator(worldObj);
-        }
-
-        return new VanillaWorldGenerator(
-            worldObj.provider.createChunkGenerator(),
-            worldObj,
-            BuiltinWorldDecorators.VANILLA);
-    }
-
     @Inject(method = "getRandomizedSpawnPoint", at = @At(value = "HEAD"), cancellable = true, remap = false)
     private void findRandomizedSpawnPoint(CallbackInfoReturnable<ChunkCoordinates> cir) {
         cir.setReturnValue(SpawnPlaceFinder.getRandomizedSpawnPoint(worldObj));
@@ -124,11 +80,5 @@ public abstract class MixinWorldProvider implements ICubicWorldProvider {
         } else {
             cir.setReturnValue(this.worldObj.getBlock(top.x, top.y, top.z) == Blocks.grass);
         }
-
-    }
-
-    @Override
-    public World getWorld() {
-        return worldObj;
     }
 }
