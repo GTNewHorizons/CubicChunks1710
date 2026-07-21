@@ -197,8 +197,13 @@ public class CubeIO implements ICubeIO {
         try {
             NBTTagCompound tag = storage.readColumn(pos);
 
-            if (tag == null) {
-                synchronized (columnCache) {
+            synchronized (columnCache) {
+                SaveData cached = columnCache.get(pos);
+                if (cached != null) {
+                    return cached.tag == null ? null : (NBTTagCompound) cached.tag.copy();
+                }
+
+                if (tag == null) {
                     columnCache.put(pos, new SaveData(null, null, System.currentTimeMillis()));
                 }
             }
@@ -223,8 +228,13 @@ public class CubeIO implements ICubeIO {
         try {
             NBTTagCompound tag = storage.readCube(pos);
 
-            if (tag == null) {
-                synchronized (cubeCache) {
+            synchronized (cubeCache) {
+                SaveData cached = cubeCache.get(pos);
+                if (cached != null) {
+                    return cached.tag == null ? null : (NBTTagCompound) cached.tag.copy();
+                }
+
+                if (tag == null) {
                     cubeCache.put(pos, new SaveData(null, null, System.currentTimeMillis()));
                 }
             }
@@ -355,30 +365,46 @@ public class CubeIO implements ICubeIO {
 
     @Override
     public void preloadColumn(ChunkCoordIntPair pos) {
+        synchronized (columnCache) {
+            if (columnCache.containsKey(pos)) return;
+        }
+
         TaskPool.submit(columnLoadExecutor, pos, tag -> {
+            synchronized (columnCache) {
+                if (columnCache.containsKey(pos)) {
+                    return;
+                }
+
+                columnCache.put(pos, new SaveData(tag.orElse(null), null, System.currentTimeMillis()));
+            }
+
             if (!tag.isPresent()) {
                 if (preloadFailures != null) preloadFailures.onColumnPreloadFailed(pos);
-            } else {
-                synchronized (columnCache) {
-                    columnCache.put(pos, new SaveData(tag.orElse(null), null, System.currentTimeMillis()));
-                }
             }
         });
     }
 
     @Override
     public void preloadCube(CubePos pos, CubeInitLevel wanted) {
+        synchronized (cubeCache) {
+            if (cubeCache.containsKey(pos)) return;
+        }
+
         TaskPool.submit(cubeLoadExecutor, pos, tag -> {
+            synchronized (cubeCache) {
+                if (cubeCache.containsKey(pos)) {
+                    return;
+                }
+
+                cubeCache.put(pos, new SaveData(tag.orElse(null), null, System.currentTimeMillis()));
+            }
+
             CubeInitLevel actual = !tag.isPresent() ? CubeInitLevel.None : IONbtReader.getCubeInitLevel(tag.get());
 
             if (actual.ordinal() < wanted.ordinal()) {
                 if (preloadFailures != null) {
                     preloadFailures.onCubePreloadFailed(pos, CubeInitLevel.None, wanted);
                 }
-            }
-
-            synchronized (cubeCache) {
-                cubeCache.put(pos, new SaveData(tag.orElse(null), null, System.currentTimeMillis()));
             }
         });
     }
