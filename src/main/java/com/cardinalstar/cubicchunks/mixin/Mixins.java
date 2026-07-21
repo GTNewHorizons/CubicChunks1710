@@ -124,10 +124,10 @@ public enum Mixins implements IMixins {
         new MixinBuilder("Mixin for world settings allowing cubes.").addCommonMixins("common.MixinWorldSettings")
             .setPhase(Phase.EARLY)
             .setApplyIf(() -> true)),
-    MIXIN_WORLD_PROVIDER(
-        new MixinBuilder("Intercept WorldProvider getActualHeight + player spawning.").addCommonMixins("common.MixinWorldProvider")
-            .setPhase(Phase.EARLY)
-            .setApplyIf(() -> true)),
+    MIXIN_WORLD_PROVIDER(new MixinBuilder("Intercept WorldProvider getActualHeight + player spawning.")
+        .addCommonMixins("common.MixinWorldProvider")
+        .setPhase(Phase.EARLY)
+        .setApplyIf(() -> true)),
     MIXIN_WORLD(new MixinBuilder("Implementing ICubicWorld.").addCommonMixins("common.MixinWorld")
         .setPhase(Phase.EARLY)
         .setApplyIf(() -> true)),

@@ -7,13 +7,14 @@ import org.jetbrains.annotations.NotNull;
 
 import com.cardinalstar.cubicchunks.api.IntRange;
 import com.cardinalstar.cubicchunks.api.worldgen.IWorldGenerator;
+import com.cardinalstar.cubicchunks.worldgen.VanillaWorldGenerator;
 
 /// Implemented on a [WorldProvider]. This is primarily used by mods to make their dimensions cubic. [ICubicWorldType]
 /// takes priority over this interface. When a [WorldProvider] does not implement this interface,
 /// [WorldProvider#createChunkGenerator()] is called and the result is wrapped by a [VanillaWorldGenerator].
 public interface ICubicWorldProvider {
 
-    /// @deprecated Implement [#createCubeGenerator(IChunkProvider)] instead.
+    /// @deprecated New parameter: implement [#createCubeGenerator(IChunkProvider)] instead.
     @Deprecated
     @NotNull
     default IWorldGenerator createCubeGenerator() {
@@ -25,7 +26,7 @@ public interface ICubicWorldProvider {
         return createCubeGenerator();
     }
 
-    /// @deprecated Implement [#getGenerationRange()] instead.
+    /// @deprecated Renamed: implement [#getGenerationRange()] instead.
     @Deprecated
     default int getOriginalActualHeight() {
         throw new UnsupportedOperationException();
@@ -35,7 +36,7 @@ public interface ICubicWorldProvider {
         return new IntRange(0, getOriginalActualHeight());
     }
 
-    /// @deprecated Unused
+    /// @deprecated Pointless due to public field: safe to remove
     @Deprecated
     default World getWorld() {
         return null;
