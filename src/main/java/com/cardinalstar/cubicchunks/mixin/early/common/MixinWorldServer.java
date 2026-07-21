@@ -158,12 +158,8 @@ public abstract class MixinWorldServer extends MixinWorld implements ICubicWorld
         return new CubicPlayerManager(server);
     }
 
-    /**
-     * @author Recursive Pineapple
-     * @reason To avoid implicit mixin conflicts
-     */
-    @Overwrite
-    protected IChunkProvider createChunkProvider() {
+    @Inject(method = "createChunkProvider", at = @At("HEAD"), cancellable = true)
+    private void interceptChunkProvider(CallbackInfoReturnable<IChunkProvider> cir) {
         WorldServer self = (WorldServer) (Object) this;
 
         WorldType terrainType = self.getWorldInfo()
@@ -185,7 +181,7 @@ public abstract class MixinWorldServer extends MixinWorld implements ICubicWorld
 
         this.theChunkProviderServer = new CubeProviderServer(self, chunkLoader, cubicGenerator, chunkGenerator);
 
-        return this.theChunkProviderServer;
+        cir.setReturnValue(this.theChunkProviderServer);
     }
 
     @Inject(method = "getChunkSaveLocation", at = @At("HEAD"), cancellable = true, remap = false)
