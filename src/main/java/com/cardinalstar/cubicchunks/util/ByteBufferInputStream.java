@@ -7,6 +7,7 @@ import java.nio.ByteBuffer;
 import org.jetbrains.annotations.NotNull;
 
 public final class ByteBufferInputStream extends InputStream {
+
     private final ByteBuffer buffer;
 
     public ByteBufferInputStream(ByteBuffer buffer) {

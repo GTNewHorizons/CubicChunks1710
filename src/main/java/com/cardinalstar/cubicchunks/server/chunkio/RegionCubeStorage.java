@@ -43,6 +43,7 @@ import com.cardinalstar.cubicchunks.server.chunkio.CCNBTUtils.TagCompression;
 import com.cardinalstar.cubicchunks.server.chunkio.region.ShadowPagingRegion;
 import com.cardinalstar.cubicchunks.util.CubePos;
 import com.cardinalstar.cubicchunks.util.DataUtils;
+
 import cubicchunks.regionlib.impl.EntryLocation2D;
 import cubicchunks.regionlib.impl.EntryLocation3D;
 import cubicchunks.regionlib.impl.SaveCubeColumns;
@@ -142,8 +143,7 @@ public class RegionCubeStorage implements ICubicStorage {
         Optional<ByteBuffer> data = this.save.load(new EntryLocation2D(pos.chunkXPos, pos.chunkZPos), true);
         if (!data.isPresent()) return null;
 
-        return CCNBTUtils.loadTag(
-            data.get());
+        return CCNBTUtils.loadTag(data.get());
     }
 
     @Override
@@ -152,8 +152,7 @@ public class RegionCubeStorage implements ICubicStorage {
         Optional<ByteBuffer> data = this.save.load(new EntryLocation3D(pos.getX(), pos.getY(), pos.getZ()), true);
         if (!data.isPresent()) return null;
 
-        return CCNBTUtils.loadTag(
-            data.get());
+        return CCNBTUtils.loadTag(data.get());
     }
 
     @Override
@@ -174,8 +173,7 @@ public class RegionCubeStorage implements ICubicStorage {
                                 .getEntryX(),
                             e.getKey()
                                 .getEntryZ()),
-                        CCNBTUtils.loadTag(
-                            e.getValue()));
+                        CCNBTUtils.loadTag(e.getValue()));
                 } catch (IOException ex) {
                     throw new UncheckedIOException(ex);
                 }
@@ -194,8 +192,7 @@ public class RegionCubeStorage implements ICubicStorage {
                                 .getEntryY(),
                             e.getKey()
                                 .getEntryZ()),
-                        CCNBTUtils.loadTag(
-                            e.getValue()));
+                        CCNBTUtils.loadTag(e.getValue()));
                 } catch (IOException ex) {
                     throw new UncheckedIOException(ex);
                 }

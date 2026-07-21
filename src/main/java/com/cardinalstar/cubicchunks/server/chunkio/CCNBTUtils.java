@@ -11,6 +11,7 @@ import java.nio.ByteOrder;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
 
+import net.jpountz.lz4.LZ4Factory;
 import net.minecraft.nbt.CompressedStreamTools;
 import net.minecraft.nbt.NBTBase;
 import net.minecraft.nbt.NBTSizeTracker;
@@ -26,7 +27,6 @@ import com.cardinalstar.cubicchunks.mixin.early.common.AccessorNBTTagCompound;
 import com.cardinalstar.cubicchunks.mixin.early.common.AccessorNBTTagList;
 import com.cardinalstar.cubicchunks.util.ByteBufferInputStream;
 import com.gtnewhorizon.gtnhlib.bytebuf.MemoryUtilities;
-import net.jpountz.lz4.LZ4Factory;
 
 public class CCNBTUtils {
 
@@ -50,7 +50,9 @@ public class CCNBTUtils {
             ByteBuffer decompressed = MemoryUtilities.memAlloc(decompLen);
 
             try {
-                LZ4Factory.fastestInstance().fastDecompressor().decompress(data, 8, decompressed, 0, decompLen);
+                LZ4Factory.fastestInstance()
+                    .fastDecompressor()
+                    .decompress(data, 8, decompressed, 0, decompLen);
 
                 decompressed.limit(decompLen);
 
@@ -74,11 +76,13 @@ public class CCNBTUtils {
         switch (compression) {
             case GZIP -> {
                 try (ByteArrayOutputStream nos = new ByteArrayOutputStream(getTagSizeEstimate(tag))) {
-                    try (DataOutputStream dos = new DataOutputStream(new BufferedOutputStream(new GZIPOutputStream2(nos)))) {
+                    try (DataOutputStream dos = new DataOutputStream(
+                        new BufferedOutputStream(new GZIPOutputStream2(nos)))) {
                         CompressedStreamTools.write(tag, dos);
                     }
 
-                    return ByteBuffer.wrap(nos.toByteArray()).order(ByteOrder.LITTLE_ENDIAN);
+                    return ByteBuffer.wrap(nos.toByteArray())
+                        .order(ByteOrder.LITTLE_ENDIAN);
                 }
             }
             case FastLZ4 -> {
@@ -89,9 +93,12 @@ public class CCNBTUtils {
 
                     byte[] data = nos.toByteArray();
 
-                    ByteBuffer compressed = ByteBuffer.allocate(data.length + 8).order(ByteOrder.LITTLE_ENDIAN);
+                    ByteBuffer compressed = ByteBuffer.allocate(data.length + 8)
+                        .order(ByteOrder.LITTLE_ENDIAN);
 
-                    int compLen = LZ4Factory.fastestInstance().fastCompressor().compress(data, 0, data.length, compressed.array(), 8);
+                    int compLen = LZ4Factory.fastestInstance()
+                        .fastCompressor()
+                        .compress(data, 0, data.length, compressed.array(), 8);
 
                     compressed.putInt(0, LZ4_MAGIC_NUMBER);
                     compressed.putInt(4, data.length);

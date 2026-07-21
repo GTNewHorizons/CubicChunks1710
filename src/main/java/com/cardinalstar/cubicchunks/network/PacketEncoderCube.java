@@ -22,6 +22,7 @@ package com.cardinalstar.cubicchunks.network;
 
 import javax.annotation.ParametersAreNonnullByDefault;
 
+import net.jpountz.lz4.LZ4Factory;
 import net.minecraft.world.World;
 
 import com.cardinalstar.cubicchunks.CubicChunks;
@@ -32,9 +33,9 @@ import com.cardinalstar.cubicchunks.util.CubeStatusVisualizer;
 import com.cardinalstar.cubicchunks.util.CubeStatusVisualizer.CubeStatus;
 import com.cardinalstar.cubicchunks.world.cube.Cube;
 import com.github.bsideup.jabel.Desugar;
+
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
-import net.jpountz.lz4.LZ4Factory;
 
 @ParametersAreNonnullByDefault
 public class PacketEncoderCube extends CCPacketEncoder<PacketCube> {
