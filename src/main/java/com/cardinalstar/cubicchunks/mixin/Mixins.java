@@ -322,7 +322,8 @@ public enum Mixins implements IMixins {
             .setApplyIf(() -> true)),
     MIXIN_JOURNEYMAP_SURFACE_READY(new MixinBuilder("Delay JourneyMap updates until cubic surface data is loaded")
         .addClientMixins("mod.MixinJourneyMapForgeHelper")
-        .setPhase(Phase.EARLY)
+        .setPhase(Phase.LATE)
+        .addRequiredMod(Mods.JourneyMap)
         .setApplyIf(() -> true))
     //
     ;
