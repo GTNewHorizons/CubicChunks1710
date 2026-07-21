@@ -66,7 +66,8 @@ public class CCNBTUtils {
             }
         }
 
-        if (data.getLong(0) == NONE_MAGIC_NUMBER_UUID.getLeastSignificantBits() && data.getLong(8) == NONE_MAGIC_NUMBER_UUID.getMostSignificantBits()) {
+        if (data.getLong(0) == NONE_MAGIC_NUMBER_UUID.getLeastSignificantBits()
+            && data.getLong(8) == NONE_MAGIC_NUMBER_UUID.getMostSignificantBits()) {
             data.position(16);
 
             try (DataInputStream dos = new DataInputStream(new ByteBufferInputStream(data))) {
