@@ -204,7 +204,7 @@ public class RegionCubeStorage implements ICubicStorage {
 
     @Override
     public void writeColumn(ChunkCoordIntPair pos, NBTTagCompound nbt) throws IOException {
-        ByteBuffer compressed = CCNBTUtils.saveTag(nbt, TagCompression.FastLZ4);
+        ByteBuffer compressed = CCNBTUtils.saveTag(nbt, CubicChunksConfig.chunkCompression);
 
         // write compressed data to disk
         this.save.save2d(new EntryLocation2D(pos.chunkXPos, pos.chunkZPos), compressed);
@@ -212,7 +212,7 @@ public class RegionCubeStorage implements ICubicStorage {
 
     @Override
     public void writeCube(CubePos pos, NBTTagCompound nbt) throws IOException {
-        ByteBuffer compressed = CCNBTUtils.saveTag(nbt, TagCompression.FastLZ4);
+        ByteBuffer compressed = CCNBTUtils.saveTag(nbt, CubicChunksConfig.chunkCompression);
 
         // write compressed data to disk
         this.save.save3d(new EntryLocation3D(pos.getX(), pos.getY(), pos.getZ()), compressed);
@@ -246,7 +246,7 @@ public class RegionCubeStorage implements ICubicStorage {
                 .parallelStream()
                 .collect(Collectors.toMap(entry -> keyMappingFunction.apply(entry.getKey()), entry -> {
                     try {
-                        return CCNBTUtils.saveTag(entry.getValue(), TagCompression.FastLZ4);
+                        return CCNBTUtils.saveTag(entry.getValue(), CubicChunksConfig.chunkCompression);
                     } catch (IOException e) {
                         // wrap exception so that we can throw it from inside the lambda
                         throw new UncheckedIOException(e);

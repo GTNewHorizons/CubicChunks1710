@@ -8,6 +8,7 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.util.UUID;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
 
@@ -32,6 +33,7 @@ public class CCNBTUtils {
 
     public static final int GZIP_MAGIC_NUMBER = 0x8b1F;
     public static final int LZ4_MAGIC_NUMBER = 0x184D2204;
+    public static final UUID NONE_MAGIC_NUMBER_UUID = UUID.fromString("904e51a4-3ee3-478c-92ee-db5a0af9ecc0");
 
     public static NBTTagCompound loadTag(ByteBuffer data) throws IOException {
         data.order(ByteOrder.LITTLE_ENDIAN);
@@ -64,12 +66,21 @@ public class CCNBTUtils {
             }
         }
 
+        if (data.getLong(0) == NONE_MAGIC_NUMBER_UUID.getLeastSignificantBits() && data.getLong(8) == NONE_MAGIC_NUMBER_UUID.getMostSignificantBits()) {
+            data.position(16);
+
+            try (DataInputStream dos = new DataInputStream(new ByteBufferInputStream(data))) {
+                return CompressedStreamTools.func_152456_a(dos, NBTSizeTracker.field_152451_a);
+            }
+        }
+
         throw new RuntimeException("Unknown NBT tag byte format; your world is likely corrupted");
     }
 
     public enum TagCompression {
         GZIP,
-        FastLZ4,
+        LZ4,
+        NONE,
     }
 
     public static ByteBuffer saveTag(NBTTagCompound tag, TagCompression compression) throws IOException {
@@ -85,7 +96,7 @@ public class CCNBTUtils {
                         .order(ByteOrder.LITTLE_ENDIAN);
                 }
             }
-            case FastLZ4 -> {
+            case LZ4 -> {
                 try (ByteArrayOutputStream nos = new ByteArrayOutputStream(getTagSizeEstimate(tag))) {
                     try (DataOutputStream dos = new DataOutputStream(nos)) {
                         CompressedStreamTools.write(tag, dos);
@@ -105,6 +116,18 @@ public class CCNBTUtils {
                     compressed.limit(8 + compLen);
 
                     return compressed;
+                }
+            }
+            case NONE -> {
+                try (ByteArrayOutputStream nos = new ByteArrayOutputStream(getTagSizeEstimate(tag))) {
+                    try (DataOutputStream dos = new DataOutputStream(nos)) {
+                        dos.writeLong(Long.reverseBytes(NONE_MAGIC_NUMBER_UUID.getLeastSignificantBits()));
+                        dos.writeLong(Long.reverseBytes(NONE_MAGIC_NUMBER_UUID.getMostSignificantBits()));
+
+                        CompressedStreamTools.write(tag, dos);
+                    }
+
+                    return ByteBuffer.wrap(nos.toByteArray());
                 }
             }
             default -> {
