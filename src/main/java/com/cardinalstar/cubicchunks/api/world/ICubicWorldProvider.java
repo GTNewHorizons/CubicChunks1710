@@ -7,7 +7,6 @@ import org.jetbrains.annotations.NotNull;
 
 import com.cardinalstar.cubicchunks.api.IntRange;
 import com.cardinalstar.cubicchunks.api.worldgen.IWorldGenerator;
-import com.cardinalstar.cubicchunks.worldgen.VanillaWorldGenerator;
 
 /// Implemented on a [WorldProvider]. This is primarily used by mods to make their dimensions cubic. [ICubicWorldType]
 /// takes priority over this interface. When a [WorldProvider] does not implement this interface,
