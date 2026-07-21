@@ -94,6 +94,10 @@ public enum Mixins implements IMixins {
             .addCommonMixins("common.MixinWorld_DeferInit", "common.MixinWorld_DeferInit$MixinWorldServer")
             .setPhase(Phase.EARLY)
             .setApplyIf(() -> true)),
+    ACCESSOR_NBT(new MixinBuilder("Add accessors for NBT tag internals.")
+        .addCommonMixins("common.AccessorNBTTagList", "common.AccessorNBTTagCompound")
+        .setPhase(Phase.EARLY)
+        .setApplyIf(() -> true)),
 
     // CHUNK
     MIXIN_CHUNK(new MixinBuilder("Various modifications to inject cubes, height map patches, etc into Chunks.")
