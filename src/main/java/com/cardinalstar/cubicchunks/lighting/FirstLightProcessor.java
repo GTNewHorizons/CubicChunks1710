@@ -35,7 +35,6 @@ import net.minecraft.world.World;
 import net.minecraft.world.chunk.storage.ExtendedBlockStorage;
 
 import com.cardinalstar.cubicchunks.api.ICube;
-import com.cardinalstar.cubicchunks.mixin.api.BlockExt_Lighting;
 import com.cardinalstar.cubicchunks.mixin.api.ICubicWorldInternal;
 import com.cardinalstar.cubicchunks.server.chunkio.ICubeLoader;
 import com.cardinalstar.cubicchunks.util.MathUtil;
@@ -92,17 +91,8 @@ public class FirstLightProcessor {
                     for (int lZ = 0; lZ < 16; lZ++) {
                         Block block = storage.getBlockByExtId(lX, lY, lZ);
 
-                        try {
-                            // Enable unsafe lighting here to disable a World.getBlock call within getLightValue
-                            // I don't know why that call exists, but the block is always correct at this point since we
-                            // just fetched it
-                            ((BlockExt_Lighting) block).cc$setUnsafeLightMode(true);
-
-                            if (block != Blocks.air && block.getLightValue(world, bX + lX, bY + lY, bZ + lZ) > 0) {
-                                lm.checkLightFor(EnumSkyBlock.Block, bX + lX, bY + lY, bZ + lZ);
-                            }
-                        } finally {
-                            ((BlockExt_Lighting) block).cc$setUnsafeLightMode(false);
+                        if (block != Blocks.air && block.getLightValue(world, bX + lX, bY + lY, bZ + lZ) > 0) {
+                            lm.checkLightFor(EnumSkyBlock.Block, bX + lX, bY + lY, bZ + lZ);
                         }
                     }
                 }
