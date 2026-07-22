@@ -119,7 +119,8 @@ public class CubeSpawnerAnimals implements ISpawnerAnimals {
 
                 if (valid) {
                     ICube cube = CCAPI.getLoadedCube(world, v.x(), v.y(), v.z());
-                    if (cube != null && !cube.isEmpty()) {
+                    ICube cubeBelow = CCAPI.getLoadedCube(world, v.x(), v.y() - 1, v.z());
+                    if (cube != null && (!cube.isEmpty() || cubeBelow != null && !cubeBelow.isEmpty())) {
                         possibleCubes.add(v.x(), v.y(), v.z());
                     }
                 }
