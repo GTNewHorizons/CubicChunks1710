@@ -50,7 +50,6 @@ import com.cardinalstar.cubicchunks.world.cube.Cube;
 @ParametersAreNonnullByDefault
 public class LightingManager implements ILightingManager {
 
-    public static final int MAX_CLIENT_LIGHT_SCAN_DEPTH = 64;
     private final World world;
     private final PhosphorLightEngine lightEngine;
     @Nullable
@@ -64,10 +63,6 @@ public class LightingManager implements ILightingManager {
         } else {
             this.firstLightProcessor = null;
         }
-    }
-
-    private CubeLightData getLightData(ICube cube) {
-        return (CubeLightData) ((Cube) cube).getCubeLightData();
     }
 
     @Override
@@ -131,7 +126,8 @@ public class LightingManager implements ILightingManager {
 
     @Override
     public void readFromNbt(ICube cube, NBTTagCompound lightingInfo) {
-        CubeLightData lightData = getLightData(cube);
+        CubeLightData lightData = (CubeLightData) ((Cube) cube).getCubeLightData();
+
         lightData.lastHeightMap = lightingInfo.hasKey("LastHeightMap") ? lightingInfo.getIntArray("LastHeightMap")
             : null;
         if (lightData.lastHeightMap != null) {
@@ -147,9 +143,8 @@ public class LightingManager implements ILightingManager {
                 }
                 int idx = i >> 5;
                 int bit = (i & 31) << 1;
-                long v = lightData.lastSaveHeightMapInfo[idx];
-                v |= ((long) flags) << bit;
-                lightData.lastSaveHeightMapInfo[idx] = v;
+
+                lightData.lastSaveHeightMapInfo[idx] |= (long) flags << bit;
             }
         }
         LightingHooks.readNeighborLightChecksFromNBT(cube, lightingInfo);
@@ -308,9 +303,8 @@ public class LightingManager implements ILightingManager {
                 }
                 int idx = i >> 5;
                 int bit = (i & 31) << 1;
-                long v = lastSaveHeightMapInfo[idx];
-                v |= ((long) flags) << bit;
-                lastSaveHeightMapInfo[idx] = v;
+
+                lastSaveHeightMapInfo[idx] |= (long) flags << bit;
             }
         }
     }
