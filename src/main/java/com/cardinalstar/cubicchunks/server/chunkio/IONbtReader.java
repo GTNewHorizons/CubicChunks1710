@@ -52,7 +52,7 @@ import com.cardinalstar.cubicchunks.network.CCPacketBuffer;
 import com.cardinalstar.cubicchunks.util.Coords;
 import com.cardinalstar.cubicchunks.util.Mods;
 import com.cardinalstar.cubicchunks.world.core.IColumnInternal;
-import com.cardinalstar.cubicchunks.world.core.ServerHeightMap;
+import com.cardinalstar.cubicchunks.world.heightmap.HeightMap3D;
 import com.cardinalstar.cubicchunks.world.cube.Cube;
 import com.falsepattern.chunk.internal.DataRegistryImpl;
 
@@ -70,10 +70,10 @@ public class IONbtReader {
             return null;
         }
 
+        readOpacityIndex(level, column);
+
         if (!Mods.ChunkAPI.isModLoaded()) {
-            column.inhabitedTime = level.getLong("InhabitedTime");
             readBiomes(level, column);
-            readOpacityIndex(level, column);
         } else {
             DataRegistryImpl.readChunkFromNBT(column, nbt);
         }
@@ -104,10 +104,12 @@ public class IONbtReader {
             return null;
         }
 
-        return new Chunk(world, x, z);
+        Chunk column = new Chunk(world, x, z);
+        column.inhabitedTime = nbt.getLong("InhabitedTime");
+        return column;
     }
 
-    private static void readBiomes(NBTTagCompound nbt, Chunk column) {// biomes
+    private static void readBiomes(NBTTagCompound nbt, Chunk column) {
         System.arraycopy(nbt.getByteArray("Biomes"), 0, column.getBiomeArray(), 0, Cube.SIZE * Cube.SIZE);
     }
 
