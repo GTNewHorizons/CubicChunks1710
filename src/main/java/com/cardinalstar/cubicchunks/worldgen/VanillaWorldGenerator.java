@@ -69,7 +69,6 @@ import com.cardinalstar.cubicchunks.world.cube.blockview.IBlockView;
 import com.cardinalstar.cubicchunks.world.cube.blockview.UniformBlockView;
 import com.gtnewhorizon.gtnhlib.util.data.BlockMeta;
 import com.gtnewhorizon.gtnhlib.util.data.ImmutableBlockMeta;
-
 import it.unimi.dsi.fastutil.objects.Object2IntMap;
 import it.unimi.dsi.fastutil.objects.Object2IntOpenHashMap;
 
@@ -407,9 +406,9 @@ public class VanillaWorldGenerator implements IWorldGenerator, IPreloadFailureDe
 
     private Box getCubesToGenerate(int x, int y, int z) {
         if (y >= 0 && y < 16) {
-            return new Box(x - 1, -1, x - 1, x + 1, 16, z + 1);
+            return new Box(x - 1, -1, z - 1, x + 1, 16, z + 1);
         } else {
-            return new Box(x - 1, y - 1, x - 1, x + 1, y + 1, z + 1);
+            return new Box(x - 1, y - 1, z - 1, x + 1, y + 1, z + 1);
         }
     }
 
