@@ -38,7 +38,6 @@ import com.cardinalstar.cubicchunks.mixin.early.common.AccessorS23PacketBlockCha
 import com.cardinalstar.cubicchunks.util.AddressTools;
 import com.cardinalstar.cubicchunks.util.CubePos;
 import com.cardinalstar.cubicchunks.util.Mods;
-import com.cardinalstar.cubicchunks.world.core.IColumnInternal;
 import com.cardinalstar.cubicchunks.world.cube.BlankCube;
 import com.cardinalstar.cubicchunks.world.cube.Cube;
 import com.falsepattern.chunk.internal.DataRegistryImpl;
@@ -46,9 +45,6 @@ import com.github.bsideup.jabel.Desugar;
 
 import cpw.mods.fml.relauncher.Side;
 import cpw.mods.fml.relauncher.SideOnly;
-import gnu.trove.iterator.TIntIterator;
-import gnu.trove.set.TIntSet;
-import gnu.trove.set.hash.TIntHashSet;
 import it.unimi.dsi.fastutil.shorts.ShortCollection;
 
 @ParametersAreNonnullByDefault
@@ -71,7 +67,6 @@ public class PacketEncoderCubeBlockChange extends CCPacketEncoder<PacketEncoderC
         CubePos cubePos = cube.getCoords();
 
         List<S23PacketBlockChange> updates = new ArrayList<>(localAddresses.size());
-        TIntSet xzAddresses = new TIntHashSet();
 
         var addrIter = localAddresses.iterator();
 
@@ -100,22 +95,6 @@ public class PacketEncoderCubeBlockChange extends CCPacketEncoder<PacketEncoderC
             }
 
             updates.add(change);
-
-            xzAddresses.add(AddressTools.getLocalAddress(x, z));
-        }
-
-        int[] heightValues = new int[xzAddresses.size()];
-
-        int i = 0;
-        TIntIterator it = xzAddresses.iterator();
-        while (it.hasNext()) {
-            int v = it.next();
-            int x = AddressTools.getLocalX(v);
-            int z = AddressTools.getLocalZ(v);
-            int height = ((IColumnInternal) cube.getColumn()).getTopYWithStaging(x, z);
-            v |= height << 8;
-            heightValues[i] = v;
-            i++;
         }
 
         return new PacketCubeBlockChange(cubePos, updates);
