@@ -378,6 +378,18 @@ public abstract class MixinChunk implements IColumn, IColumnInternal {
         }
     }
 
+    @Inject(method = "setChunkModified", at = @At("HEAD"))
+    private void markCubesDirty(CallbackInfo ci) {
+        ArrayList<Cube> cubes = this.cubeMap.cubes;
+
+        int len = cubes.size();
+
+        //noinspection ForLoopReplaceableByForEach
+        for (int i = 0; i < len; i++) {
+            cubes.get(i).markDirty();
+        }
+    }
+
     // ==============================================
     // getBlock
     // ==============================================

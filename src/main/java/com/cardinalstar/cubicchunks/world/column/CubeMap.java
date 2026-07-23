@@ -24,7 +24,6 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Iterator;
-import java.util.List;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -46,7 +45,7 @@ public class CubeMap implements Iterable<Cube> {
     public static final ExtendedBlockStorage[] ZERO_LEN_EBS_ARRAY = new ExtendedBlockStorage[0];
 
     @Nonnull
-    private final List<Cube> cubes = new ArrayList<>();
+    public final ArrayList<Cube> cubes = new ArrayList<>();
 
     private ExtendedBlockStorage[] tickableEBSes = ZERO_LEN_EBS_ARRAY;
 
