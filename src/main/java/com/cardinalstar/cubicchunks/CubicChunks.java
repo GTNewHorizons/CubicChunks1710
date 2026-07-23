@@ -184,10 +184,6 @@ public class CubicChunks {
     @Mod.EventHandler
     public void postInit(FMLPostInitializationEvent event) {
         CompatHandler.init();
-
-        if (Mods.ChunkAPI.isModLoaded()) {
-            DataRegistry.disableDataManager("chunkapi", "lighting");
-        }
     }
 
     @Mod.EventHandler
