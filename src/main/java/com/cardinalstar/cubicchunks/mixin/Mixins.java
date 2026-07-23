@@ -324,12 +324,7 @@ public enum Mixins implements IMixins {
         new MixinBuilder("Route AE2 chunk section resends through the cubic synchronization protocol")
             .addCommonMixins("mod.MixinAE2Platform")
             .setPhase(Phase.EARLY)
-            .setApplyIf(() -> true)),
-    MIXIN_JOURNEYMAP_SURFACE_READY(new MixinBuilder("Delay JourneyMap updates until cubic surface data is loaded")
-        .addClientMixins("mod.MixinJourneyMapForgeHelper")
-        .setPhase(Phase.LATE)
-        .addRequiredMod(Mods.JourneyMap)
-        .setApplyIf(() -> true))
+            .setApplyIf(() -> true))
     //
     ;
 
