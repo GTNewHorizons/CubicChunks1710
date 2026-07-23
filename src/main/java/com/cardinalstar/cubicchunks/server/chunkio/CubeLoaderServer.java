@@ -849,11 +849,6 @@ public class CubeLoaderServer implements ICubeLoader {
                 cube.setInitialLightingDone(true);
             }
 
-            // Put the surface into the column (to update the column heightmap) as needed
-            if (!cube.isSurfaceTracked()) {
-                cube.trackSurface();
-            }
-
             return cube.getInitLevel() == CubeInitLevel.Lit;
         }
 

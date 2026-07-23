@@ -112,8 +112,10 @@ public class IONbtReader {
     }
 
     private static void readOpacityIndex(NBTTagCompound nbt, Chunk chunk) {
+        if (!nbt.hasKey("HeightMap3D", NBT.TAG_BYTE_ARRAY)) return;
+
         IHeightMap hmap = ((IColumn) chunk).getOpacityIndex();
-        ((ServerHeightMap) hmap).readData(new CCPacketBuffer(Unpooled.wrappedBuffer(nbt.getByteArray("OpacityIndex"))));
+        ((HeightMap3D) hmap).readData(new CCPacketBuffer(Unpooled.wrappedBuffer(nbt.getByteArray("HeightMap3D"))));
     }
 
     static CubeInitLevel getCubeInitLevel(NBTTagCompound nbt) {
@@ -176,9 +178,6 @@ public class IONbtReader {
         // set the worldgen stage
         cube.setPopulationStatus(level.getShort("population"));
 
-        // previous versions will get their surface tracking redone. This is intended
-        cube.setSurfaceTracked(level.getBoolean("isSurfaceTracked"));
-
         // this status will get unset again in readLightingInfo() if the lighting engine is changed (LightingInfoType).
         cube.setInitialLightingDone(level.getBoolean("initLightDone"));
 
@@ -209,7 +208,6 @@ public class IONbtReader {
         readTileEntities(level, world, cube);
         readScheduledBlockTicks(level, world);
         readLightingInfo(cube, level, world);
-        validateSurfaceTracking(cube);
 
         cube.getColumn()
             .preCacheCube(cube);
@@ -360,46 +358,11 @@ public class IONbtReader {
                 }
                 Arrays.fill(storage.getBlocklightArray().data, (byte) 0);
             }
-            cube.setSurfaceTracked(false);
             lightingManager.readFromNbt(cube, new NBTTagCompound());
             return;
         }
         NBTTagCompound lightingInfo = nbt.getCompoundTag("LightingInfo");
         lightingManager.readFromNbt(cube, lightingInfo);
-    }
-
-    private static void validateSurfaceTracking(Cube cube) {
-        if (!cube.isSurfaceTracked()) {
-            return;
-        }
-
-        ExtendedBlockStorage storage = cube.getStorage();
-        if (storage == null || storage.isEmpty()) {
-            return;
-        }
-
-        IHeightMap heightMap = ((IColumn) cube.getColumn()).getOpacityIndex();
-        int cubeMaxY = Coords.cubeToMaxBlock(cube.getY());
-
-        for (int localX = 0; localX < Cube.SIZE; localX++) {
-            for (int localZ = 0; localZ < Cube.SIZE; localZ++) {
-                int columnTop = heightMap.getTopBlockY(localX, localZ);
-                if (columnTop >= cubeMaxY) {
-                    continue;
-                }
-
-                for (int localY = Cube.SIZE - 1; localY >= 0; localY--) {
-                    Block block = storage.getBlockByExtId(localX, localY, localZ);
-                    if (block != null && block.getLightOpacity() > 0) {
-                        if (columnTop < Coords.localToBlock(cube.getY(), localY)) {
-                            cube.setSurfaceTracked(false);
-                            return;
-                        }
-                        break;
-                    }
-                }
-            }
-        }
     }
 
     private static void readBiomes(Cube cube, NBTTagCompound nbt) {// biomes

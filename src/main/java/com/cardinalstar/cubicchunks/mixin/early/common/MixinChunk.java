@@ -23,6 +23,7 @@ package com.cardinalstar.cubicchunks.mixin.early.common;
 import static com.cardinalstar.cubicchunks.util.Coords.blockToCube;
 import static com.cardinalstar.cubicchunks.util.Coords.blockToLocal;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
@@ -69,16 +70,15 @@ import com.cardinalstar.cubicchunks.api.IColumn;
 import com.cardinalstar.cubicchunks.api.ICube;
 import com.cardinalstar.cubicchunks.api.IHeightMap;
 import com.cardinalstar.cubicchunks.mixin.api.ICubicWorldInternal;
+import com.cardinalstar.cubicchunks.network.CCPacketBuffer;
 import com.cardinalstar.cubicchunks.util.Mods;
 import com.cardinalstar.cubicchunks.world.column.ColumnTileEntityMap;
 import com.cardinalstar.cubicchunks.world.column.CubeMap;
 import com.cardinalstar.cubicchunks.world.column.EmptyEBS;
-import com.cardinalstar.cubicchunks.world.core.ClientHeightMap;
 import com.cardinalstar.cubicchunks.world.core.IColumnInternal;
-import com.cardinalstar.cubicchunks.world.core.ServerHeightMap;
-import com.cardinalstar.cubicchunks.world.core.StagingHeightMap;
 import com.cardinalstar.cubicchunks.world.cube.BlankCube;
 import com.cardinalstar.cubicchunks.world.cube.Cube;
+import com.cardinalstar.cubicchunks.world.heightmap.HeightMap3D;
 import com.llamalad7.mixinextras.expression.Definition;
 import com.llamalad7.mixinextras.expression.Expression;
 import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
@@ -129,8 +129,6 @@ public abstract class MixinChunk implements IColumn, IColumnInternal {
     private IHeightMap opacityIndex;
     @Unique
     private Cube cachedCube; // todo: make it always nonnull using BlankCube
-    @Unique
-    private StagingHeightMap stagingHeightMap;
     @Unique
     private boolean isColumn = false;
 
@@ -208,13 +206,7 @@ public abstract class MixinChunk implements IColumn, IColumnInternal {
         }
 
         this.cubeMap = new CubeMap();
-        // clientside we don't really need that much data. we actually only need top and bottom block Y positions
-        if (world.isRemote) {
-            this.opacityIndex = new ClientHeightMap((Chunk) (Object) this, heightMap);
-        } else {
-            this.opacityIndex = new ServerHeightMap(heightMap);
-        }
-        this.stagingHeightMap = new StagingHeightMap();
+        this.opacityIndex = new HeightMap3D(heightMap);
         // instead of redirecting access to this map, just make the map do the work
         this.chunkTileEntityMap = new ColumnTileEntityMap(this);
 
@@ -423,13 +415,9 @@ public abstract class MixinChunk implements IColumn, IColumnInternal {
 
         markDirty(blockToCube(y));
 
-        if (getCube(blockToCube(y)).isSurfaceTracked()) {
-            opacityIndex.onOpacityChange(blockToLocal(x), y, blockToLocal(z), block.getLightOpacity());
-            getWorldObj().getLightingManager()
-                .onHeightUpdate(x + 16 * this.xPosition, y, z + 16 * this.zPosition);
-        } else {
-            stagingHeightMap.onOpacityChange(blockToLocal(x), y, blockToLocal(z), block.getLightOpacity());
-        }
+        opacityIndex.onOpacityChange(blockToLocal(x), y, blockToLocal(z), block.getLightOpacity() > 0);
+        getWorldObj().getLightingManager()
+            .onHeightUpdate(x + 16 * this.xPosition, y, z + 16 * this.zPosition);
     }
 
     @Redirect(
@@ -481,13 +469,9 @@ public abstract class MixinChunk implements IColumn, IColumnInternal {
 
         Block block = cube.getBlock(x, y, z);
 
-        if (cube.isSurfaceTracked()) {
-            opacityIndex.onOpacityChange(blockToLocal(x), y, blockToLocal(z), block.getLightOpacity());
-            getWorldObj().getLightingManager()
-                .onHeightUpdate(x + 16 * this.xPosition, y, z + 16 * this.zPosition);
-        } else {
-            stagingHeightMap.onOpacityChange(blockToLocal(x), y, blockToLocal(z), block.getLightOpacity());
-        }
+        opacityIndex.onOpacityChange(blockToLocal(x), y, blockToLocal(z), block.getLightOpacity() > 0);
+        getWorldObj().getLightingManager()
+            .onHeightUpdate(x + 16 * this.xPosition, y, z + 16 * this.zPosition);
     }
 
     @Redirect(
@@ -1037,26 +1021,18 @@ public abstract class MixinChunk implements IColumn, IColumnInternal {
     }
 
     @Override
-    public void removeFromStagingHeightmap(ICube cube) {
-        stagingHeightMap.removeStagedCube(cube);
-    }
-
-    @Override
-    public void addToStagingHeightmap(ICube cube) {
-        stagingHeightMap.addStagedCube(cube);
-    }
-
-    @Override
-    public void recalculateStagingHeightmap() {
-        stagingHeightMap.recalculate();
-    }
-
-    @Override
     public int getTopYWithStaging(int localX, int localZ) {
-        if (!isColumn) {
-            return heightMap[localZ << 4 | localX] - 1;
-        }
-        return Math.max(opacityIndex.getTopBlockY(localX, localZ), stagingHeightMap.getTopBlockY(localX, localZ));
+        return heightMap[localZ << 4 | localX] - 1;
+    }
+
+    @Override
+    public void writeHeightmapDataForClient(CCPacketBuffer out) {
+        ((HeightMap3D) this.opacityIndex).writeData(out);
+    }
+
+    @Override
+    public void loadClientHeightmapData(CCPacketBuffer in) {
+        ((HeightMap3D) this.opacityIndex).readData(in);
     }
 
     @Override

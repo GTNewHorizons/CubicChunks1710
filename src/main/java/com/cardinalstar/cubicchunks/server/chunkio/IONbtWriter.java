@@ -49,8 +49,7 @@ import com.cardinalstar.cubicchunks.mixin.api.ICubicWorldInternal;
 import com.cardinalstar.cubicchunks.network.CCPacketBuffer;
 import com.cardinalstar.cubicchunks.util.Coords;
 import com.cardinalstar.cubicchunks.util.Mods;
-import com.cardinalstar.cubicchunks.world.core.ClientHeightMap;
-import com.cardinalstar.cubicchunks.world.core.ServerHeightMap;
+import com.cardinalstar.cubicchunks.world.heightmap.HeightMap3D;
 import com.cardinalstar.cubicchunks.world.cube.Cube;
 import com.falsepattern.chunk.internal.DataRegistryImpl;
 
@@ -129,11 +128,7 @@ class IONbtWriter {
 
     private static void writeOpacityIndex(Chunk column, NBTTagCompound nbt) {// light index
         IHeightMap hmap = ((IColumn) column).getOpacityIndex();
-        if (hmap instanceof ServerHeightMap) {
-            nbt.setByteArray("OpacityIndex", ((ServerHeightMap) hmap).getData());
-        } else {
-            nbt.setByteArray("OpacityIndexClient", ((ClientHeightMap) hmap).getData());
-        }
+        nbt.setByteArray("HeightMap3D", ((HeightMap3D) hmap).getData());
     }
 
     private static void writeBaseCube(Cube cube, NBTTagCompound cubeNbt) {
@@ -146,7 +141,6 @@ class IONbtWriter {
 
         // save the worldgen stage and the target stage
         cubeNbt.setShort("population", cube.getPopulationStatus());
-        cubeNbt.setBoolean("isSurfaceTracked", cube.isSurfaceTracked());
 
         cubeNbt.setBoolean("initLightDone", cube.isInitialLightingDone());
     }

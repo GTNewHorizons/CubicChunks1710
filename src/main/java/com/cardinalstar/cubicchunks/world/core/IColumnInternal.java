@@ -21,23 +21,12 @@
 
 package com.cardinalstar.cubicchunks.world.core;
 
-import net.minecraft.network.PacketBuffer;
-
 import com.cardinalstar.cubicchunks.api.IColumn;
-import com.cardinalstar.cubicchunks.api.ICube;
 import com.cardinalstar.cubicchunks.network.CCPacketBuffer;
-import com.cardinalstar.cubicchunks.util.AddressTools;
-import com.cardinalstar.cubicchunks.world.cube.Cube;
 
 public interface IColumnInternal extends IColumn {
 
     void setColumn(boolean isColumn);
-
-    void removeFromStagingHeightmap(ICube cube);
-
-    void addToStagingHeightmap(ICube cube);
-
-    void recalculateStagingHeightmap();
 
     /**
      * Returns Y coordinate of the top non-transparent block
@@ -48,13 +37,6 @@ public interface IColumnInternal extends IColumn {
      */
     int getTopYWithStaging(int localX, int localZ);
 
-    default void writeHeightmapDataForClient(CCPacketBuffer out) {
-        for (int i = 0; i < Cube.SIZE * Cube.SIZE; i++) {
-            out.writeInt(getTopYWithStaging(AddressTools.getLocalX(i), AddressTools.getLocalZ(i)));
-        }
-    }
-
-    default void loadClientHeightmapData(PacketBuffer in) {
-        ((ClientHeightMap) getOpacityIndex()).loadData(in);
-    }
+    void writeHeightmapDataForClient(CCPacketBuffer out);
+    void loadClientHeightmapData(CCPacketBuffer in);
 }

@@ -164,10 +164,6 @@ public class Cube implements ICube {
      */
     private boolean isCubeLoaded;
 
-    /**
-     * True only if all the blocks have been added to server height map. Always true clientside.
-     */
-    private boolean isSurfaceTracked = false;
     private boolean ticked = false;
 
     // private final CapabilityDispatcher capabilities;
@@ -203,7 +199,7 @@ public class Cube implements ICube {
      * @param cubeY  cube y position
      * @param blocks primer containing the blocks for this cube
      */
-    @SuppressWarnings("deprecation") // when a block is generated, does it really have any extra
+    // when a block is generated, does it really have any extra
     // information it could give us about its opacity by knowing its location?
     public Cube(Chunk column, int cubeY, Block[] blocks) {
         this(column, cubeY);
@@ -615,35 +611,32 @@ public class Cube implements ICube {
         this.world.func_147448_a(this.cubeTileEntityMap.values());
         this.world.addLoadedEntities(this.entities);
 
-        if (!isSurfaceTracked) {
-            ((IColumnInternal) getColumn()).addToStagingHeightmap(this);
-        }
+        this.updateHeightMap();
+
         ((ICubicWorldInternal) world).getLightingManager()
             .onCubeLoad(this);
         CompatHandler.onCubeLoad(new ChunkEvent.Load(getColumn()));
         EVENT_BUS.post(new CubeEvent.Load(world, this));
     }
 
-    @SuppressWarnings("deprecation")
-    public void trackSurface() {
-        IHeightMap opindex = ((IColumn) column).getOpacityIndex();
+    /// Update the chunk's height map with the data stored in this cube.
+    /// We never remove the data from the height map - we only upsert it to match this cube's contents.
+    /// This is so that skylight calculations are correct even when high-up cubes have been unloaded.
+    public void updateHeightMap() {
+        IHeightMap heightMap = ((IColumn) column).getOpacityIndex();
         int miny = getCoords().getMinBlockY();
 
         for (int x = 0; x < Cube.SIZE; x++) {
             for (int z = 0; z < Cube.SIZE; z++) {
-
                 for (int y = Cube.SIZE - 1; y >= 0; y--) {
                     Block newBlock = this.getBlock(x, y, z);
 
-                    column.setChunkModified(); // TODO: maybe ServerHeightMap needs its own isModified?
-                    opindex.onOpacityChange(x, miny + y, z, newBlock.getLightOpacity());
+                    heightMap.onOpacityChange(x, miny + y, z, newBlock.getLightOpacity() > 0);
                 }
             }
         }
-        isSurfaceTracked = true;
-        ((IColumnInternal) getColumn()).removeFromStagingHeightmap(this);
-        ((ICubicWorldInternal) world).getLightingManager()
-            .onTrackCubeSurface(this);
+
+        column.setChunkModified();
     }
 
     /**
@@ -677,7 +670,6 @@ public class Cube implements ICube {
         for (TileEntity tileEntity : this.cubeTileEntityMap.values()) {
             this.world.func_147457_a(tileEntity);
         }
-        ((IColumnInternal) getColumn()).removeFromStagingHeightmap(this);
     }
 
     @Override
@@ -738,7 +730,6 @@ public class Cube implements ICube {
     public void setClientCube() {
         this.populationStatus = POP_ALL;
         this.isInitialLightingDone = true;
-        this.isSurfaceTracked = true;
         this.ticked = true;
     }
 
@@ -763,20 +754,6 @@ public class Cube implements ICube {
     @Override
     public boolean isFullyPopulated() {
         return (populationStatus & POP_ALL) == POP_ALL;
-    }
-
-    /**
-     * Sets internal isSurfaceTracked value. Intended to be used only for deserialization.
-     *
-     * @param value true if surface is already tracked
-     */
-    public void setSurfaceTracked(boolean value) {
-        this.isSurfaceTracked = value;
-    }
-
-    @Override
-    public boolean isSurfaceTracked() {
-        return this.isSurfaceTracked;
     }
 
     @Override
