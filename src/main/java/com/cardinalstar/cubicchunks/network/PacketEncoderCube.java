@@ -22,6 +22,7 @@ package com.cardinalstar.cubicchunks.network;
 
 import javax.annotation.ParametersAreNonnullByDefault;
 
+import net.jpountz.lz4.LZ4Factory;
 import net.minecraft.world.World;
 
 import com.cardinalstar.cubicchunks.CubicChunks;
@@ -73,16 +74,25 @@ public class PacketEncoderCube extends CCPacketEncoder<PacketCube> {
     public void writePacket(CCPacketBuffer buffer, PacketCube packet) {
         buffer.writeCubePos(packet.cubePos);
 
-        buffer.writeByteArray(packet.data);
+        buffer.writeVarIntToBuffer(packet.data.length);
+        buffer.writeByteArray(
+            LZ4Factory.fastestInstance()
+                .fastCompressor()
+                .compress(packet.data));
     }
 
     @Override
     public PacketCube readPacket(CCPacketBuffer buf) {
         CubePos pos = buf.readCubePos();
 
+        byte[] decompressed = new byte[buf.readVarIntFromBuffer()];
         byte[] data = buf.readByteArray();
 
-        return new PacketCube(pos, data);
+        LZ4Factory.fastestInstance()
+            .fastDecompressor()
+            .decompress(data, decompressed);
+
+        return new PacketCube(pos, decompressed);
     }
 
     @Override
