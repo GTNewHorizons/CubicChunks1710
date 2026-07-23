@@ -38,7 +38,6 @@ import com.cardinalstar.cubicchunks.mixin.early.common.AccessorS23PacketBlockCha
 import com.cardinalstar.cubicchunks.util.AddressTools;
 import com.cardinalstar.cubicchunks.util.CubePos;
 import com.cardinalstar.cubicchunks.util.Mods;
-import com.cardinalstar.cubicchunks.world.core.ClientHeightMap;
 import com.cardinalstar.cubicchunks.world.core.IColumnInternal;
 import com.cardinalstar.cubicchunks.world.cube.BlankCube;
 import com.cardinalstar.cubicchunks.world.cube.Cube;
@@ -56,7 +55,7 @@ import it.unimi.dsi.fastutil.shorts.ShortCollection;
 public class PacketEncoderCubeBlockChange extends CCPacketEncoder<PacketEncoderCubeBlockChange.PacketCubeBlockChange> {
 
     @Desugar
-    public record PacketCubeBlockChange(CubePos cubePos, int[] heightValues, List<S23PacketBlockChange> updates)
+    public record PacketCubeBlockChange(CubePos cubePos, List<S23PacketBlockChange> updates)
         implements CCPacket {
 
         @Override
@@ -119,7 +118,7 @@ public class PacketEncoderCubeBlockChange extends CCPacketEncoder<PacketEncoderC
             i++;
         }
 
-        return new PacketCubeBlockChange(cubePos, heightValues, updates);
+        return new PacketCubeBlockChange(cubePos, updates);
     }
 
     @Override
@@ -130,7 +129,6 @@ public class PacketEncoderCubeBlockChange extends CCPacketEncoder<PacketEncoderC
     @Override
     public void writePacket(CCPacketBuffer buffer, PacketCubeBlockChange packet) {
         buffer.writeCubePos(packet.cubePos);
-        buffer.writeIntArray(packet.heightValues);
 
         buffer.writeList(packet.updates, (buffer1, value) -> {
             try {
@@ -144,7 +142,6 @@ public class PacketEncoderCubeBlockChange extends CCPacketEncoder<PacketEncoderC
     @Override
     public PacketCubeBlockChange readPacket(CCPacketBuffer buffer) {
         CubePos pos = buffer.readCubePos();
-        int[] heightValues = buffer.readIntArray();
 
         List<S23PacketBlockChange> updates = buffer.readList(buffer1 -> {
             S23PacketBlockChange packet = new S23PacketBlockChange();
@@ -158,7 +155,7 @@ public class PacketEncoderCubeBlockChange extends CCPacketEncoder<PacketEncoderC
             return packet;
         });
 
-        return new PacketCubeBlockChange(pos, heightValues, updates);
+        return new PacketCubeBlockChange(pos, updates);
     }
 
     @Override
@@ -172,17 +169,6 @@ public class PacketEncoderCubeBlockChange extends CCPacketEncoder<PacketEncoderC
         if (cube instanceof BlankCube) {
             CubicChunks.LOGGER.error("Ignored block update to blank cube {}", packet.cubePos);
             return;
-        }
-
-        ClientHeightMap index = (ClientHeightMap) cube.getColumn()
-            .getOpacityIndex();
-
-        for (int hmapUpdate : packet.heightValues) {
-            int x = hmapUpdate & 0xF;
-            int z = (hmapUpdate >> 4) & 0xF;
-            // height is signed, so don't use unsigned shift
-            int height = hmapUpdate >> 8;
-            index.setHeight(x, z, height);
         }
 
         for (S23PacketBlockChange update : packet.updates) {
