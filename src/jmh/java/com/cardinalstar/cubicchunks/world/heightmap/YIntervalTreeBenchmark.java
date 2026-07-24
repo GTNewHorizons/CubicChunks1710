@@ -179,7 +179,7 @@ public class YIntervalTreeBenchmark {
         XSTR r = rng;
         for (int i = 0; i < ops.length; i++) {
             if ((i & 1) == 0) fresh.add(ops[i]);
-            else              fresh.remove(ops[i]);
+            else fresh.remove(ops[i]);
         }
         return fresh.getTopY();
     }

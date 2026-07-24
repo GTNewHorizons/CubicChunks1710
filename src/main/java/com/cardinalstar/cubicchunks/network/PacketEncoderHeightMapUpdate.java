@@ -39,8 +39,8 @@ import com.cardinalstar.cubicchunks.mixin.api.ICubicWorldInternal;
 import com.cardinalstar.cubicchunks.mixin.api.ICubicWorldInternal.Client;
 import com.cardinalstar.cubicchunks.util.AddressTools;
 import com.cardinalstar.cubicchunks.util.BooleanArray2D;
-import com.cardinalstar.cubicchunks.world.cube.Cube;
 import com.cardinalstar.cubicchunks.world.core.IColumnInternal;
+import com.cardinalstar.cubicchunks.world.cube.Cube;
 import com.cardinalstar.cubicchunks.world.heightmap.HeightMap3D;
 import com.github.bsideup.jabel.Desugar;
 

@@ -23,7 +23,6 @@ package com.cardinalstar.cubicchunks.mixin.early.common;
 import static com.cardinalstar.cubicchunks.util.Coords.blockToCube;
 import static com.cardinalstar.cubicchunks.util.Coords.blockToLocal;
 
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;

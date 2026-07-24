@@ -49,8 +49,8 @@ import com.cardinalstar.cubicchunks.mixin.api.ICubicWorldInternal;
 import com.cardinalstar.cubicchunks.network.CCPacketBuffer;
 import com.cardinalstar.cubicchunks.util.Coords;
 import com.cardinalstar.cubicchunks.util.Mods;
-import com.cardinalstar.cubicchunks.world.heightmap.HeightMap3D;
 import com.cardinalstar.cubicchunks.world.cube.Cube;
+import com.cardinalstar.cubicchunks.world.heightmap.HeightMap3D;
 import com.falsepattern.chunk.internal.DataRegistryImpl;
 
 import cpw.mods.fml.common.FMLLog;
