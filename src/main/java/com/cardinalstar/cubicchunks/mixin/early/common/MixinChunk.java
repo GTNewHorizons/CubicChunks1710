@@ -385,9 +385,10 @@ public abstract class MixinChunk implements IColumn, IColumnInternal {
 
         int len = cubes.size();
 
-        //noinspection ForLoopReplaceableByForEach
+        // noinspection ForLoopReplaceableByForEach
         for (int i = 0; i < len; i++) {
-            cubes.get(i).markDirty();
+            cubes.get(i)
+                .markDirty();
         }
     }
 
