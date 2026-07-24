@@ -23,6 +23,7 @@ package com.cardinalstar.cubicchunks.mixin.early.common;
 import static com.cardinalstar.cubicchunks.util.Coords.blockToCube;
 import static com.cardinalstar.cubicchunks.util.Coords.blockToLocal;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
@@ -277,6 +278,29 @@ public abstract class MixinChunk implements IColumn, IColumnInternal {
     }
 
     // ==============================================
+    // generateHeightMap
+    // ==============================================
+
+    @Inject(method = "generateHeightMap", at = @At(value = "HEAD"), cancellable = true)
+    private void generateHeightMap_CubicChunks_Cancel(CallbackInfo cbi) {
+        if (isColumn) {
+            cbi.cancel();
+        }
+    }
+
+    // ==============================================
+    // fillChunk
+    // ==============================================
+
+    @Inject(method = "fillChunk", at = @At(value = "HEAD"))
+    private void fillChunk_CubicChunks_NotSupported(byte[] p_76607_1_, int p_76607_2_, int p_76607_3_,
+        boolean p_76607_4_, CallbackInfo ci) {
+        if (false) if (isColumn) {
+            throw new UnsupportedOperationException("setting storage arrays it not supported with cubic chunks");
+        }
+    }
+
+    // ==============================================
     // relightBlock
     // ==============================================
 
@@ -351,6 +375,19 @@ public abstract class MixinChunk implements IColumn, IColumnInternal {
 
         if (isColumn) {
             this.getCube(cubeY)
+                .markDirty();
+        }
+    }
+
+    @Inject(method = "setChunkModified", at = @At("HEAD"))
+    private void markCubesDirty(CallbackInfo ci) {
+        ArrayList<Cube> cubes = this.cubeMap.cubes;
+
+        int len = cubes.size();
+
+        // noinspection ForLoopReplaceableByForEach
+        for (int i = 0; i < len; i++) {
+            cubes.get(i)
                 .markDirty();
         }
     }
