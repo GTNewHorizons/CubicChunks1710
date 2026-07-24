@@ -199,6 +199,12 @@ public class LightingManager implements ILightingManager {
         }
         assert firstLightProcessor != null;
         firstLightProcessor.diffuseSkylight(cube);
+        // Drain the Phosphor queue immediately so that all light corrections are
+        // flushed into the EBS before the cube packet is sent to clients.
+        // Without this, Phosphor's deferred updates run after the packet is sent
+        // and are never communicated to the client (setLightValue does not call
+        // markBlockForUpdate - it only sets cube.isModified for disk persistence).
+        processUpdates();
     }
 
     /**
