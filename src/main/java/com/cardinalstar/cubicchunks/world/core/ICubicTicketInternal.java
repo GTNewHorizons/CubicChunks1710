@@ -25,7 +25,6 @@ import java.util.Set;
 
 import javax.annotation.ParametersAreNonnullByDefault;
 
-import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.world.ChunkCoordIntPair;
 
 import com.cardinalstar.cubicchunks.api.ICubicTicket;
@@ -51,9 +50,6 @@ public interface ICubicTicketInternal extends ICubicTicket, ITicket {
     void setAllForcedChunkCubes(Map<ChunkCoordIntPair, IntSet> cubePosMap);
 
     // setters and getters for private data, because no ATs for forge classes
-    void setModData(NBTTagCompound modData);
-
-    void setPlayer(String player);
 
     void setEntityChunkX(int chunkX);
 

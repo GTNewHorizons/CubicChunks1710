@@ -94,10 +94,6 @@ public enum Mixins implements IMixins {
             .addCommonMixins("common.MixinWorld_DeferInit", "common.MixinWorld_DeferInit$MixinWorldServer")
             .setPhase(Phase.EARLY)
             .setApplyIf(() -> true)),
-    UNSAFE_LIGHTING(new MixinBuilder("Disable some pointless operations while performing light checks")
-        .addCommonMixins("common.MixinBlock_Lighting")
-        .setPhase(Phase.EARLY)
-        .setApplyIf(() -> true)),
 
     // CHUNK
     MIXIN_CHUNK(new MixinBuilder("Various modifications to inject cubes, height map patches, etc into Chunks.")
@@ -296,6 +292,15 @@ public enum Mixins implements IMixins {
     // =============================================================
     // Mod Mixins
     // =============================================================
+    MIXIN_FORGE_CHUNK_MANAGER_TICKET(new MixinBuilder("Add cubic chunk ticket data to ForgeChunkManager$Ticket")
+        .addCommonMixins("common.forge.MixinTicket")
+        .setPhase(Phase.EARLY)
+        .setApplyIf(() -> true)),
+    MIXIN_FORGE_CHUNK_MANAGER(new MixinBuilder("Add cubic chunk hooks to ForgeChunkManager loadWorld/saveWorld")
+        .addCommonMixins("common.forge.MixinForgeChunkManager")
+        .setPhase(Phase.EARLY)
+        .setApplyIf(() -> true)),
+
     MIXIN_COORD_PACKER_HODGE(new MixinBuilder("Overwrite GTNHLib CoordinatePacker algorithm with a CC-compatible one")
         .addCommonMixins("mod.MixinCoordinatePacker")
         .setPhase(Phase.EARLY)
@@ -310,7 +315,12 @@ public enum Mixins implements IMixins {
         new MixinBuilder("Route AE2 chunk section resends through the cubic synchronization protocol")
             .addCommonMixins("mod.MixinAE2Platform")
             .setPhase(Phase.EARLY)
-            .setApplyIf(() -> true))
+            .setApplyIf(() -> true)),
+    MIXIN_JOURNEYMAP_SURFACE_READY(new MixinBuilder("Delay JourneyMap updates until cubic surface data is loaded")
+        .addClientMixins("mod.MixinJourneyMapForgeHelper")
+        .setPhase(Phase.LATE)
+        .addRequiredMod(Mods.JourneyMap)
+        .setApplyIf(() -> true))
     //
     ;
 
