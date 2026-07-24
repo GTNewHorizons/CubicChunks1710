@@ -16,7 +16,7 @@ public abstract class MixinJourneyMapChunkRenderController {
     @Inject(method = "renderChunk", at = @At("HEAD"), remap = false)
     private void beginSurfaceRender(@Coerce Object regionCoord, @Coerce Object mapType, @Coerce Object chunkMetadata,
         CallbackInfoReturnable<Boolean> cir) {
-        JourneyMapRenderGuard.begin(chunkMetadata, mapType);
+        JourneyMapRenderGuard.begin(mapType);
     }
 
     @Inject(method = "renderChunk", at = @At("RETURN"), remap = false)
