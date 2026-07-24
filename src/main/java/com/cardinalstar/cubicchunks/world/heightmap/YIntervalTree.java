@@ -18,24 +18,24 @@ import com.cardinalstar.cubicchunks.util.XSTR;
  */
 public final class YIntervalTree {
 
-    private static final int NULL             = -1;
+    private static final int NULL = -1;
     private static final int INITIAL_CAPACITY = 8;
 
     // Node pool: 5 parallel int[] arrays indexed by slot number.
     // When a node is freed, left[node] is repurposed as the free-list next pointer.
-    private int[] lo;       // interval lower bound (inclusive)
-    private int[] hi;       // interval upper bound (inclusive)
-    private int[] left;     // left child index, or free-list next when node is freed
-    private int[] right;    // right child index
-    private int[] prio;     // treap priority (random, maintains heap invariant)
+    private int[] lo; // interval lower bound (inclusive)
+    private int[] hi; // interval upper bound (inclusive)
+    private int[] left; // left child index, or free-list next when node is freed
+    private int[] right; // right child index
+    private int[] prio; // treap priority (random, maintains heap invariant)
 
-    private int root      = NULL;
-    private int freeHead  = NULL;   // head of free-node singly-linked list (through left[])
-    private int nodeCount = 0;      // live node count
+    private int root = NULL;
+    private int freeHead = NULL; // head of free-node singly-linked list (through left[])
+    private int nodeCount = 0; // live node count
     private int capacity;
 
     /** Cached hi value of the rightmost node; {@link Coords#NO_HEIGHT} when tree is empty. */
-    private int topY    = Coords.NO_HEIGHT;
+    private int topY = Coords.NO_HEIGHT;
     /** Cached lo value of the leftmost node; {@link Coords#NO_HEIGHT} when tree is empty. */
     private int bottomY = Coords.NO_HEIGHT;
 
@@ -48,12 +48,12 @@ public final class YIntervalTree {
 
     public YIntervalTree() {
         capacity = INITIAL_CAPACITY;
-        lo    = new int[capacity];
-        hi    = new int[capacity];
-        left  = new int[capacity];
+        lo = new int[capacity];
+        hi = new int[capacity];
+        left = new int[capacity];
         right = new int[capacity];
-        prio  = new int[capacity];
-        Arrays.fill(left,  NULL);
+        prio = new int[capacity];
+        Arrays.fill(left, NULL);
         Arrays.fill(right, NULL);
     }
 
@@ -68,15 +68,20 @@ public final class YIntervalTree {
         int node = root;
         int pred = NULL, succ = NULL;
         while (node != NULL) {
-            if (lo[node] <= y) { pred = node; node = right[node]; }
-            else               { succ = node; node = left[node];  }
+            if (lo[node] <= y) {
+                pred = node;
+                node = right[node];
+            } else {
+                succ = node;
+                node = left[node];
+            }
         }
 
         if (pred != NULL && hi[pred] >= y) {
             return; // y is already inside [lo[pred], hi[pred]]
         }
 
-        boolean leftAdj  = pred != NULL && hi[pred] == y - 1;
+        boolean leftAdj = pred != NULL && hi[pred] == y - 1;
         boolean rightAdj = succ != NULL && lo[succ] == y + 1;
 
         if (leftAdj) {
@@ -125,7 +130,7 @@ public final class YIntervalTree {
         if (predLo == y && predHi == y) {
             // Singleton: delete the node, then recompute both extremes via tree walk
             deleteInterval(predLo);
-            if (y == topY)    updateTopY();
+            if (y == topY) updateTopY();
             if (y == bottomY) updateBottomY();
         } else if (predHi == y) {
             // Trim right end in-place (hi is not the BST key)
@@ -149,9 +154,14 @@ public final class YIntervalTree {
             int n = allocNode(y + 1, predHi);
             if (prio[pred] >= prio[n]) {
                 int parent = NULL, cur = right[pred];
-                while (cur != NULL && prio[cur] >= prio[n]) { parent = cur; cur = left[cur]; }
-                right[n] = cur; left[n] = NULL;
-                if (parent == NULL) right[pred]  = n; else left[parent] = n;
+                while (cur != NULL && prio[cur] >= prio[n]) {
+                    parent = cur;
+                    cur = left[cur];
+                }
+                right[n] = cur;
+                left[n] = NULL;
+                if (parent == NULL) right[pred] = n;
+                else left[parent] = n;
             } else {
                 insertAllocated(n, y + 1);
             }
@@ -221,8 +231,13 @@ public final class YIntervalTree {
         int node = root;
         int pred = NULL, succ = NULL;
         while (node != NULL) {
-            if (lo[node] <= y) { pred = node; node = right[node]; }
-            else               { succ = node; node = left[node];  }
+            if (lo[node] <= y) {
+                pred = node;
+                node = right[node];
+            } else {
+                succ = node;
+                node = left[node];
+            }
         }
 
         boolean was = pred != NULL && hi[pred] >= y;
@@ -230,7 +245,7 @@ public final class YIntervalTree {
 
         if (present) {
             // Add path — same in-place adjacency logic as add()
-            boolean leftAdj  = pred != NULL && hi[pred] == y - 1;
+            boolean leftAdj = pred != NULL && hi[pred] == y - 1;
             boolean rightAdj = succ != NULL && lo[succ] == y + 1;
             if (leftAdj) {
                 if (rightAdj) {
@@ -254,7 +269,7 @@ public final class YIntervalTree {
             int predHi = hi[pred];
             if (predLo == y && predHi == y) {
                 deleteInterval(predLo);
-                if (y == topY)    updateTopY();
+                if (y == topY) updateTopY();
                 if (y == bottomY) updateBottomY();
             } else if (predHi == y) {
                 hi[pred] = y - 1;
@@ -267,9 +282,14 @@ public final class YIntervalTree {
                 int n = allocNode(y + 1, predHi);
                 if (prio[pred] >= prio[n]) {
                     int parent = NULL, cur = right[pred];
-                    while (cur != NULL && prio[cur] >= prio[n]) { parent = cur; cur = left[cur]; }
-                    right[n] = cur; left[n] = NULL;
-                    if (parent == NULL) right[pred] = n; else left[parent] = n;
+                    while (cur != NULL && prio[cur] >= prio[n]) {
+                        parent = cur;
+                        cur = left[cur];
+                    }
+                    right[n] = cur;
+                    left[n] = NULL;
+                    if (parent == NULL) right[pred] = n;
+                    else left[parent] = n;
                 } else {
                     insertAllocated(n, y + 1);
                 }
@@ -290,8 +310,8 @@ public final class YIntervalTree {
 
         // In-order traversal via an explicit int[] stack to avoid recursion overhead
         int[] stack = new int[nodeCount + 1];
-        int   top   = -1;
-        int   cur   = root;
+        int top = -1;
+        int cur = root;
         while (cur != NULL || top >= 0) {
             while (cur != NULL) {
                 stack[++top] = cur;
@@ -308,13 +328,13 @@ public final class YIntervalTree {
      * Reads tree contents written by {@link #writeData}. Resets all existing state first.
      */
     public void readData(CCPacketBuffer buf) {
-        Arrays.fill(left,  0, capacity, NULL);
+        Arrays.fill(left, 0, capacity, NULL);
         Arrays.fill(right, 0, capacity, NULL);
-        root      = NULL;
-        freeHead  = NULL;
+        root = NULL;
+        freeHead = NULL;
         nodeCount = 0;
-        topY      = Coords.NO_HEIGHT;
-        bottomY   = Coords.NO_HEIGHT;
+        topY = Coords.NO_HEIGHT;
+        bottomY = Coords.NO_HEIGHT;
 
         int count = buf.readVarIntFromBuffer();
         // Pairs arrive sorted, non-overlapping, non-adjacent: no merging occurs on insert
@@ -332,9 +352,9 @@ public final class YIntervalTree {
     private int allocNode(int newLo, int newHi) {
         int n;
         if (freeHead != NULL) {
-            n        = freeHead;
+            n = freeHead;
             freeHead = left[n]; // advance free list
-            left[n]  = NULL;
+            left[n] = NULL;
             right[n] = NULL;
         } else {
             if (nodeCount == capacity) grow();
@@ -342,26 +362,26 @@ public final class YIntervalTree {
             // left[n] and right[n] are already NULL: constructor/grow() fill new slots with NULL
         }
         nodeCount++;
-        lo[n]   = newLo;
-        hi[n]   = newHi;
+        lo[n] = newLo;
+        hi[n] = newHi;
         prio[n] = rng.nextInt();
         return n;
     }
 
     private void freeNode(int n) {
         nodeCount--;
-        left[n]  = freeHead;
+        left[n] = freeHead;
         freeHead = n;
     }
 
     private void grow() {
         int newCap = capacity * 2;
-        lo    = Arrays.copyOf(lo,    newCap);
-        hi    = Arrays.copyOf(hi,    newCap);
-        left  = Arrays.copyOf(left,  newCap);
+        lo = Arrays.copyOf(lo, newCap);
+        hi = Arrays.copyOf(hi, newCap);
+        left = Arrays.copyOf(left, newCap);
         right = Arrays.copyOf(right, newCap);
-        prio  = Arrays.copyOf(prio,  newCap);
-        Arrays.fill(left,  capacity, newCap, NULL);
+        prio = Arrays.copyOf(prio, newCap);
+        Arrays.fill(left, capacity, newCap, NULL);
         Arrays.fill(right, capacity, newCap, NULL);
         capacity = newCap;
     }
@@ -379,20 +399,22 @@ public final class YIntervalTree {
         splitL = NULL;
         splitR = NULL;
         int lTail = NULL; // rightmost node in the L chain; right[lTail] is the next slot to fill
-        int rTail = NULL; // leftmost  node in the R chain; left[rTail]  is the next slot to fill
+        int rTail = NULL; // leftmost node in the R chain; left[rTail] is the next slot to fill
         while (node != NULL) {
             if (lo[node] < key) {
-                if (lTail == NULL) splitL = node; else right[lTail] = node;
+                if (lTail == NULL) splitL = node;
+                else right[lTail] = node;
                 lTail = node;
-                node  = right[node]; // descend; right[lTail] will be updated on next iter or at end
+                node = right[node]; // descend; right[lTail] will be updated on next iter or at end
             } else {
-                if (rTail == NULL) splitR = node; else left[rTail] = node;
+                if (rTail == NULL) splitR = node;
+                else left[rTail] = node;
                 rTail = node;
-                node  = left[node];
+                node = left[node];
             }
         }
         if (lTail != NULL) right[lTail] = NULL;
-        if (rTail != NULL) left[rTail]  = NULL;
+        if (rTail != NULL) left[rTail] = NULL;
     }
 
     /**
@@ -404,30 +426,51 @@ public final class YIntervalTree {
         if (L == NULL) return R;
         if (R == NULL) return L;
         // Unroll first iteration so the hot loop never needs a tail==NULL check.
-        int root; int tail; boolean tailGoRight;
-        if (prio[L] > prio[R]) { root = L; tail = L; tailGoRight = true;  L = right[L]; }
-        else                    { root = R; tail = R; tailGoRight = false; R = left[R];  }
+        int root;
+        int tail;
+        boolean tailGoRight;
+        if (prio[L] > prio[R]) {
+            root = L;
+            tail = L;
+            tailGoRight = true;
+            L = right[L];
+        } else {
+            root = R;
+            tail = R;
+            tailGoRight = false;
+            R = left[R];
+        }
         while (L != NULL && R != NULL) {
-            int parent; boolean goRight;
-            if (prio[L] > prio[R]) { parent = L; goRight = true;  L = right[L]; }
-            else                    { parent = R; goRight = false; R = left[R];  }
-            if (tailGoRight) right[tail] = parent; else left[tail] = parent;
-            tail = parent; tailGoRight = goRight;
+            int parent;
+            boolean goRight;
+            if (prio[L] > prio[R]) {
+                parent = L;
+                goRight = true;
+                L = right[L];
+            } else {
+                parent = R;
+                goRight = false;
+                R = left[R];
+            }
+            if (tailGoRight) right[tail] = parent;
+            else left[tail] = parent;
+            tail = parent;
+            tailGoRight = goRight;
         }
         int remaining = L != NULL ? L : R;
         if (tailGoRight) right[tail] = remaining;
-        else             left[tail]  = remaining;
+        else left[tail] = remaining;
         return root;
     }
 
     /** Returns the node index with the maximum {@code lo <= y}, or NULL if none exists. */
     private int findPred(int y) {
-        int node   = root;
+        int node = root;
         int result = NULL;
         while (node != NULL) {
             if (lo[node] <= y) {
                 result = node;
-                node   = right[node];
+                node = right[node];
             } else {
                 node = left[node];
             }
@@ -445,26 +488,33 @@ public final class YIntervalTree {
      * the allocNode call so callers can pre-check priority before deciding the insertion path.
      */
     private void insertAllocated(int n, int newLo) {
-        int     nPrio  = prio[n];
-        int     parent = NULL;
+        int nPrio = prio[n];
+        int parent = NULL;
         boolean isRight = false;
-        int     cur    = root;
+        int cur = root;
         while (cur != NULL && prio[cur] >= nPrio) {
-            if (lo[cur] < newLo) { parent = cur; isRight = true;  cur = right[cur]; }
-            else                  { parent = cur; isRight = false; cur = left[cur];  }
+            if (lo[cur] < newLo) {
+                parent = cur;
+                isRight = true;
+                cur = right[cur];
+            } else {
+                parent = cur;
+                isRight = false;
+                cur = left[cur];
+            }
         }
         split(cur, newLo);
-        left[n]  = splitL;
+        left[n] = splitL;
         right[n] = splitR;
-        if (parent == NULL)  root          = n;
-        else if (isRight)    right[parent] = n;
-        else                 left[parent]  = n;
+        if (parent == NULL) root = n;
+        else if (isRight) right[parent] = n;
+        else left[parent] = n;
     }
 
     private void deleteInterval(int loKey) {
         // Walk to the unique node whose lo == loKey, then splice it out by merging its children.
         // Saves one split vs the split/split/merge approach.
-        int parent  = NULL;
+        int parent = NULL;
         boolean isRight = false;
         int cur = root;
         while (cur != NULL) {
@@ -472,18 +522,18 @@ public final class YIntervalTree {
             if (curLo == loKey) {
                 int merged = merge(left[cur], right[cur]);
                 freeNode(cur);
-                if (parent == NULL)  root          = merged;
-                else if (isRight)    right[parent] = merged;
-                else                 left[parent]  = merged;
+                if (parent == NULL) root = merged;
+                else if (isRight) right[parent] = merged;
+                else left[parent] = merged;
                 return;
             } else if (curLo < loKey) {
-                parent  = cur;
+                parent = cur;
                 isRight = true;
-                cur     = right[cur];
+                cur = right[cur];
             } else {
-                parent  = cur;
+                parent = cur;
                 isRight = false;
-                cur     = left[cur];
+                cur = left[cur];
             }
         }
     }

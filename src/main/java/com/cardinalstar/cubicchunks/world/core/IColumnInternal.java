@@ -38,5 +38,6 @@ public interface IColumnInternal extends IColumn {
     int getTopYWithStaging(int localX, int localZ);
 
     void writeHeightmapDataForClient(CCPacketBuffer out);
+
     void loadClientHeightmapData(CCPacketBuffer in);
 }

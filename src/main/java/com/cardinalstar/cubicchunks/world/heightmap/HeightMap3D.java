@@ -29,6 +29,7 @@ import com.cardinalstar.cubicchunks.api.IHeightMap;
 import com.cardinalstar.cubicchunks.network.CCPacketBuffer;
 import com.cardinalstar.cubicchunks.util.Array2D_16x16;
 import com.cardinalstar.cubicchunks.util.Coords;
+
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.PooledByteBufAllocator;
 
@@ -64,12 +65,14 @@ public class HeightMap3D implements IHeightMap {
 
     @Override
     public int getTopBlockY(int localX, int localZ) {
-        return this.heightmap.get(localX, localZ).getTopY();
+        return this.heightmap.get(localX, localZ)
+            .getTopY();
     }
 
     @Override
     public int getTopBlockYBelow(int localX, int blockY, int localZ) {
-        return this.heightmap.get(localX, localZ).getBottomAirY(blockY);
+        return this.heightmap.get(localX, localZ)
+            .getBottomAirY(blockY);
     }
 
     public byte[] getData() {

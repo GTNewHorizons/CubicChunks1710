@@ -3,10 +3,11 @@ package com.cardinalstar.cubicchunks.util;
 import org.jetbrains.annotations.UnknownNullability;
 
 import com.github.bsideup.jabel.Desugar;
+
 import it.unimi.dsi.fastutil.ints.Int2ObjectFunction;
 
 @Desugar
-public record Array2D_16x16<T>(T[] data) {
+public record Array2D_16x16<T> (T[] data) {
 
     public Array2D_16x16(T[] data) {
         this.data = data;

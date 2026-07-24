@@ -51,8 +51,7 @@ import it.unimi.dsi.fastutil.shorts.ShortCollection;
 public class PacketEncoderCubeBlockChange extends CCPacketEncoder<PacketEncoderCubeBlockChange.PacketCubeBlockChange> {
 
     @Desugar
-    public record PacketCubeBlockChange(CubePos cubePos, List<S23PacketBlockChange> updates)
-        implements CCPacket {
+    public record PacketCubeBlockChange(CubePos cubePos, List<S23PacketBlockChange> updates) implements CCPacket {
 
         @Override
         public byte getPacketID() {
