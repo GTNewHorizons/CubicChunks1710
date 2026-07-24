@@ -77,10 +77,7 @@ public class ColumnTileEntityMap implements Map<ChunkPosition, TileEntity> {
 
         int y = Coords.blockToCube(pos.chunkPosY);
 
-        // Use getLoadedCube to avoid loading or generating cubes.
-        // You almost never want to load chunks with this method, and you definitely never want to generate chunks with
-        // this method.
-        ICube cube = column.getLoadedCube(y);
+        ICube cube = column.getCube(y);
 
         return cube != null && cube.getTileEntityMap()
             .containsKey(o);
@@ -92,7 +89,7 @@ public class ColumnTileEntityMap implements Map<ChunkPosition, TileEntity> {
             return false;
         }
         int y = Coords.blockToCube(((TileEntity) o).yCoord);
-        ICube cube = column.getLoadedCube(y);
+        ICube cube = column.getCube(y);
         assert cube != null : "Cube is null but tile entity in it exists!";
         return cube.getTileEntityMap()
             .containsValue(o);
@@ -107,10 +104,7 @@ public class ColumnTileEntityMap implements Map<ChunkPosition, TileEntity> {
 
         int y = Coords.blockToCube(pos.chunkPosY);
 
-        // Use getLoadedCube to avoid loading or generating cubes.
-        // You almost never want to load chunks with this method, and you definitely never want to generate chunks with
-        // this method.
-        ICube cube = column.getLoadedCube(y);
+        ICube cube = column.getCube(y);
 
         return cube == null ? null
             : cube.getTileEntityMap()
@@ -134,10 +128,7 @@ public class ColumnTileEntityMap implements Map<ChunkPosition, TileEntity> {
 
         int y = Coords.blockToCube(pos.chunkPosY);
 
-        // Use getLoadedCube to avoid loading or generating cubes.
-        // You almost never want to load chunks with this method, and you definitely never want to generate chunks with
-        // this method.
-        ICube cube = column.getLoadedCube(y);
+        ICube cube = column.getCube(y);
 
         return cube == null ? null
             : cube.getTileEntityMap()
