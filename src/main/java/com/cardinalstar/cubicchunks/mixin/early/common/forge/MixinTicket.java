@@ -28,7 +28,6 @@ import java.util.Set;
 
 import javax.annotation.ParametersAreNonnullByDefault;
 
-import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.world.ChunkCoordIntPair;
 import net.minecraft.world.World;
 import net.minecraftforge.common.ForgeChunkManager;
@@ -54,14 +53,6 @@ public abstract class MixinTicket implements ICubicTicketInternal {
     private Map<ChunkCoordIntPair, IntSet> cubePosMap = new HashMap<>();
     private int entityChunkY;
     private int cubeDepth;
-
-    @Override
-    @Accessor
-    public abstract void setModData(NBTTagCompound modData);
-
-    @Override
-    @Accessor
-    public abstract void setPlayer(String player);
 
     @Override
     @Accessor

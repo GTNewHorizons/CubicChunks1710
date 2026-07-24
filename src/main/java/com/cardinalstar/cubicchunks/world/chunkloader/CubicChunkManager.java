@@ -20,9 +20,6 @@
  */
 package com.cardinalstar.cubicchunks.world.chunkloader;
 
-import static com.cardinalstar.cubicchunks.util.ReflectionUtil.cast;
-
-import java.lang.invoke.MethodHandle;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -37,20 +34,16 @@ import net.minecraftforge.common.ForgeChunkManager;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.common.util.Constants;
 
-import com.cardinalstar.cubicchunks.CubicChunks;
 import com.cardinalstar.cubicchunks.CubicChunksConfig;
 import com.cardinalstar.cubicchunks.mixin.early.common.forge.IForgeChunkManager;
 import com.cardinalstar.cubicchunks.util.CubePos;
 import com.cardinalstar.cubicchunks.util.ITicket;
-import com.cardinalstar.cubicchunks.util.ReflectionUtil;
 import com.cardinalstar.cubicchunks.world.ICubicWorld;
 import com.cardinalstar.cubicchunks.world.core.ICubicTicketInternal;
 import com.cardinalstar.cubicchunks.world.cube.Cube;
 import com.gtnewhorizon.gtnhlib.eventbus.EventBusSubscriber;
 
 import cpw.mods.fml.common.FMLLog;
-import cpw.mods.fml.common.Loader;
-import cpw.mods.fml.common.ModContainer;
 import cpw.mods.fml.common.eventhandler.SubscribeEvent;
 import it.unimi.dsi.fastutil.ints.IntArraySet;
 import it.unimi.dsi.fastutil.ints.IntSet;
@@ -73,9 +66,6 @@ public class CubicChunkManager {
      *
      * When serializing forced chunks, we also store this map in a file, and load it when a world is loaded.
      */
-
-    private static final MethodHandle ticketConstructor = ReflectionUtil
-        .constructHandle(ForgeChunkManager.Ticket.class, String.class, ForgeChunkManager.Type.class, World.class);
 
     /**
      * Force the supplied chunk coordinate to be loaded by the supplied ticket. If the ticket's maxDepth is
@@ -156,22 +146,6 @@ public class CubicChunkManager {
     }
 
     // internals
-
-    private static ModContainer getContainer(Object mod) {
-        ModContainer container = Loader.instance()
-            .getModObjectList()
-            .inverse()
-            .get(mod);
-        return container;
-    }
-
-    public static ForgeChunkManager.Ticket makeTicket(String str, ForgeChunkManager.Type type, World world) {
-        try {
-            return cast(ticketConstructor.invoke(str, type, world));
-        } catch (Throwable throwable) {
-            throw new RuntimeException(throwable);
-        }
-    }
 
     public static void onDeserializeTicket(NBTTagCompound ticketNBT, ForgeChunkManager.Ticket ticket) {
         NBTTagCompound cubicNBT = ticketNBT.getCompoundTag("cubicchunks");
@@ -275,11 +249,11 @@ public class CubicChunkManager {
     public static void onForgeChunkManagerUnforceChunk(ForgeChunkManager.UnforceChunkEvent event) {
         ForgeChunkManager.Ticket ticket = event.ticket;
         World world = ticket.world;
+        // Null when vanilla mods force chunks via ForgeChunkManager directly, since onForgeChunkManagerForceChunk
+        // does not yet populate the cube map (see TODO there). Nothing to unforce in that case.
         IntSet forcedCubes = ((ICubicTicketInternal) ticket).getAllForcedChunkCubes()
             .get(event.location);
         if (forcedCubes == null) {
-            CubicChunks.LOGGER
-                .warn("CubicChunkManager: Unforcing chunk with no information about forced cubes at " + event.location);
             return;
         }
         for (int cubeY : forcedCubes) {

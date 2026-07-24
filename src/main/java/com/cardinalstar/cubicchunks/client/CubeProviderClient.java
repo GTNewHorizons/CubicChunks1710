@@ -99,7 +99,8 @@ public class CubeProviderClient extends ChunkProviderClient implements ICubeProv
 
         Chunk column = (Chunk) ((IChunkProviderClient) this).getChunkMapping()
             .getValueByKey(packedCoords);
-        if (column == null) {
+        boolean isNew = column == null;
+        if (isNew) {
             column = new Chunk((World) this.world, cubeX, cubeZ); // make a new one
             ((IColumnInternal) column).setColumn(true);
 
@@ -109,10 +110,14 @@ public class CubeProviderClient extends ChunkProviderClient implements ICubeProv
 
         if (init != null) init.accept(column);
 
-        // fire a forge event... make mods happy :)
-        EVENT_BUS.post(new ChunkEvent.Load(column));
+        // noinspection ConstantValue
+        if (isNew) {
+            // fire a forge event... make mods happy :)
+            EVENT_BUS.post(new ChunkEvent.Load(column));
 
-        column.isChunkLoaded = true;
+            column.isChunkLoaded = true;
+        }
+
         return column;
     }
 
