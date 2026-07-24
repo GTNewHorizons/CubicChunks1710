@@ -353,15 +353,6 @@ public class VanillaWorldGenerator implements IWorldGenerator, IPreloadFailureDe
             // Generate all relevant cubes and store them in an array cache
             loader.cacheCubes(getCubesToGenerate(cx, cy, cz), Requirement.GENERATE);
 
-            if (cy >= 0 && cy < 16) {
-                for (int x = -1; x <= 1; x++) {
-                    for (int z = -1; z <= 1; z++) {
-                        ((IColumnInternal) loader.getColumn(cx + x, cz + z, Requirement.GENERATE))
-                            .recalculateStagingHeightmap();
-                    }
-                }
-            }
-
             for (Vector3ic v : getCubesToPopulate(cx, cy, cz)) {
                 Cube center = loader.getCube(v.x(), v.y(), v.z(), Requirement.GENERATE);
 

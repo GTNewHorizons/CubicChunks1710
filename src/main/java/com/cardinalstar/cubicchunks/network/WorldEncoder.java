@@ -35,7 +35,6 @@ import com.cardinalstar.cubicchunks.mixin.api.ICubicWorldInternal;
 import com.cardinalstar.cubicchunks.util.AddressTools;
 import com.cardinalstar.cubicchunks.util.Coords;
 import com.cardinalstar.cubicchunks.util.Mods;
-import com.cardinalstar.cubicchunks.world.core.ClientHeightMap;
 import com.cardinalstar.cubicchunks.world.core.IColumnInternal;
 import com.cardinalstar.cubicchunks.world.cube.Cube;
 import com.falsepattern.chunk.internal.DataRegistryImpl;
@@ -70,8 +69,28 @@ class WorldEncoder {
             DataRegistryImpl.readFromBuffer(column, 0, true, buffer);
         }
 
-        if (in.readableBytes() > 0) {
-            ((IColumnInternal) column).loadClientHeightmapData(in);
+        ILightingManager lm = ((ICubicWorldInternal) column.worldObj).getLightingManager();
+
+        int[] oldHeights = new int[Cube.SIZE * Cube.SIZE];
+
+        IColumnInternal columnInternal = (IColumnInternal) column;
+
+        for (int dx = 0; dx < Cube.SIZE; dx++) {
+            for (int dz = 0; dz < Cube.SIZE; dz++) {
+                oldHeights[AddressTools.getLocalAddress(dx, dz)] = columnInternal.getTopYWithStaging(dx, dz);
+            }
+        }
+
+        columnInternal.loadClientHeightmapData(in);
+
+        for (int dx = 0; dx < Cube.SIZE; dx++) {
+            for (int dz = 0; dz < Cube.SIZE; dz++) {
+                int oldY = oldHeights[AddressTools.getLocalAddress(dx, dz)];
+                int newY = columnInternal.getTopYWithStaging(dx, dz);
+                if (oldY != newY) {
+                    lm.updateLightBetween(column, dx, oldY, newY, dz);
+                }
+            }
         }
     }
 
@@ -115,12 +134,6 @@ class WorldEncoder {
             }
         }
 
-        // 5. heightmap and bottom-block-y. Each non-empty cube has a chance to update this data.
-        // Trying to keep track of when it changes would be complex, so send all cubes
-        if (!empty) {
-            ((IColumnInternal) cube.getColumn()).writeHeightmapDataForClient(out);
-        }
-
         // 6. biomes
         cube.writeBiomeArray(out);
 
@@ -144,8 +157,6 @@ class WorldEncoder {
 
     static void decodeCube(CCPacketBuffer in, Cube cube, World world) {
         final boolean capi = Mods.ChunkAPI.isModLoaded();
-
-        int[] oldHeights = new int[Cube.SIZE * Cube.SIZE];
 
         byte[] buffer;
         if (capi) {
@@ -189,31 +200,6 @@ class WorldEncoder {
             // 4. sky light
             if (!cube.getWorld().provider.hasNoSky) {
                 in.readBytes(storage.getSkylightArray().data);
-            }
-        }
-
-        if (!empty) {
-            // 5. heightmaps and after all that - update ref counts
-            ILightingManager lm = ((ICubicWorldInternal) cube.getWorld()).getLightingManager();
-
-            IColumnInternal column = cube.getColumn();
-            ClientHeightMap coi = (ClientHeightMap) column.getOpacityIndex();
-            for (int dx = 0; dx < Cube.SIZE; dx++) {
-                for (int dz = 0; dz < Cube.SIZE; dz++) {
-                    oldHeights[AddressTools.getLocalAddress(dx, dz)] = coi.getTopBlockY(dx, dz);
-                }
-            }
-
-            column.loadClientHeightmapData(in);
-
-            for (int dx = 0; dx < Cube.SIZE; dx++) {
-                for (int dz = 0; dz < Cube.SIZE; dz++) {
-                    int oldY = oldHeights[AddressTools.getLocalAddress(dx, dz)];
-                    int newY = coi.getTopBlockY(dx, dz);
-                    if (oldY != newY) {
-                        lm.updateLightBetween(cube.getColumn(), dx, oldY, newY, dz);
-                    }
-                }
             }
         }
 

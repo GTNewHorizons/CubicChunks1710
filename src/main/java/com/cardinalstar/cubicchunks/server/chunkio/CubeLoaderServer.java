@@ -843,15 +843,10 @@ public class CubeLoaderServer implements ICubeLoader {
             if (!populated) return false;
 
             // Do the initial lighting
-            if (!cube.isInitialLightingDone() || !cube.isSurfaceTracked()) {
+            if (!cube.isInitialLightingDone()) {
                 ((ICubicWorldInternal) world).getLightingManager()
                     .doFirstLight(cube);
                 cube.setInitialLightingDone(true);
-            }
-
-            // Put the surface into the column (to update the column heightmap) as needed
-            if (!cube.isSurfaceTracked()) {
-                cube.trackSurface();
             }
 
             return cube.getInitLevel() == CubeInitLevel.Lit;

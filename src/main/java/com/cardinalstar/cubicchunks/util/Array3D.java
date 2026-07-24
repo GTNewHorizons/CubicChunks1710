@@ -1,6 +1,6 @@
 package com.cardinalstar.cubicchunks.util;
 
-public class Array3D<T> {
+public final class Array3D<T> {
 
     private final int spanx;
     private final int spany;
@@ -22,7 +22,7 @@ public class Array3D<T> {
         this.data = data;
     }
 
-    public final void set(final int x, final int y, final int z, final T value) {
+    public void set(final int x, final int y, final int z, final T value) {
         final int relx = x - offsetx;
         final int rely = y - offsety;
         final int relz = z - offsetz;
@@ -34,7 +34,7 @@ public class Array3D<T> {
         data[relx + (rely * spanx) + (relz * spanslice)] = value;
     }
 
-    public final T get(final int x, final int y, final int z) {
+    public T get(final int x, final int y, final int z) {
         final int relx = x - offsetx;
         final int rely = y - offsety;
         final int relz = z - offsetz;
