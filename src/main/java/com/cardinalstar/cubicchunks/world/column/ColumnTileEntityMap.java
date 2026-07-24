@@ -204,8 +204,8 @@ public class ColumnTileEntityMap implements Map<ChunkPosition, TileEntity> {
     }
 
     @Override
-    public Collection<TileEntity> values() {
-        return new AbstractCollection<TileEntity>() {
+    public @NotNull Collection<TileEntity> values() {
+        return new AbstractCollection<>() {
 
             @Override
             public int size() {
@@ -224,17 +224,17 @@ public class ColumnTileEntityMap implements Map<ChunkPosition, TileEntity> {
             }
 
             @Override
-            public Iterator<TileEntity> iterator() {
-                return new Iterator<TileEntity>() {
+            public @NotNull Iterator<TileEntity> iterator() {
+                return new Iterator<>() {
 
-                    Iterator<? extends ICube> cubes = column.getLoadedCubes()
+                    private final Iterator<? extends ICube> cubes = column.getLoadedCubes()
                         .iterator();
-                    Iterator<TileEntity> curIt = !cubes.hasNext() ? null
+                    private Iterator<TileEntity> curIt = !cubes.hasNext() ? null
                         : cubes.next()
                             .getTileEntityMap()
                             .values()
                             .iterator();
-                    TileEntity nextVal;
+                    private TileEntity nextVal;
 
                     @Override
                     public boolean hasNext() {
@@ -290,8 +290,8 @@ public class ColumnTileEntityMap implements Map<ChunkPosition, TileEntity> {
     }
 
     @Override
-    public Set<Entry<ChunkPosition, TileEntity>> entrySet() {
-        return new AbstractSet<Entry<ChunkPosition, TileEntity>>() {
+    public @NotNull Set<Entry<ChunkPosition, TileEntity>> entrySet() {
+        return new AbstractSet<>() {
 
             @Override
             public int size() {
@@ -311,11 +311,11 @@ public class ColumnTileEntityMap implements Map<ChunkPosition, TileEntity> {
             @Nonnull
             @Override
             public Iterator<Entry<ChunkPosition, TileEntity>> iterator() {
-                return new Iterator<Entry<ChunkPosition, TileEntity>>() {
+                return new Iterator<>() {
 
-                    Iterator<? extends ICube> cubes = column.getLoadedCubes()
+                    private final Iterator<? extends ICube> cubes = column.getLoadedCubes()
                         .iterator();
-                    Iterator<Entry<ChunkPosition, TileEntity>> curIt = !cubes.hasNext() ? null
+                    private Iterator<Entry<ChunkPosition, TileEntity>> curIt = !cubes.hasNext() ? null
                         : cubes.next()
                             .getTileEntityMap()
                             .entrySet()
