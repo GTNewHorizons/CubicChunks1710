@@ -236,10 +236,6 @@ public enum Mixins implements IMixins {
     MIXIN_IGUI_SCREEN(new MixinBuilder("Allows access to the buttonList field.").addClientMixins("client.IGuiScreen")
         .setPhase(Phase.EARLY)
         .setApplyIf(() -> true)),
-    MIXIN_CHUNK_CUBES_CLIENT(
-        new MixinBuilder("Client chunk fix to turn them to cubes.").addClientMixins("client.MixinChunk_Cubes")
-            .setPhase(Phase.EARLY)
-            .setApplyIf(() -> true)),
     MIXIN_CHUNK_CACHE_HEIGHT_LIMITS_CLIENT(new MixinBuilder("Client chunk cache fixes for height limits.")
         .addClientMixins("client.MixinChunkCache_HeightLimits")
         .setPhase(Phase.EARLY)
