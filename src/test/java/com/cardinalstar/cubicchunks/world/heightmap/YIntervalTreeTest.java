@@ -250,9 +250,9 @@ public class YIntervalTreeTest {
         for (int y = 10; y <= 15; y++) tree.add(y);
         for (int y = 20; y <= 25; y++) tree.add(y);
 
-        Assertions.assertEquals(12, tree.getTopSolidY(12));   // inside [10,15]
-        Assertions.assertEquals(20, tree.getTopSolidY(17));   // air in gap, first solid above is 20
-        Assertions.assertEquals(10, tree.getTopSolidY(5));    // below all, first solid is 10
+        Assertions.assertEquals(12, tree.getTopSolidY(12)); // inside [10,15]
+        Assertions.assertEquals(20, tree.getTopSolidY(17)); // air in gap, first solid above is 20
+        Assertions.assertEquals(10, tree.getTopSolidY(5)); // below all, first solid is 10
         Assertions.assertEquals(Coords.NO_HEIGHT, tree.getTopSolidY(30)); // above all
     }
 
@@ -262,9 +262,9 @@ public class YIntervalTreeTest {
         for (int y = 10; y <= 15; y++) tree.add(y);
         for (int y = 20; y <= 25; y++) tree.add(y);
 
-        Assertions.assertEquals(12, tree.getBottomSolidY(12));  // inside [10,15]
-        Assertions.assertEquals(15, tree.getBottomSolidY(17));  // air in gap, highest solid below is 15
-        Assertions.assertEquals(25, tree.getBottomSolidY(30));  // above all, highest solid is 25
+        Assertions.assertEquals(12, tree.getBottomSolidY(12)); // inside [10,15]
+        Assertions.assertEquals(15, tree.getBottomSolidY(17)); // air in gap, highest solid below is 15
+        Assertions.assertEquals(25, tree.getBottomSolidY(30)); // above all, highest solid is 25
         Assertions.assertEquals(Coords.NO_HEIGHT, tree.getBottomSolidY(5)); // below all
     }
 
@@ -450,7 +450,8 @@ public class YIntervalTreeTest {
             }
             Assertions.assertEquals(refTopAir, tree.getTopAirY(startY), "getTopAirY mismatch at startY=" + startY);
 
-            // getBottomAirY: if startY solid use its run lo-1; else find next solid above, use its run lo-1; NO_HEIGHT if none
+            // getBottomAirY: if startY solid use its run lo-1; else find next solid above, use its run lo-1; NO_HEIGHT
+            // if none
             int refBottomAir;
             if (ref.contains(startY)) {
                 int runLo = startY;
@@ -466,8 +467,8 @@ public class YIntervalTreeTest {
                     refBottomAir = runLo - 1;
                 }
             }
-            Assertions.assertEquals(refBottomAir, tree.getBottomAirY(startY),
-                "getBottomAirY mismatch at startY=" + startY);
+            Assertions
+                .assertEquals(refBottomAir, tree.getBottomAirY(startY), "getBottomAirY mismatch at startY=" + startY);
 
             // getTopSolidY: if startY solid return startY; else first solid above; NO_HEIGHT if none
             int refTopSolid;
@@ -477,8 +478,8 @@ public class YIntervalTreeTest {
                 Integer next = ref.higher(startY);
                 refTopSolid = next == null ? Coords.NO_HEIGHT : next;
             }
-            Assertions.assertEquals(refTopSolid, tree.getTopSolidY(startY),
-                "getTopSolidY mismatch at startY=" + startY);
+            Assertions
+                .assertEquals(refTopSolid, tree.getTopSolidY(startY), "getTopSolidY mismatch at startY=" + startY);
 
             // getBottomSolidY: if startY solid return startY; else highest solid below; NO_HEIGHT if none
             int refBottomSolid;
@@ -488,7 +489,9 @@ public class YIntervalTreeTest {
                 Integer prev = ref.lower(startY);
                 refBottomSolid = prev == null ? Coords.NO_HEIGHT : prev;
             }
-            Assertions.assertEquals(refBottomSolid, tree.getBottomSolidY(startY),
+            Assertions.assertEquals(
+                refBottomSolid,
+                tree.getBottomSolidY(startY),
                 "getBottomSolidY mismatch at startY=" + startY);
         }
     }
