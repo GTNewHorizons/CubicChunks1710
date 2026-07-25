@@ -350,8 +350,8 @@ public class VanillaWorldGenerator implements IWorldGenerator, IPreloadFailureDe
         try {
             WorldgenHangWatchdog.startWorldGen();
 
-            // Generate all relevant cubes and store them in an array cache
-            loader.cacheCubes(getCubesToGenerate(cx, cy, cz), Requirement.GENERATE);
+            // Cache the affected cubes for this vanilla chunk
+            loader.cacheCubes(getRelevantCubes(cx, cy, cz));
 
             if (cy >= 0 && cy < 16) {
                 for (int x = -1; x <= 1; x++) {
@@ -405,11 +405,11 @@ public class VanillaWorldGenerator implements IWorldGenerator, IPreloadFailureDe
     // private static final short[] CUBE_FLAGS = { Cube.POP_100, Cube.POP_010, Cube.POP_110, Cube.POP_001, Cube.POP_101,
     // Cube.POP_011, Cube.POP_111, };
 
-    private Box getCubesToGenerate(int x, int y, int z) {
+    private Box getRelevantCubes(int x, int y, int z) {
         if (y >= 0 && y < 16) {
-            return new Box(x - 1, -1, x - 1, x + 1, 16, z + 1);
+            return new Box(x - 1, -1, z - 1, x + 1, 16, z + 1);
         } else {
-            return new Box(x - 1, y - 1, x - 1, x + 1, y + 1, z + 1);
+            return new Box(x - 1, y - 1, z - 1, x + 1, y + 1, z + 1);
         }
     }
 
