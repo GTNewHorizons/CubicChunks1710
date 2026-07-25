@@ -204,8 +204,10 @@ public abstract class MixinChunk implements IColumn, IColumnInternal {
             return;
         }
 
+        int actualHeight = world.provider.getActualHeight();
+
         this.cubeMap = new CubeMap();
-        this.opacityIndex = new HeightMap3D(heightMap);
+        this.opacityIndex = new HeightMap3D(heightMap, actualHeight);
         // instead of redirecting access to this map, just make the map do the work
         this.chunkTileEntityMap = new ColumnTileEntityMap(this);
 

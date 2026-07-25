@@ -40,9 +40,11 @@ public class HeightMap3D implements IHeightMap {
 
     @Nonnull
     private final VanillaHeightMap vanilla;
+    private final int worldActualHeight;
 
-    public HeightMap3D(int[] vanilla) {
+    public HeightMap3D(int[] vanilla, int worldActualHeight) {
         this.vanilla = new VanillaHeightMap(vanilla);
+        this.worldActualHeight = worldActualHeight;
 
         for (int i = 0; i < 256; i++) {
             this.heightmap.data()[i] = new YIntervalTree();
@@ -58,9 +60,17 @@ public class HeightMap3D implements IHeightMap {
         YIntervalTree tree = this.heightmap.get(localX, localZ);
 
         if (tree.set(blockY, occluded)) {
-            int topY = tree.getTopY();
-            vanilla.set(localX, localZ, topY == Coords.NO_HEIGHT ? 60 : topY);
+            updateVanilla(localX, localZ, tree);
         }
+    }
+
+    private void updateVanilla(int localX, int localZ, YIntervalTree tree) {
+        // We don't want to insert >256 heights into the vanilla map because it breaks a ton of mod code.
+        // So we scan from the logical top of the world (256 in OW, 128 in nether) to find the first air->block
+        // transition in that column, defaulting to 0 if there are no blocks in that column (which happens in the end).
+        int fakeTop = tree.getBottomSolidY(worldActualHeight);
+
+        vanilla.set(localX, localZ, fakeTop == Coords.NO_HEIGHT ? 0 : fakeTop);
     }
 
     @Override
@@ -92,18 +102,17 @@ public class HeightMap3D implements IHeightMap {
     public void readData(int localX, int localZ, CCPacketBuffer buffer) {
         int i = localZ << 4 | localX;
 
-        this.heightmap.data()[i].readData(buffer);
+        YIntervalTree tree = this.heightmap.data()[i];
+        tree.readData(buffer);
 
-        int topY = this.heightmap.data()[i].getTopY();
-        this.vanilla.data[i] = topY == Coords.NO_HEIGHT ? 60 : topY + 1;
+        updateVanilla(localX, localZ, tree);
     }
 
     public void readData(CCPacketBuffer buffer) {
-        for (int i = 0; i < 256; i++) {
-            this.heightmap.data()[i].readData(buffer);
-
-            int topY = this.heightmap.data()[i].getTopY();
-            this.vanilla.data[i] = topY == Coords.NO_HEIGHT ? 60 : topY + 1;
+        for (int lZ = 0; lZ < 16; lZ++) {
+            for (int lX = 0; lX < 16; lX++) {
+                readData(lX, lZ, buffer);
+            }
         }
     }
 
@@ -114,8 +123,10 @@ public class HeightMap3D implements IHeightMap {
     }
 
     public void writeData(CCPacketBuffer buffer) {
-        for (int i = 0; i < 256; i++) {
-            this.heightmap.data()[i].writeData(buffer);
+        for (int lZ = 0; lZ < 16; lZ++) {
+            for (int lX = 0; lX < 16; lX++) {
+                writeData(lX, lZ, buffer);
+            }
         }
     }
 }

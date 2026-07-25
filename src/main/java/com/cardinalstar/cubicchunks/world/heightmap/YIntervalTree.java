@@ -185,31 +185,75 @@ public final class YIntervalTree {
     }
 
     /**
-     * Returns the first Y' &gt;= {@code startY} that is NOT occupied (first air at or above startY).
-     * If {@code startY} is already unoccupied, returns {@code startY}.
+     * Returns the first air Y just above the solid interval at or below {@code startY},
+     * i.e. {@code hi[pred] + 1} where {@code pred} is the highest interval with lo &lt;= startY.
+     * Returns {@link Coords#NO_HEIGHT} if no solid exists at or below {@code startY}.
      * O(log n).
      */
     public int getTopAirY(int startY) {
         int pred = findPred(startY);
-        if (pred == NULL || hi[pred] < startY) {
-            return startY; // startY is already air
-        }
-        // startY is inside [lo[pred], hi[pred]]; intervals are non-adjacent so hi[pred]+1 is air
+        if (pred == NULL) return Coords.NO_HEIGHT;
         return hi[pred] + 1;
     }
 
     /**
-     * Returns the first Y' &lt;= {@code startY} that is NOT occupied (first air at or below startY).
-     * If {@code startY} is already unoccupied, returns {@code startY}.
+     * Returns the first air Y just below the solid interval at or above {@code startY},
+     * i.e. {@code lo[succ] - 1} where {@code succ} is the lowest interval with lo &gt; startY
+     * (or the interval containing {@code startY} if it is solid).
+     * Returns {@link Coords#NO_HEIGHT} if no solid exists at or above {@code startY}.
      * O(log n).
      */
     public int getBottomAirY(int startY) {
-        int pred = findPred(startY);
-        if (pred == NULL || hi[pred] < startY) {
-            return startY; // startY is already air
+        int node = root;
+        int pred = NULL, succ = NULL;
+        while (node != NULL) {
+            if (lo[node] <= startY) {
+                pred = node;
+                node = right[node];
+            } else {
+                succ = node;
+                node = left[node];
+            }
         }
-        // startY is inside [lo[pred], hi[pred]]; intervals are non-adjacent so lo[pred]-1 is air
-        return lo[pred] - 1;
+        if (pred != NULL && hi[pred] >= startY) return lo[pred] - 1; // startY is solid
+        if (succ != NULL) return lo[succ] - 1; // startY is air; anchor on solid above
+        return Coords.NO_HEIGHT;
+    }
+
+    /**
+     * Returns the first Y' &gt;= {@code startY} that IS occupied (first solid at or above startY).
+     * If {@code startY} is already occupied, returns {@code startY}.
+     * Returns {@link Coords#NO_HEIGHT} if no solid exists at or above {@code startY}.
+     * O(log n).
+     */
+    public int getTopSolidY(int startY) {
+        int node = root;
+        int pred = NULL, succ = NULL;
+        while (node != NULL) {
+            if (lo[node] <= startY) {
+                pred = node;
+                node = right[node];
+            } else {
+                succ = node;
+                node = left[node];
+            }
+        }
+        if (pred != NULL && hi[pred] >= startY) return startY;
+        if (succ != NULL) return lo[succ];
+        return Coords.NO_HEIGHT;
+    }
+
+    /**
+     * Returns the first Y' &lt;= {@code startY} that IS occupied (first solid at or below startY).
+     * If {@code startY} is already occupied, returns {@code startY}.
+     * Returns {@link Coords#NO_HEIGHT} if no solid exists at or below {@code startY}.
+     * O(log n).
+     */
+    public int getBottomSolidY(int startY) {
+        int pred = findPred(startY);
+        if (pred == NULL) return Coords.NO_HEIGHT;
+        if (hi[pred] >= startY) return startY;
+        return hi[pred];
     }
 
     /**
