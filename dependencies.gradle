@@ -35,7 +35,7 @@
  */
 dependencies {
     // ========================= Real Deps ========================= //
-    implementation("com.github.GTNewHorizons:GTNHLib:0.11.24:dev")
+    implementation("com.github.GTNewHorizons:GTNHLib:0.11.32:dev")
     implementation("com.github.GTNewHorizons:RegionLib:v0.1.0-GTNH:dev")
 
 //    runtimeOnlyNonPublishable("maven.modrinth:archaicfix:0.8.0:dev")
@@ -51,7 +51,7 @@ dependencies {
     compileOnly("ganymedes01.etfuturum:Et-Futurum-Requiem:2.6.2.21-GTNH-daily:dev")
 
     // ========================= Test Deps ========================= //
-    devOnlyNonPublishable("com.github.GTNewHorizons:NotEnoughItems:2.8.111-GTNH:dev")
+    devOnlyNonPublishable("com.github.GTNewHorizons:NotEnoughItems:2.8.114-GTNH:dev")
     testImplementation(platform('org.junit:junit-bom:5.11.4'))
     testImplementation('org.junit.jupiter:junit-jupiter')
 
