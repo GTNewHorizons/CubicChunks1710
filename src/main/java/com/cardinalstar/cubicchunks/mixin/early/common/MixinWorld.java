@@ -73,6 +73,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 import com.cardinalstar.cubicchunks.CubicChunks;
 import com.cardinalstar.cubicchunks.api.ICube;
 import com.cardinalstar.cubicchunks.api.IntRange;
+import com.cardinalstar.cubicchunks.api.world.ICubicWorldProvider;
 import com.cardinalstar.cubicchunks.api.world.ICubicWorldType;
 import com.cardinalstar.cubicchunks.lighting.LightingManager;
 import com.cardinalstar.cubicchunks.mixin.api.ICubicWorldInternal;
@@ -83,7 +84,6 @@ import com.cardinalstar.cubicchunks.util.CubePos;
 import com.cardinalstar.cubicchunks.util.ReflectionUtil;
 import com.cardinalstar.cubicchunks.world.CubicChunksSavedData;
 import com.cardinalstar.cubicchunks.world.ICubicWorld;
-import com.cardinalstar.cubicchunks.world.ICubicWorldProvider;
 import com.cardinalstar.cubicchunks.world.cube.Cube;
 import com.cardinalstar.cubicchunks.world.cube.ICubeProvider;
 import com.cardinalstar.cubicchunks.world.cube.ICubeProviderInternal;
@@ -99,6 +99,7 @@ import com.llamalad7.mixinextras.sugar.Local;
 @ParametersAreNonnullByDefault
 @Mixin(World.class)
 @Implements(@Interface(iface = ICubicWorld.class, prefix = "world$"))
+@SuppressWarnings({ "AddedMixinMembersNamePattern" })
 public abstract class MixinWorld implements ICubicWorldInternal {
 
     // these have to be here because of mixin limitation, they are used by MixinWorldServer
@@ -241,8 +242,6 @@ public abstract class MixinWorld implements ICubicWorldInternal {
         // noinspection ConstantValue
         if (!((Object) this instanceof WorldServer worldServer)) return;
 
-        ((ICubicWorldInternal.Server) this).initCubicWorldServer();
-
         if (shouldSkipWorld(worldServer)) {
             CubicChunks.LOGGER.info(
                 "Skipping world {} with type {} due to potential compatibility issues",
@@ -251,14 +250,20 @@ public abstract class MixinWorld implements ICubicWorldInternal {
             return;
         }
 
+        ((ICubicWorldInternal.Server) this).initCubicWorldServer();
+
         CubicChunks.LOGGER.info("Initializing world {} with type {}", this, this.worldInfo.getTerrainType());
 
-        IntRange generationRange = new IntRange(0, ((ICubicWorldProvider) this.provider).getOriginalActualHeight());
+        IntRange generationRange;
 
         WorldType type = this.worldInfo.getTerrainType();
 
-        if (type instanceof ICubicWorldType && ((ICubicWorldType) type).hasCubicGeneratorForWorld(worldServer)) {
-            generationRange = ((ICubicWorldType) type).calculateGenerationHeightRange(worldServer);
+        if (type instanceof ICubicWorldType cubicWorldType && cubicWorldType.hasCubicGeneratorForWorld(worldServer)) {
+            generationRange = cubicWorldType.getGenerationRange(worldServer);
+        } else if (this.provider instanceof ICubicWorldProvider cubicWorldProvider) {
+            generationRange = cubicWorldProvider.getGenerationRange();
+        } else {
+            generationRange = new IntRange(0, this.provider.getActualHeight());
         }
 
         this.chunkProvider = createChunkProvider();
