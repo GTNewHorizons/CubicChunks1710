@@ -39,6 +39,7 @@ import net.minecraft.world.NextTickListEntry;
 import net.minecraft.world.SpawnerAnimals;
 import net.minecraft.world.World;
 import net.minecraft.world.WorldServer;
+import net.minecraft.world.WorldType;
 import net.minecraft.world.chunk.Chunk;
 import net.minecraft.world.chunk.IChunkProvider;
 import net.minecraft.world.chunk.storage.ExtendedBlockStorage;
@@ -64,6 +65,10 @@ import com.cardinalstar.cubicchunks.api.ICube;
 import com.cardinalstar.cubicchunks.api.ICubicWorldServer;
 import com.cardinalstar.cubicchunks.api.XYZMap;
 import com.cardinalstar.cubicchunks.api.XZMap;
+import com.cardinalstar.cubicchunks.api.world.ICubicWorldProvider;
+import com.cardinalstar.cubicchunks.api.world.ICubicWorldType;
+import com.cardinalstar.cubicchunks.api.worldgen.BuiltinWorldDecorators;
+import com.cardinalstar.cubicchunks.api.worldgen.IWorldGenerator;
 import com.cardinalstar.cubicchunks.mixin.api.ICubicWorldInternal;
 import com.cardinalstar.cubicchunks.server.CubeProviderServer;
 import com.cardinalstar.cubicchunks.server.CubicPlayerManager;
@@ -71,10 +76,10 @@ import com.cardinalstar.cubicchunks.server.SpawnCubes;
 import com.cardinalstar.cubicchunks.util.CubePos;
 import com.cardinalstar.cubicchunks.util.world.CubeSplitTicks;
 import com.cardinalstar.cubicchunks.world.CubeSpawnerAnimals;
-import com.cardinalstar.cubicchunks.world.ICubicWorldProvider;
 import com.cardinalstar.cubicchunks.world.ISpawnerAnimals;
 import com.cardinalstar.cubicchunks.world.chunkloader.CubicChunkManager;
 import com.cardinalstar.cubicchunks.world.savedata.WorldFormatSavedData;
+import com.cardinalstar.cubicchunks.worldgen.VanillaWorldGenerator;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 
@@ -152,12 +157,30 @@ public abstract class MixinWorldServer extends MixinWorld implements ICubicWorld
         return new CubicPlayerManager(server);
     }
 
-    @Redirect(
-        method = "createChunkProvider",
-        at = @At(value = "NEW", target = "net/minecraft/world/gen/ChunkProviderServer"))
-    private ChunkProviderServer redirectChunkProviderServer(WorldServer world, IChunkLoader chunkLoader,
-        IChunkProvider chunkGenerator) {
-        return new CubeProviderServer(world, chunkLoader, ((ICubicWorldProvider) world.provider).createCubeGenerator());
+    @Inject(method = "createChunkProvider", at = @At("HEAD"), cancellable = true)
+    private void interceptChunkProvider(CallbackInfoReturnable<IChunkProvider> cir) {
+        WorldServer self = (WorldServer) (Object) this;
+
+        WorldType terrainType = self.getWorldInfo()
+            .getTerrainType();
+
+        IChunkProvider chunkGenerator = self.provider.createChunkGenerator();
+
+        IWorldGenerator cubicGenerator;
+
+        if (terrainType instanceof ICubicWorldType cubicWorldType && cubicWorldType.hasCubicGeneratorForWorld(self)) {
+            cubicGenerator = cubicWorldType.createCubeGenerator(self, chunkGenerator);
+        } else if (self.provider instanceof ICubicWorldProvider cubicProvider) {
+            cubicGenerator = cubicProvider.createCubeGenerator(chunkGenerator);
+        } else {
+            cubicGenerator = new VanillaWorldGenerator(chunkGenerator, self, BuiltinWorldDecorators.VANILLA);
+        }
+
+        IChunkLoader chunkLoader = this.saveHandler.getChunkLoader(this.provider);
+
+        this.theChunkProviderServer = new CubeProviderServer(self, chunkLoader, cubicGenerator, chunkGenerator);
+
+        cir.setReturnValue(this.theChunkProviderServer);
     }
 
     @Inject(method = "getChunkSaveLocation", at = @At("HEAD"), cancellable = true, remap = false)
