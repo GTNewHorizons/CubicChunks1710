@@ -149,6 +149,12 @@ public class FirstLightProcessor {
                     for (int yPos = minY; yPos <= bYMax; yPos++) {
                         if (yPos >= minInstantFill && yPos <= maxInstantFill) {
                             cube.setLightFor(EnumSkyBlock.Sky, bX + lX, yPos, bZ + lZ, 15);
+                        } else if (!isCubeEmpty && isEdge && yPos > stagingTopBlock) {
+                            // Above-terrain edge blocks have unambiguous sky access within their
+                            // own column. Instant-fill like vanilla instead of deferring to
+                            // Phosphor, otherwise the client would see sky=0 on the border until
+                            // the client lighting engine updates those blocks.
+                            cube.setLightFor(EnumSkyBlock.Sky, bX + lX, yPos, bZ + lZ, 15);
                         } else {
                             if (isEdge) {
                                 cube.setLightFor(EnumSkyBlock.Sky, bX + lX, yPos, bZ + lZ, 0);
