@@ -35,13 +35,14 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
+import com.cardinalstar.cubicchunks.mixin.early.common.MixinChunk;
 import com.cardinalstar.cubicchunks.world.column.CubeMap;
 import com.cardinalstar.cubicchunks.world.cube.BlankCube;
 import com.cardinalstar.cubicchunks.world.cube.Cube;
 
 @ParametersAreNonnullByDefault
 @Mixin(EmptyChunk.class)
-public abstract class MixinEmptyChunk extends MixinChunk_Cubes {
+public abstract class MixinEmptyChunk extends MixinChunk {
 
     private Cube blankCube;
 
