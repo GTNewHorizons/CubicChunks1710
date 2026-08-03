@@ -377,6 +377,7 @@ public class VanillaWorldGenerator implements IWorldGenerator, IPreloadFailureDe
                         // columns in the
                         // negative directions (-x,z, x,-z, -x,-z).
 
+                        preparePopulationTerrain(loader, v.x(), v.z());
                         populateChunk(loader, v.x(), v.z());
                     }
 
@@ -426,6 +427,16 @@ public class VanillaWorldGenerator implements IWorldGenerator, IPreloadFailureDe
             return new Box(x, 0, z, x, 15, z);
         } else {
             return new Box(x, y, z, x, y, z);
+        }
+    }
+
+    private void preparePopulationTerrain(ICubeLoader loader, int columnX, int columnZ) {
+        for (int dx = 0; dx <= 1; dx++) {
+            for (int dz = 0; dz <= 1; dz++) {
+                for (int cubeY = 0; cubeY < 16; cubeY++) {
+                    loader.getCube(columnX + dx, cubeY, columnZ + dz, Requirement.GENERATE);
+                }
+            }
         }
     }
 
