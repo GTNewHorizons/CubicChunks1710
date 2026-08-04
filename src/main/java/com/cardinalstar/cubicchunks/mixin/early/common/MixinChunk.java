@@ -361,8 +361,8 @@ public abstract class MixinChunk implements IColumn, IColumnInternal {
     // ==============================================
 
     /**
-     * @author CardinalStar
-     * @reason Vanilla only checks the fixed storage array, which does not contain unloaded cubic surface sections.
+     * @author Jakfut
+     * @reason Vanilla only checks the fixed storage array, which cannot represent unloaded cubic surface sections.
      */
     @Overwrite
     public int getTopFilledSegment() {
@@ -390,7 +390,7 @@ public abstract class MixinChunk implements IColumn, IColumnInternal {
             }
         }
 
-        return highestCubeY == Integer.MIN_VALUE ? 0 : cubeToMinBlock(highestCubeY);
+        return highestCubeY == Integer.MIN_VALUE ? 0 : MathHelper.clamp_int(cubeToMinBlock(highestCubeY), 0, 256);
     }
 
     // ==============================================
