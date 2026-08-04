@@ -34,7 +34,7 @@ public interface ICubeLoader extends Flushable, Closeable {
 
     void setNow(long now);
 
-    default void cacheCubes(Box box, Requirement effort) {
+    default void cacheCubes(Box box) {
         cacheCubes(
             box.getX1(),
             box.getY1(),
