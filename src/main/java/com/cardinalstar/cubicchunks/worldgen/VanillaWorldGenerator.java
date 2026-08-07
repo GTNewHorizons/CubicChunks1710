@@ -385,6 +385,11 @@ public class VanillaWorldGenerator implements IWorldGenerator, IPreloadFailureDe
                 }
             }
 
+            if (cy >= 0 && cy < 16) {
+                // A later neighboring population tile can grow leaves into this completed column after its snow pass.
+                reconcileSnowCover(cx, cz);
+            }
+
             for (Vector3ic v : getFullyPopulatedCubes(cx, cy, cz)) {
                 Cube center = loader.getCube(v.x(), v.y(), v.z(), Requirement.GENERATE);
 
@@ -435,6 +440,23 @@ public class VanillaWorldGenerator implements IWorldGenerator, IPreloadFailureDe
             for (int dz = 0; dz <= 1; dz++) {
                 for (int cubeY = 0; cubeY < 16; cubeY++) {
                     loader.getCube(columnX + dx, cubeY, columnZ + dz, Requirement.GENERATE);
+                }
+            }
+        }
+    }
+
+    private void reconcileSnowCover(int columnX, int columnZ) {
+        int minBlockX = Coords.cubeToMinBlock(columnX);
+        int minBlockZ = Coords.cubeToMinBlock(columnZ);
+
+        for (int dx = 0; dx < 16; dx++) {
+            for (int dz = 0; dz < 16; dz++) {
+                int blockX = minBlockX + dx;
+                int blockZ = minBlockZ + dz;
+                int precipitationY = world.getPrecipitationHeight(blockX, blockZ);
+
+                if (world.func_147478_e(blockX, precipitationY, blockZ, true)) {
+                    world.setBlock(blockX, precipitationY, blockZ, Blocks.snow_layer, 0, 2);
                 }
             }
         }
