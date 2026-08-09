@@ -70,13 +70,13 @@ public class IONbtReader {
             return null;
         }
 
-        readOpacityIndex(level, column);
-
         if (!Mods.ChunkAPI.isModLoaded()) {
             readBiomes(level, column);
         } else {
             DataRegistryImpl.readChunkFromNBT(column, nbt);
         }
+
+        readOpacityIndex(level, column);
 
         column.isModified = false; // its exactly the same as on disk so its not modified
         ((IColumnInternal) column).setColumn(true);
@@ -114,10 +114,13 @@ public class IONbtReader {
     }
 
     private static void readOpacityIndex(NBTTagCompound nbt, Chunk chunk) {
-        if (!nbt.hasKey("HeightMap3D", NBT.TAG_BYTE_ARRAY)) return;
-
         IHeightMap hmap = ((IColumn) chunk).getOpacityIndex();
-        ((HeightMap3D) hmap).readData(new CCPacketBuffer(Unpooled.wrappedBuffer(nbt.getByteArray("HeightMap3D"))));
+        HeightMap3D heightMap3D = (HeightMap3D) hmap;
+        heightMap3D.setVanillaHeightMap(chunk.heightMap);
+
+        if (nbt.hasKey("HeightMap3D", NBT.TAG_BYTE_ARRAY)) {
+            heightMap3D.readData(new CCPacketBuffer(Unpooled.wrappedBuffer(nbt.getByteArray("HeightMap3D"))));
+        }
     }
 
     static CubeInitLevel getCubeInitLevel(NBTTagCompound nbt) {
