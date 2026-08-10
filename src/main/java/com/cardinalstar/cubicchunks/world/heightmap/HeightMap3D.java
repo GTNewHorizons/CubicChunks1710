@@ -39,16 +39,21 @@ public class HeightMap3D implements IHeightMap {
     private final Array2D_16x16<YIntervalTree> heightmap = new Array2D_16x16<>(YIntervalTree[]::new);
 
     @Nonnull
-    private final VanillaHeightMap vanilla;
+    private VanillaHeightMap vanilla;
     private final int worldActualHeight;
 
     public HeightMap3D(int[] vanilla, int worldActualHeight) {
-        this.vanilla = new VanillaHeightMap(vanilla);
+        setVanillaHeightMap(vanilla);
         this.worldActualHeight = worldActualHeight;
 
         for (int i = 0; i < 256; i++) {
             this.heightmap.data()[i] = new YIntervalTree();
         }
+    }
+
+    /** Rebinds the vanilla view after an external chunk data manager replaces {@code Chunk.heightMap}. */
+    public void setVanillaHeightMap(int[] vanilla) {
+        this.vanilla = new VanillaHeightMap(vanilla);
     }
 
     @Override
