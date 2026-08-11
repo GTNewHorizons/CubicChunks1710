@@ -135,6 +135,11 @@ public class CubeLoaderServer implements ICubeLoader {
 
         column.column.onChunkUnload();
 
+        for (var cube : new ArrayList<>(column.containedCubes)) {
+            cube.onCubeUnloaded();
+            cubes.remove(cube);
+        }
+
         columns.remove(column);
 
         column.onColumnUnloaded();
