@@ -45,7 +45,7 @@ public class CubeMap implements Iterable<Cube> {
     public static final ExtendedBlockStorage[] ZERO_LEN_EBS_ARRAY = new ExtendedBlockStorage[0];
 
     @Nonnull
-    public final ArrayList<Cube> cubes = new ArrayList<>();
+    private final ArrayList<Cube> cubes = new ArrayList<>();
 
     private ExtendedBlockStorage[] tickableEBSes = ZERO_LEN_EBS_ARRAY;
 
@@ -279,5 +279,9 @@ public class CubeMap implements Iterable<Cube> {
 
             relightCubeIdx++;
         }
+    }
+
+    public void markDirty() {
+        this.cubes.forEach(Cube::markDirty);
     }
 }

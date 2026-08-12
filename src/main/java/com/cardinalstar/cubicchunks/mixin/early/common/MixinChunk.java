@@ -23,7 +23,6 @@ package com.cardinalstar.cubicchunks.mixin.early.common;
 import static com.cardinalstar.cubicchunks.util.Coords.blockToCube;
 import static com.cardinalstar.cubicchunks.util.Coords.blockToLocal;
 
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
@@ -381,14 +380,8 @@ public abstract class MixinChunk implements IColumn, IColumnInternal {
 
     @Inject(method = "setChunkModified", at = @At("HEAD"))
     private void markCubesDirty(CallbackInfo ci) {
-        ArrayList<Cube> cubes = this.cubeMap.cubes;
-
-        int len = cubes.size();
-
-        // noinspection ForLoopReplaceableByForEach
-        for (int i = 0; i < len; i++) {
-            cubes.get(i)
-                .markDirty();
+        if (this.cubeMap != null) {
+            this.cubeMap.markDirty();
         }
     }
 
