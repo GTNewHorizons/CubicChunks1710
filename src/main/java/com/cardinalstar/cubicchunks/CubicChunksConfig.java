@@ -120,7 +120,7 @@ public class CubicChunksConfig {
     @Config.LangKey("cubicchunks.config.default_min_height")
     @Config.Comment("World min height. Values that are not an integer multiple of 16 may cause unintended behavior")
     @Config.RangeInt(min = CubicChunks.MIN_SUPPORTED_BLOCK_Y, max = 0)
-    public static int defaultMinHeight = -(1 << 30);
+    public static int defaultMinHeight = 0;
 
     @Config.LangKey("cubicchunks.config.default_max_height")
     @Config.Comment("World max height. Values that are not an integer multiple of 16 may cause unintended behavior")
