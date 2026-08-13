@@ -101,6 +101,9 @@ public class PacketEncoderCube extends CCPacketEncoder<PacketCube> {
 
         WorldEncoder.decodeCube(new CCPacketBuffer(Unpooled.wrappedBuffer(packet.data)), cube, world);
 
+        if (!cube.isCubeLoaded()) {
+            cube.onCubeLoad();
+        }
         cube.markForRenderUpdate();
     }
 }
