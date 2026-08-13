@@ -356,6 +356,13 @@ public abstract class MixinChunk implements IColumn, IColumnInternal {
         }
     }
 
+    @Inject(method = "setChunkModified", at = @At("HEAD"))
+    private void markCubesDirty(CallbackInfo ci) {
+        if (this.cubeMap != null) {
+            this.cubeMap.markDirty();
+        }
+    }
+
     // ==============================================
     // getTopFilledSegment
     // ==============================================
