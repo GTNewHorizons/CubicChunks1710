@@ -293,7 +293,15 @@ public class CubeLoaderServer implements ICubeLoader {
     public void unloadCube(int x, int y, int z) {
         CubeInfo info = cubes.remove(x, y, z);
 
-        if (info != null) info.onCubeUnloaded();
+        if (info != null) {
+            if (lastCube == info.cube) {
+                lastCube = null;
+            }
+            if (cache != null) {
+                cache.set(x, y, z, null);
+            }
+            info.onCubeUnloaded();
+        }
     }
 
     @Override
