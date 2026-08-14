@@ -168,6 +168,9 @@ public class CubeProviderClient extends ChunkProviderClient implements ICubeProv
         cubeMap.remove(pos.getX(), pos.getY(), pos.getZ());
         cube.getColumn()
             .removeCube(pos.getY());
+        if (lastCube == cube) {
+            lastCube = null;
+        }
     }
 
     @Override
