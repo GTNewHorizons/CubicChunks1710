@@ -104,13 +104,13 @@ public class CCNBTUtils {
                     }
 
                     byte[] data = nos.toByteArray();
+                    var compressor = LZ4Factory.fastestInstance()
+                        .fastCompressor();
 
-                    ByteBuffer compressed = ByteBuffer.allocate(data.length + 8)
+                    ByteBuffer compressed = ByteBuffer.allocate(8 + compressor.maxCompressedLength(data.length))
                         .order(ByteOrder.LITTLE_ENDIAN);
 
-                    int compLen = LZ4Factory.fastestInstance()
-                        .fastCompressor()
-                        .compress(data, 0, data.length, compressed.array(), 8);
+                    int compLen = compressor.compress(data, 0, data.length, compressed.array(), 8);
 
                     compressed.putInt(0, LZ4_MAGIC_NUMBER);
                     compressed.putInt(4, data.length);
