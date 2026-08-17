@@ -350,8 +350,8 @@ public class VanillaWorldGenerator implements IWorldGenerator, IPreloadFailureDe
         try {
             WorldgenHangWatchdog.startWorldGen();
 
-            // Generate all relevant cubes and store them in an array cache
-            loader.cacheCubes(getCubesToGenerate(cx, cy, cz), Requirement.GENERATE);
+            // Cache the affected cubes for this vanilla chunk
+            loader.cacheCubes(getRelevantCubes(cx, cy, cz));
 
             if (cy >= 0 && cy < 16) {
                 for (int x = -1; x <= 1; x++) {
@@ -377,11 +377,17 @@ public class VanillaWorldGenerator implements IWorldGenerator, IPreloadFailureDe
                         // columns in the
                         // negative directions (-x,z, x,-z, -x,-z).
 
+                        preparePopulationTerrain(loader, v.x(), v.z());
                         populateChunk(loader, v.x(), v.z());
                     }
 
                     center.markPopulated(Cube.POP_000);
                 }
+            }
+
+            if (cy >= 0 && cy < 16) {
+                // A later neighboring population tile can grow leaves into this completed column after its snow pass.
+                reconcileSnowCover(cx, cz);
             }
 
             for (Vector3ic v : getFullyPopulatedCubes(cx, cy, cz)) {
@@ -405,11 +411,11 @@ public class VanillaWorldGenerator implements IWorldGenerator, IPreloadFailureDe
     // private static final short[] CUBE_FLAGS = { Cube.POP_100, Cube.POP_010, Cube.POP_110, Cube.POP_001, Cube.POP_101,
     // Cube.POP_011, Cube.POP_111, };
 
-    private Box getCubesToGenerate(int x, int y, int z) {
+    private Box getRelevantCubes(int x, int y, int z) {
         if (y >= 0 && y < 16) {
-            return new Box(x - 1, -1, x - 1, x + 1, 16, z + 1);
+            return new Box(x - 1, -1, z - 1, x + 1, 16, z + 1);
         } else {
-            return new Box(x - 1, y - 1, x - 1, x + 1, y + 1, z + 1);
+            return new Box(x - 1, y - 1, z - 1, x + 1, y + 1, z + 1);
         }
     }
 
@@ -426,6 +432,33 @@ public class VanillaWorldGenerator implements IWorldGenerator, IPreloadFailureDe
             return new Box(x, 0, z, x, 15, z);
         } else {
             return new Box(x, y, z, x, y, z);
+        }
+    }
+
+    private void preparePopulationTerrain(ICubeLoader loader, int columnX, int columnZ) {
+        for (int dx = 0; dx <= 1; dx++) {
+            for (int dz = 0; dz <= 1; dz++) {
+                for (int cubeY = 0; cubeY < 16; cubeY++) {
+                    loader.getCube(columnX + dx, cubeY, columnZ + dz, Requirement.GENERATE);
+                }
+            }
+        }
+    }
+
+    private void reconcileSnowCover(int columnX, int columnZ) {
+        int minBlockX = Coords.cubeToMinBlock(columnX);
+        int minBlockZ = Coords.cubeToMinBlock(columnZ);
+
+        for (int dx = 0; dx < 16; dx++) {
+            for (int dz = 0; dz < 16; dz++) {
+                int blockX = minBlockX + dx;
+                int blockZ = minBlockZ + dz;
+                int precipitationY = world.getPrecipitationHeight(blockX, blockZ);
+
+                if (world.func_147478_e(blockX, precipitationY, blockZ, true)) {
+                    world.setBlock(blockX, precipitationY, blockZ, Blocks.snow_layer, 0, 2);
+                }
+            }
         }
     }
 

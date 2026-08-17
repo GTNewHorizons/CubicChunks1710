@@ -74,7 +74,7 @@ public class CubicChunksConfig {
         + "         0:bottom:-128, \n"
         + "         0:top:1024 \n"
         + "     >\n")
-    public static String[] dimensional_height_overrides = {};
+    public static String[] dimensional_height_overrides = { "0:bottom:-64" };
 
     @Config.LangKey("cubicchunks.config.vert_view_distance")
     @Config.Comment("Similar to Minecraft's view distance, only for vertical chunks. Automatically adjusted by vertical view distance slider on the"
@@ -120,7 +120,7 @@ public class CubicChunksConfig {
     @Config.LangKey("cubicchunks.config.default_min_height")
     @Config.Comment("World min height. Values that are not an integer multiple of 16 may cause unintended behavior")
     @Config.RangeInt(min = CubicChunks.MIN_SUPPORTED_BLOCK_Y, max = 0)
-    public static int defaultMinHeight = -(1 << 30);
+    public static int defaultMinHeight = 0;
 
     @Config.LangKey("cubicchunks.config.default_max_height")
     @Config.Comment("World max height. Values that are not an integer multiple of 16 may cause unintended behavior")

@@ -96,7 +96,8 @@ public abstract class MixinWorldClient extends MixinWorld implements ICubicWorld
     @Definition(id = "nextInt", method = "Ljava/util/Random;nextInt(I)I")
     @Expression("this.rand.nextInt(8) > ?")
     @WrapOperation(method = "doVoidFogParticles", at = @At("MIXINEXTRAS:EXPRESSION"))
-    public boolean decreaseVoidParticleAmount(int ignored, int blockY, Operation<Boolean> original) {
-        return this.rand.nextInt(8) > Math.max(blockY, 4);
+    public boolean useMinimumHeightForVoidParticles(int randomValue, int blockY, Operation<Boolean> original) {
+        long relativeY = (long) blockY - this.getMinHeight();
+        return randomValue > Math.max(relativeY, 4L);
     }
 }

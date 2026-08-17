@@ -133,6 +133,13 @@ public class CubeLoaderServer implements ICubeLoader {
             throw new IllegalStateException("Cannot unload column that still contains cubes");
         }
 
+        column.column.onChunkUnload();
+
+        for (var cube : new ArrayList<>(column.containedCubes)) {
+            cube.onCubeUnloaded();
+            cubes.remove(cube);
+        }
+
         columns.remove(column);
 
         column.onColumnUnloaded();
@@ -286,7 +293,15 @@ public class CubeLoaderServer implements ICubeLoader {
     public void unloadCube(int x, int y, int z) {
         CubeInfo info = cubes.remove(x, y, z);
 
-        if (info != null) info.onCubeUnloaded();
+        if (info != null) {
+            if (lastCube == info.cube) {
+                lastCube = null;
+            }
+            if (cache != null) {
+                cache.set(x, y, z, null);
+            }
+            info.onCubeUnloaded();
+        }
     }
 
     @Override
@@ -630,8 +645,6 @@ public class CubeLoaderServer implements ICubeLoader {
         }
 
         public void onColumnUnloaded() {
-            column.onChunkUnload();
-
             try {
                 cubeIO.saveColumn(pos, column);
             } finally {

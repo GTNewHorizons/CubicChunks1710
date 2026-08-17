@@ -22,6 +22,7 @@ package com.cardinalstar.cubicchunks.mixin.early.common;
 
 import static com.cardinalstar.cubicchunks.util.Coords.blockToCube;
 import static com.cardinalstar.cubicchunks.util.Coords.blockToLocal;
+import static com.cardinalstar.cubicchunks.util.Coords.cubeToMinBlock;
 
 import java.util.Arrays;
 import java.util.Collection;
@@ -353,6 +354,50 @@ public abstract class MixinChunk implements IColumn, IColumnInternal {
             this.getCube(cubeY)
                 .markDirty();
         }
+    }
+
+    @Inject(method = "setChunkModified", at = @At("HEAD"))
+    private void markCubesDirty(CallbackInfo ci) {
+        if (this.cubeMap != null) {
+            this.cubeMap.markDirty();
+        }
+    }
+
+    // ==============================================
+    // getTopFilledSegment
+    // ==============================================
+
+    /**
+     * @author Jakfut
+     * @reason Vanilla only checks the fixed storage array, which cannot represent unloaded cubic surface sections.
+     */
+    @Overwrite
+    public int getTopFilledSegment() {
+        if (!isColumn) {
+            for (int cubeY = storageArrays.length - 1; cubeY >= 0; cubeY--) {
+                if (storageArrays[cubeY] != null) return storageArrays[cubeY].getYLocation();
+            }
+            return 0;
+        }
+
+        int highestCubeY = Integer.MIN_VALUE;
+        for (int localZ = 0; localZ < 16; localZ++) {
+            for (int localX = 0; localX < 16; localX++) {
+                int topBlockY = opacityIndex.getTopBlockY(localX, localZ);
+                if (topBlockY >= CubicChunks.MIN_SUPPORTED_BLOCK_Y) {
+                    highestCubeY = Math.max(highestCubeY, blockToCube(topBlockY));
+                }
+            }
+        }
+
+        for (Cube cube : cubeMap) {
+            ExtendedBlockStorage storage = cube.getStorage();
+            if (storage != null && !storage.isEmpty()) {
+                highestCubeY = Math.max(highestCubeY, cube.getY());
+            }
+        }
+
+        return highestCubeY == Integer.MIN_VALUE ? 0 : MathHelper.clamp_int(cubeToMinBlock(highestCubeY), 0, 256);
     }
 
     // ==============================================
