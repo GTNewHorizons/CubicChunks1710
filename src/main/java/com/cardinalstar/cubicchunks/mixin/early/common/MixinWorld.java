@@ -261,32 +261,38 @@ public abstract class MixinWorld implements ICubicWorldInternal {
         }
 
         // If this is some other World subclass that we don't care about, skip its CC init
+        // This is usually the case for dummy worlds, and we can't control the lifecycle of those at all so we leave them non-cubic
+        //noinspection ConstantValue
         if (!isServer && !isClient) return;
 
-        CubicChunks.LOGGER.info("Initializing world {} with type {}", this, this.worldInfo.getTerrainType());
+        IntRange generationRange, heightRange;
 
-        // noinspection ConstantValue
-        if ((Object) this instanceof WorldServer worldServer) {
-            IntRange generationRange;
+        WorldType type = this.worldInfo.getTerrainType();
 
-            WorldType type = this.worldInfo.getTerrainType();
+        World world = (World) (Object) this;
 
-            if (type instanceof ICubicWorldType cubicWorldType && cubicWorldType.hasCubicGeneratorForWorld(worldServer)) {
-                generationRange = cubicWorldType.getGenerationRange(worldServer);
-            } else if (this.provider instanceof ICubicWorldProvider cubicWorldProvider) {
-                generationRange = cubicWorldProvider.getGenerationRange();
-            } else {
-                generationRange = new IntRange(0, this.provider.getActualHeight());
-            }
-
-            CubicChunksSavedData savedData = CubicChunksSavedData.get(worldServer);
-
-            this.initCubicWorld(new IntRange(savedData.minHeight, savedData.maxHeight), generationRange);
+        if (type instanceof ICubicWorldType cubicWorldType && cubicWorldType.hasCubicGeneratorForWorld(world)) {
+            generationRange = cubicWorldType.getGenerationRange(world);
+        } else if (this.provider instanceof ICubicWorldProvider cubicWorldProvider) {
+            generationRange = cubicWorldProvider.getGenerationRange();
         } else {
-            this.initCubicWorld(new IntRange(Integer.MIN_VALUE, Integer.MAX_VALUE), new IntRange(Integer.MIN_VALUE, Integer.MAX_VALUE));
+            generationRange = new IntRange(0, this.provider.getActualHeight());
         }
 
+        if ((Object) this instanceof WorldServer worldServer) {
+            CubicChunksSavedData savedData = CubicChunksSavedData.get(worldServer);
+
+            heightRange = new IntRange(savedData.minHeight, savedData.maxHeight);
+        } else {
+            // Client world, just set some defaults and let the packets update these properly
+            heightRange = new IntRange(Integer.MIN_VALUE, Integer.MAX_VALUE);
+        }
+
+        this.initCubicWorld(heightRange, generationRange);
+
         this.chunkProvider = createChunkProvider();
+
+        CubicChunks.LOGGER.info("Initialized world {} with type {} (generation range: {}, height: {}, provider: {})", this, this.worldInfo.getTerrainType(), generationRange, heightRange, chunkProvider);
 
         this.lightingManager = new LightingManager((World) (Object) this);
     }
