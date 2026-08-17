@@ -22,6 +22,7 @@ package com.cardinalstar.cubicchunks.api.worldtype;
 
 import javax.annotation.ParametersAreNonnullByDefault;
 
+import net.minecraft.world.World;
 import net.minecraft.world.WorldServer;
 import net.minecraft.world.WorldType;
 import net.minecraft.world.chunk.IChunkProvider;
@@ -55,12 +56,12 @@ public class VanillaCubicWorldType extends WorldType implements ICubicWorldType 
     }
 
     @Override
-    public IntRange getGenerationRange(WorldServer world) {
+    public IntRange getGenerationRange(World world) {
         return new IntRange(0, world.provider.getActualHeight());
     }
 
     @Override
-    public boolean hasCubicGeneratorForWorld(WorldServer object) {
+    public boolean hasCubicGeneratorForWorld(World object) {
         return true;
     }
 }
