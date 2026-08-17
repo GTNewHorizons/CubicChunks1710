@@ -30,7 +30,6 @@ import org.jetbrains.annotations.NotNull;
 
 import com.cardinalstar.cubicchunks.api.IntRange;
 import com.cardinalstar.cubicchunks.api.worldgen.IWorldGenerator;
-import com.cardinalstar.cubicchunks.worldgen.VanillaWorldGenerator;
 
 /// Implemented on [WorldType] references to override other world generators. World types take priority over
 /// [WorldProvider]s that implement [ICubicWorldProvider]. When neither interface is present,

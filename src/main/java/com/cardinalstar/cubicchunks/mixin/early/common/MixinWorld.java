@@ -92,6 +92,7 @@ import com.gtnewhorizon.gtnhlib.blockpos.BlockPos;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.llamalad7.mixinextras.sugar.Local;
+
 import cpw.mods.fml.common.FMLCommonHandler;
 
 /**
@@ -232,7 +233,9 @@ public abstract class MixinWorld implements ICubicWorldInternal {
         boolean isServer = (Object) this instanceof WorldServer;
         boolean isClient = false;
 
-        if (FMLCommonHandler.instance().getSide().isClient()) {
+        if (FMLCommonHandler.instance()
+            .getSide()
+            .isClient()) {
             if ((Object) this instanceof WorldClient) {
                 isClient = true;
             }
@@ -254,15 +257,18 @@ public abstract class MixinWorld implements ICubicWorldInternal {
         boolean isServer = (Object) this instanceof WorldServer;
         boolean isClient = false;
 
-        if (FMLCommonHandler.instance().getSide().isClient()) {
+        if (FMLCommonHandler.instance()
+            .getSide()
+            .isClient()) {
             if ((Object) this instanceof WorldClient) {
                 isClient = true;
             }
         }
 
         // If this is some other World subclass that we don't care about, skip its CC init
-        // This is usually the case for dummy worlds, and we can't control the lifecycle of those at all so we leave them non-cubic
-        //noinspection ConstantValue
+        // This is usually the case for dummy worlds, and we can't control the lifecycle of those at all so we leave
+        // them non-cubic
+        // noinspection ConstantValue
         if (!isServer && !isClient) return;
 
         IntRange generationRange, heightRange;
@@ -292,7 +298,13 @@ public abstract class MixinWorld implements ICubicWorldInternal {
 
         this.chunkProvider = createChunkProvider();
 
-        CubicChunks.LOGGER.info("Initialized world {} with type {} (generation range: {}, height: {}, provider: {})", this, this.worldInfo.getTerrainType(), generationRange, heightRange, chunkProvider);
+        CubicChunks.LOGGER.info(
+            "Initialized world {} with type {} (generation range: {}, height: {}, provider: {})",
+            this,
+            this.worldInfo.getTerrainType(),
+            generationRange,
+            heightRange,
+            chunkProvider);
 
         this.lightingManager = new LightingManager((World) (Object) this);
     }
