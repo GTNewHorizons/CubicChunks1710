@@ -20,8 +20,14 @@
  */
 package com.cardinalstar.cubicchunks.network;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import javax.annotation.ParametersAreNonnullByDefault;
 
+import net.minecraft.block.Block;
+import net.minecraft.tileentity.TileEntity;
+import net.minecraft.world.ChunkPosition;
 import net.minecraft.world.World;
 import net.minecraft.world.chunk.Chunk;
 import net.minecraft.world.chunk.NibbleArray;
@@ -145,6 +151,8 @@ class WorldEncoder {
     static void decodeCube(CCPacketBuffer in, Cube cube, World world) {
         final boolean capi = Mods.ChunkAPI.isModLoaded();
 
+        cacheTileEntityBlockData(cube);
+
         int[] oldHeights = new int[Cube.SIZE * Cube.SIZE];
 
         byte[] buffer;
@@ -231,6 +239,81 @@ class WorldEncoder {
 
         if (!empty) {
             storage.removeInvalidBlocks();
+        }
+
+        refreshTileEntities(cube, world);
+
+        if (!empty) {
+            createTileEntities(cube, world, storage);
+        }
+    }
+
+    private static void cacheTileEntityBlockData(Cube cube) {
+        for (TileEntity tileEntity : cube.cubeTileEntityMap.values()) {
+            tileEntity.updateContainingBlockInfo();
+            tileEntity.getBlockMetadata();
+            tileEntity.getBlockType();
+        }
+    }
+
+    private static void refreshTileEntities(Cube cube, World world) {
+        List<TileEntity> invalidTileEntities = new ArrayList<>();
+
+        for (TileEntity tileEntity : cube.cubeTileEntityMap.values()) {
+            Block oldBlock = tileEntity.getBlockType();
+            int oldMetadata = tileEntity.blockMetadata;
+            Block newBlock = cube.getBlock(tileEntity.xCoord, tileEntity.yCoord, tileEntity.zCoord);
+            int newMetadata = cube.getBlockMetadata(tileEntity.xCoord, tileEntity.yCoord, tileEntity.zCoord);
+
+            if ((oldBlock != newBlock || oldMetadata != newMetadata) && tileEntity.shouldRefresh(
+                oldBlock,
+                newBlock,
+                oldMetadata,
+                newMetadata,
+                world,
+                tileEntity.xCoord,
+                tileEntity.yCoord,
+                tileEntity.zCoord)) {
+                invalidTileEntities.add(tileEntity);
+            }
+            tileEntity.updateContainingBlockInfo();
+        }
+
+        for (TileEntity tileEntity : invalidTileEntities) {
+            tileEntity.invalidate();
+        }
+    }
+
+    private static void createTileEntities(Cube cube, World world, ExtendedBlockStorage storage) {
+        int minBlockX = Coords.cubeToMinBlock(cube.getX());
+        int minBlockY = Coords.cubeToMinBlock(cube.getY());
+        int minBlockZ = Coords.cubeToMinBlock(cube.getZ());
+
+        for (int y = 0; y < Cube.SIZE; y++) {
+            int worldY = minBlockY + y;
+            for (int z = 0; z < Cube.SIZE; z++) {
+                for (int x = 0; x < Cube.SIZE; x++) {
+                    Block block = storage.getBlockByExtId(x, y, z);
+                    int metadata = storage.getExtBlockMetadata(x, y, z);
+                    if (!block.hasTileEntity(metadata)) {
+                        continue;
+                    }
+
+                    ChunkPosition pos = new ChunkPosition(x, worldY, z);
+                    TileEntity existing = cube.cubeTileEntityMap.get(pos);
+                    if (existing != null && !existing.isInvalid()) {
+                        continue;
+                    }
+
+                    TileEntity tileEntity = block.createTileEntity(world, metadata);
+                    if (tileEntity != null) {
+                        tileEntity.xCoord = minBlockX + x;
+                        tileEntity.yCoord = worldY;
+                        tileEntity.zCoord = minBlockZ + z;
+                        cube.addTileEntity(tileEntity);
+                    }
+                }
+            }
         }
     }
 }

@@ -36,7 +36,6 @@ import net.minecraftforge.event.world.ChunkEvent;
 
 import com.cardinalstar.cubicchunks.api.IColumn;
 import com.cardinalstar.cubicchunks.api.XYZMap;
-import com.cardinalstar.cubicchunks.api.event.CubeEvent;
 import com.cardinalstar.cubicchunks.mixin.api.ICubicWorldInternal;
 import com.cardinalstar.cubicchunks.mixin.early.client.IChunkProviderClient;
 import com.cardinalstar.cubicchunks.util.CubePos;
@@ -151,10 +150,6 @@ public class CubeProviderClient extends ChunkProviderClient implements ICubeProv
         cube = new Cube(column, pos.getY()); // auto added to column
         ((IColumn) column).addCube(cube);
         this.cubeMap.put(cube);
-        world.getLightingManager()
-            .onCubeLoad(cube);
-        cube.setCubeLoaded();
-        EVENT_BUS.post(new CubeEvent.Load(column.worldObj, cube));
         return cube;
     }
 
