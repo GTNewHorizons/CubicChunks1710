@@ -72,6 +72,10 @@ public enum Mixins implements IMixins {
         .addCommonMixins("common.vanillaclient.MixinS01PacketJoinGame")
         .setPhase(Phase.EARLY)
         .setApplyIf(() -> true)),
+    MIXIN_S07PACKET_RESPAWN(new MixinBuilder("Giving respawn packets info to initialize cubicWorlds for clients.")
+        .addCommonMixins("common.vanillaclient.MixinS07PacketRespawn")
+        .setPhase(Phase.EARLY)
+        .setApplyIf(() -> true)),
     MIXIN_OVERWORLD_GENERATOR(new MixinBuilder("Modify overworld chunk generator")
         .addCommonMixins("common.worldgen.MixinChunkProviderGenerate")
         .setPhase(Phase.EARLY)
