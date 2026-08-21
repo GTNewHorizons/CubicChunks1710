@@ -52,15 +52,12 @@ public class MixinNetHandlerPlayClient {
     @Expression("this.clientWorldController.isRemote = true")
     @Inject(method = "handleRespawn", at = @At("MIXINEXTRAS:EXPRESSION"))
     void initRespawnedClientCubicWorld(S07PacketRespawn packetIn, CallbackInfo ci) {
-        if (packetIn instanceof ICubicRespawnPacket cubicRespawnPacket) {
-            ((ICubicWorldInternal.Client) clientWorldController).initCubicWorldClient(
-                new IntRange(
-                    cubicRespawnPacket.cubicChunks$getMinHeight(),
-                    cubicRespawnPacket.cubicChunks$getMaxHeight()),
-                new IntRange(
-                    cubicRespawnPacket.cubicChunks$getMinGenerationHeight(),
-                    cubicRespawnPacket.cubicChunks$getMaxGenerationHeight()));
-            Minecraft.getMinecraft().renderGlobal.setWorldAndLoadRenderers(clientWorldController);
-        }
+        ICubicRespawnPacket cubicRespawnPacket = (ICubicRespawnPacket) packetIn;
+        ((ICubicWorldInternal.Client) clientWorldController).initCubicWorldClient(
+            new IntRange(cubicRespawnPacket.cubicChunks$getMinHeight(), cubicRespawnPacket.cubicChunks$getMaxHeight()),
+            new IntRange(
+                cubicRespawnPacket.cubicChunks$getMinGenerationHeight(),
+                cubicRespawnPacket.cubicChunks$getMaxGenerationHeight()));
+        Minecraft.getMinecraft().renderGlobal.setWorldAndLoadRenderers(clientWorldController);
     }
 }

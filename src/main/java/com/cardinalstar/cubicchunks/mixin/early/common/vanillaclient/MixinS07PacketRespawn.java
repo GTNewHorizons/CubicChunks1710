@@ -103,8 +103,6 @@ public class MixinS07PacketRespawn implements ICubicRespawnPacket {
 
     @Inject(method = "readPacketData", at = @At("TAIL"))
     private void cubicChunks$readHeightInfo(PacketBuffer data, CallbackInfo ci) {
-        if (data.readableBytes() < 16) return;
-
         cubicChunks$setHeightInfo(data.readInt(), data.readInt(), data.readInt(), data.readInt());
     }
 }
