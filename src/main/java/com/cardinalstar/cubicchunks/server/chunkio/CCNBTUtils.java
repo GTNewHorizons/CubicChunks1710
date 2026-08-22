@@ -12,7 +12,9 @@ import java.util.UUID;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
 
-import net.jpountz.lz4.LZ4Factory;
+import net.jpountz.lz4.LZ4FrameInputStream;
+import net.jpountz.lz4.LZ4FrameOutputStream;
+import net.jpountz.lz4.LZ4FrameOutputStream.BLOCKSIZE;
 import net.minecraft.nbt.CompressedStreamTools;
 import net.minecraft.nbt.NBTBase;
 import net.minecraft.nbt.NBTSizeTracker;
@@ -27,7 +29,6 @@ import org.apache.commons.lang3.mutable.MutableInt;
 import com.cardinalstar.cubicchunks.mixin.early.common.AccessorNBTTagCompound;
 import com.cardinalstar.cubicchunks.mixin.early.common.AccessorNBTTagList;
 import com.cardinalstar.cubicchunks.util.ByteBufferInputStream;
-import com.gtnewhorizon.gtnhlib.bytebuf.MemoryUtilities;
 
 public class CCNBTUtils {
 
@@ -47,22 +48,10 @@ public class CCNBTUtils {
         }
 
         if (data.getInt(0) == LZ4_MAGIC_NUMBER) {
-            int decompLen = data.getInt(4);
-
-            ByteBuffer decompressed = MemoryUtilities.memAlloc(decompLen);
-
-            try {
-                LZ4Factory.fastestInstance()
-                    .fastDecompressor()
-                    .decompress(data, 8, decompressed, 0, decompLen);
-
-                decompressed.limit(decompLen);
-
-                try (DataInputStream dos = new DataInputStream(new ByteBufferInputStream(decompressed))) {
-                    return CompressedStreamTools.func_152456_a(dos, NBTSizeTracker.field_152451_a);
+            try (var input = new LZ4FrameInputStream(new ByteBufferInputStream(data))) {
+                try (DataInputStream dis = new DataInputStream(new BufferedInputStream(input))) {
+                    return CompressedStreamTools.func_152456_a(dis, NBTSizeTracker.field_152451_a);
                 }
-            } finally {
-                MemoryUtilities.memFree(decompressed);
             }
         }
 
@@ -99,24 +88,13 @@ public class CCNBTUtils {
             }
             case LZ4 -> {
                 try (ByteArrayOutputStream nos = new ByteArrayOutputStream(getTagSizeEstimate(tag))) {
-                    try (DataOutputStream dos = new DataOutputStream(nos)) {
+                    try (DataOutputStream dos = new DataOutputStream(
+                        new BufferedOutputStream(new LZ4FrameOutputStream(nos, BLOCKSIZE.SIZE_64KB)))) {
                         CompressedStreamTools.write(tag, dos);
                     }
 
-                    byte[] data = nos.toByteArray();
-                    var compressor = LZ4Factory.fastestInstance()
-                        .fastCompressor();
-
-                    ByteBuffer compressed = ByteBuffer.allocate(8 + compressor.maxCompressedLength(data.length))
+                    return ByteBuffer.wrap(nos.toByteArray())
                         .order(ByteOrder.LITTLE_ENDIAN);
-
-                    int compLen = compressor.compress(data, 0, data.length, compressed.array(), 8);
-
-                    compressed.putInt(0, LZ4_MAGIC_NUMBER);
-                    compressed.putInt(4, data.length);
-                    compressed.limit(8 + compLen);
-
-                    return compressed;
                 }
             }
             case NONE -> {
