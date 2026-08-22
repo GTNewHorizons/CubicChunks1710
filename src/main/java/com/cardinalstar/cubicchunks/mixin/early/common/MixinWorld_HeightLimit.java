@@ -26,17 +26,15 @@ import javax.annotation.Nonnull;
 import javax.annotation.ParametersAreNonnullByDefault;
 
 import net.minecraft.block.Block;
-import net.minecraft.client.multiplayer.WorldClient;
 import net.minecraft.entity.Entity;
 import net.minecraft.world.World;
 import net.minecraft.world.WorldProvider;
-import net.minecraft.world.WorldServer;
 import net.minecraft.world.chunk.Chunk;
+import net.minecraft.world.chunk.IChunkProvider;
 
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
-import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Constant;
 import org.spongepowered.asm.mixin.injection.Group;
@@ -49,13 +47,12 @@ import com.cardinalstar.cubicchunks.api.IColumn;
 import com.cardinalstar.cubicchunks.api.ICube;
 import com.cardinalstar.cubicchunks.util.Coords;
 import com.cardinalstar.cubicchunks.world.ICubicWorld;
+import com.cardinalstar.cubicchunks.world.cube.ICubeProviderInternal;
 import com.llamalad7.mixinextras.expression.Definition;
 import com.llamalad7.mixinextras.expression.Expression;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.llamalad7.mixinextras.sugar.Local;
-
-import cpw.mods.fml.common.FMLCommonHandler;
 
 /**
  * Contains fixes for hardcoded height checks and other height-related issues.
@@ -63,23 +60,6 @@ import cpw.mods.fml.common.FMLCommonHandler;
 @ParametersAreNonnullByDefault
 @Mixin(World.class)
 public abstract class MixinWorld_HeightLimit implements ICubicWorld {
-
-    @Unique
-    private boolean cc$isCubicWorld = isCubic();
-
-    @Unique
-    private boolean isCubic() {
-        if (FMLCommonHandler.instance()
-            .getSide()
-            .isClient()) {
-            if (((Object) this) instanceof WorldClient) {
-                return true;
-            }
-        }
-
-        // noinspection ConstantValue
-        return ((Object) this) instanceof WorldServer;
-    }
 
     @Shadow
     public int skylightSubtracted;
@@ -101,6 +81,9 @@ public abstract class MixinWorld_HeightLimit implements ICubicWorld {
     // =================================================
     // Individual Height Limit Mixins
     // =================================================
+
+    @Shadow
+    protected IChunkProvider chunkProvider;
 
     // blockExists
     @ModifyConstant(
@@ -140,7 +123,7 @@ public abstract class MixinWorld_HeightLimit implements ICubicWorld {
     boolean redirectChunkExistsCubeExists(World instance, int p_72916_1_, int p_72916_2_,
         @Local(argsOnly = true, name = "p_72899_1_") int x, @Local(argsOnly = true, name = "p_72899_2_") int y,
         @Local(argsOnly = true, name = "p_72899_3_") int z) {
-        if (cc$isCubicWorld) {
+        if (chunkProvider instanceof ICubeProviderInternal) {
             return cubeExists(x >> 4, y >> 4, z >> 4);
         } else {
             return chunkExists(x >> 4, z >> 4);
@@ -429,6 +412,7 @@ public abstract class MixinWorld_HeightLimit implements ICubicWorld {
     @Inject(method = "checkChunksExist(IIIIII)Z", at = @At(value = "HEAD"), cancellable = true, require = 1)
     private void checkChunksExistInject(int xStart, int yStart, int zStart, int xEnd, int yEnd, int zEnd,
         @Nonnull CallbackInfoReturnable<Boolean> cbi) {
+        if (!(this.chunkProvider instanceof ICubeProviderInternal)) return;
         cbi.setReturnValue(this.testForCubes(xStart, yStart, zStart, xEnd, yEnd, zEnd, Objects::nonNull));
     }
 
@@ -439,10 +423,8 @@ public abstract class MixinWorld_HeightLimit implements ICubicWorld {
         at = @At(value = "INVOKE", target = "Lnet/minecraft/world/World;chunkExists(II)Z", ordinal = 0))
     private boolean updateEntityWithOptionalForce_chunkExists0(World world, int chunkX, int chunkZ, Entity entity,
         boolean force) {
-        assert this == (Object) world;
-        ICube cube = this.getCubeCache()
-            .getLoadedCube(entity.chunkCoordX, entity.chunkCoordY, entity.chunkCoordZ);
-        return cube != null;
+        if (!(this.chunkProvider instanceof ICubeProviderInternal)) return this.chunkExists(chunkX, chunkZ);
+        return this.cubeExists(entity.chunkCoordX, entity.chunkCoordY, entity.chunkCoordZ);
     }
 
     @Redirect(
@@ -451,14 +433,12 @@ public abstract class MixinWorld_HeightLimit implements ICubicWorld {
     private boolean updateEntityWithOptionalForce_chunkExists1(World world, int chunkX, int chunkZ, Entity entity,
         boolean force) {
         assert this == (Object) world;
+        if (!(this.chunkProvider instanceof ICubeProviderInternal)) return this.chunkExists(chunkX, chunkZ);
         int x = Coords.blockToCube(entity.posX);
         int y = Coords.blockToCube(entity.posY);
         int z = Coords.blockToCube(entity.posZ);
 
-        ICube cube = this.getCubeCache()
-            .getLoadedCube(x, y, z);
-
-        return cube != null;
+        return this.cubeExists(x >> 4, y >> 4, z >> 4);
     }
 
     // TODO FIX
@@ -552,7 +532,6 @@ public abstract class MixinWorld_HeightLimit implements ICubicWorld {
         method = "getBiomeGenForCoordsBody",
         at = @At(value = "INVOKE", target = "Lnet/minecraft/world/World;blockExists(III)Z"))
     private boolean checkColumnExists(World instance, int x, int zero, int z) {
-        return ((ICubicWorld) instance).getCubeCache()
-            .getLoadedColumn(x >> 4, z >> 4) != null;
+        return chunkExists(x >> 4, z >> 4);
     }
 }
