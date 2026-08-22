@@ -2,10 +2,10 @@ package com.cardinalstar.cubicchunks.server.chunkio;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.UUID;
@@ -29,6 +29,7 @@ import org.apache.commons.lang3.mutable.MutableInt;
 import com.cardinalstar.cubicchunks.mixin.early.common.AccessorNBTTagCompound;
 import com.cardinalstar.cubicchunks.mixin.early.common.AccessorNBTTagList;
 import com.cardinalstar.cubicchunks.util.ByteBufferInputStream;
+import com.cardinalstar.cubicchunks.util.ByteBufferOutputStream;
 
 public class CCNBTUtils {
 
@@ -76,38 +77,38 @@ public class CCNBTUtils {
     public static ByteBuffer saveTag(NBTTagCompound tag, TagCompression compression) throws IOException {
         switch (compression) {
             case GZIP -> {
-                try (ByteArrayOutputStream nos = new ByteArrayOutputStream(getTagSizeEstimate(tag))) {
-                    try (DataOutputStream dos = new DataOutputStream(
-                        new BufferedOutputStream(new GZIPOutputStream2(nos)))) {
-                        CompressedStreamTools.write(tag, dos);
-                    }
+                ByteBufferOutputStream nos = new ByteBufferOutputStream(getTagSizeEstimate(tag));
 
-                    return ByteBuffer.wrap(nos.toByteArray())
-                        .order(ByteOrder.LITTLE_ENDIAN);
+                try (DataOutputStream dos = new DataOutputStream(
+                    new BufferedOutputStream(new GZIPOutputStream2(nos)))) {
+                    CompressedStreamTools.write(tag, dos);
                 }
+
+                return nos.toByteBuffer()
+                    .order(ByteOrder.LITTLE_ENDIAN);
             }
             case LZ4 -> {
-                try (ByteArrayOutputStream nos = new ByteArrayOutputStream(getTagSizeEstimate(tag))) {
-                    try (DataOutputStream dos = new DataOutputStream(
-                        new BufferedOutputStream(new LZ4FrameOutputStream(nos, BLOCKSIZE.SIZE_64KB)))) {
-                        CompressedStreamTools.write(tag, dos);
-                    }
+                ByteBufferOutputStream nos = new ByteBufferOutputStream(getTagSizeEstimate(tag));
 
-                    return ByteBuffer.wrap(nos.toByteArray())
-                        .order(ByteOrder.LITTLE_ENDIAN);
+                try (DataOutputStream dos = new DataOutputStream(
+                    new BufferedOutputStream(new LZ4FrameOutputStream(nos, BLOCKSIZE.SIZE_64KB)))) {
+                    CompressedStreamTools.write(tag, dos);
                 }
+
+                return nos.toByteBuffer()
+                    .order(ByteOrder.LITTLE_ENDIAN);
             }
             case NONE -> {
-                try (ByteArrayOutputStream nos = new ByteArrayOutputStream(getTagSizeEstimate(tag))) {
-                    try (DataOutputStream dos = new DataOutputStream(nos)) {
-                        dos.writeLong(Long.reverseBytes(NONE_MAGIC_NUMBER_UUID.getLeastSignificantBits()));
-                        dos.writeLong(Long.reverseBytes(NONE_MAGIC_NUMBER_UUID.getMostSignificantBits()));
+                ByteBufferOutputStream nos = new ByteBufferOutputStream(16 + getTagSizeEstimate(tag));
 
-                        CompressedStreamTools.write(tag, dos);
-                    }
+                try (DataOutputStream dos = new DataOutputStream(nos)) {
+                    dos.writeLong(Long.reverseBytes(NONE_MAGIC_NUMBER_UUID.getLeastSignificantBits()));
+                    dos.writeLong(Long.reverseBytes(NONE_MAGIC_NUMBER_UUID.getMostSignificantBits()));
 
-                    return ByteBuffer.wrap(nos.toByteArray());
+                    CompressedStreamTools.write(tag, dos);
                 }
+
+                return nos.toByteBuffer();
             }
             default -> {
                 throw new AssertionError("Illegal compression level: " + compression);
@@ -180,7 +181,7 @@ public class CCNBTUtils {
 
         private final byte[] pooled;
 
-        public GZIPOutputStream2(ByteArrayOutputStream nos) throws IOException {
+        public GZIPOutputStream2(OutputStream nos) throws IOException {
             super(nos);
             pooled = new byte[1];
         }
