@@ -2,7 +2,6 @@ package com.cardinalstar.cubicchunks.server.chunkio;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
@@ -13,7 +12,6 @@ import java.util.UUID;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
 
-import com.cardinalstar.cubicchunks.util.ByteBufferOutputStream;
 import net.jpountz.lz4.LZ4Factory;
 import net.minecraft.nbt.CompressedStreamTools;
 import net.minecraft.nbt.NBTBase;
@@ -24,11 +22,10 @@ import net.minecraft.nbt.NBTTagIntArray;
 import net.minecraft.nbt.NBTTagString;
 import net.minecraftforge.common.util.Constants.NBT;
 
-import org.apache.commons.lang3.mutable.MutableInt;
-
 import com.cardinalstar.cubicchunks.mixin.early.common.AccessorNBTTagCompound;
 import com.cardinalstar.cubicchunks.mixin.early.common.AccessorNBTTagList;
 import com.cardinalstar.cubicchunks.util.ByteBufferInputStream;
+import com.cardinalstar.cubicchunks.util.ByteBufferOutputStream;
 import com.gtnewhorizon.gtnhlib.bytebuf.MemoryUtilities;
 
 public class CCNBTUtils {
@@ -91,12 +88,13 @@ public class CCNBTUtils {
             case GZIP -> {
                 ByteBufferOutputStream nos = new ByteBufferOutputStream(getTagSizeEstimate(tag));
 
-                try (DataOutputStream dos = new DataOutputStream(
-                    new BufferedOutputStream(new GZIPOutputStream2(nos)))) {
+                try (
+                    DataOutputStream dos = new DataOutputStream(new BufferedOutputStream(new GZIPOutputStream2(nos)))) {
                     CompressedStreamTools.write(tag, dos);
                 }
 
-                return nos.toByteBuffer().order(ByteOrder.LITTLE_ENDIAN);
+                return nos.toByteBuffer()
+                    .order(ByteOrder.LITTLE_ENDIAN);
             }
             case LZ4 -> {
                 ByteBufferOutputStream nos = new ByteBufferOutputStream(getTagSizeEstimate(tag));
@@ -170,7 +168,7 @@ public class CCNBTUtils {
 
                 int size = 5;
 
-                //noinspection ForLoopReplaceableByForEach
+                // noinspection ForLoopReplaceableByForEach
                 for (int i = 0; i < len; i++) {
                     size += getTagSizeEstimate(list.get(i));
                 }
@@ -183,7 +181,8 @@ public class CCNBTUtils {
                 int size = 5;
 
                 for (var e : map.entrySet()) {
-                    size += e.getKey().length() * 2;
+                    size += e.getKey()
+                        .length() * 2;
                     size += getTagSizeEstimate(e.getValue());
                 }
 
