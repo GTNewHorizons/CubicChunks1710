@@ -5,6 +5,7 @@ import static net.minecraftforge.common.MinecraftForge.EVENT_BUS;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 import javax.annotation.Nonnull;
 
@@ -60,7 +61,7 @@ public class CubeLoaderServer implements ICubeLoader {
     private final List<Cube> pendingCubeLoads = new ArrayList<>();
     private final List<Chunk> pendingColumnLoads = new ArrayList<>();
 
-    private Array3D<Cube> cache;
+    private Array3D<Optional<Cube>> cache;
     @Setter
     private long now;
 
@@ -174,9 +175,10 @@ public class CubeLoaderServer implements ICubeLoader {
     @Override
     public Cube getLoadedCube(int x, int y, int z) {
         if (cache != null) {
-            Cube cube = cache.get(x, y, z);
+            Optional<Cube> cube = cache.get(x, y, z);
 
-            if (cube != null) return cube;
+            //noinspection OptionalAssignedToNull
+            if (cube != null) return cube.orElse(null);
         } else {
             if (lastCube != null && lastCube.getX() == x && lastCube.getY() == y && lastCube.getZ() == z) {
                 return lastCube;
@@ -190,7 +192,7 @@ public class CubeLoaderServer implements ICubeLoader {
         if (cache == null) {
             lastCube = cube;
         } else {
-            cache.set(x, y, z, cube);
+            cache.set(x, y, z, Optional.ofNullable(cube));
         }
 
         return cube;
@@ -206,13 +208,17 @@ public class CubeLoaderServer implements ICubeLoader {
     @Override
     public Cube getCube(int x, int y, int z, Requirement effort) {
         if (cache != null) {
-            Cube cube = cache.get(x, y, z);
+            Optional<Cube> cube = cache.get(x, y, z);
 
-            if (cube != null && cube.getInitLevel()
-                .ordinal()
-                >= CubeInitLevel.fromRequirement(effort)
-                    .ordinal()) {
-                return cube;
+            //noinspection OptionalAssignedToNull
+            if (cube != null) {
+                Cube cubeRef = cube.orElse(null);
+
+                if (cubeRef != null) {
+                    if (cubeRef.getInitLevel().ordinal() >= CubeInitLevel.fromRequirement(effort).ordinal()) {
+                        return cubeRef;
+                    }
+                }
             }
         }
 
@@ -250,7 +256,7 @@ public class CubeLoaderServer implements ICubeLoader {
         }
 
         if (success && cache != null) {
-            cache.set(x, y, z, cubeInfo.cube);
+            cache.set(x, y, z, Optional.ofNullable(cubeInfo.cube));
         }
 
         if (success) {
@@ -273,7 +279,7 @@ public class CubeLoaderServer implements ICubeLoader {
 
     @Override
     public void cacheCubes(int x, int y, int z, int spanx, int spany, int spanz) {
-        cache = new Array3D<>(spanx, spany, spanz, x, y, z, new Cube[spanx * spany * spanz]);
+        cache = new Array3D<>(spanx, spany, spanz, x, y, z, new Optional[spanx * spany * spanz]);
     }
 
     @Override
@@ -856,15 +862,10 @@ public class CubeLoaderServer implements ICubeLoader {
             if (!populated) return false;
 
             // Do the initial lighting
-            if (!cube.isInitialLightingDone() || !cube.isSurfaceTracked()) {
+            if (!cube.isInitialLightingDone()) {
                 ((ICubicWorldInternal) world).getLightingManager()
                     .doFirstLight(cube);
                 cube.setInitialLightingDone(true);
-            }
-
-            // Put the surface into the column (to update the column heightmap) as needed
-            if (!cube.isSurfaceTracked()) {
-                cube.trackSurface();
             }
 
             return cube.getInitLevel() == CubeInitLevel.Lit;

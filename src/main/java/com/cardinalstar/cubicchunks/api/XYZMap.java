@@ -27,7 +27,9 @@ import javax.annotation.ParametersAreNonnullByDefault;
 
 import com.cardinalstar.cubicchunks.util.Coords;
 
-import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
+import com.gtnewhorizon.gtnhlib.hash.Fnv1a32;
+import it.unimi.dsi.fastutil.longs.Long2ObjectOpenCustomHashMap;
+import it.unimi.dsi.fastutil.longs.LongHash.Strategy;
 
 /**
  * Hash table implementation for objects in a 3-dimensional cartesian coordinate
@@ -40,7 +42,18 @@ import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 @ParametersAreNonnullByDefault
 public class XYZMap<T extends XYZAddressable> implements Iterable<T> {
 
-    Long2ObjectOpenHashMap<T> items = new Long2ObjectOpenHashMap<>();
+    Long2ObjectOpenCustomHashMap<T> items = new Long2ObjectOpenCustomHashMap<>(new Strategy() {
+
+        @Override
+        public int hashCode(long e) {
+            return Fnv1a32.hashStep(Fnv1a32.initialState(), e);
+        }
+
+        @Override
+        public boolean equals(long a, long b) {
+            return a == b;
+        }
+    });
 
     public T remove(int x, int y, int z) {
         if (x < -2097152 || x > 2097151) return null;
