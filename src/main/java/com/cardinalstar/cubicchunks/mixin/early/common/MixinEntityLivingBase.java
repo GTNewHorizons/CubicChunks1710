@@ -9,6 +9,7 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Redirect;
 
+import com.cardinalstar.cubicchunks.world.ICubicWorld;
 import com.llamalad7.mixinextras.expression.Definition;
 import com.llamalad7.mixinextras.expression.Expression;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
@@ -25,7 +26,10 @@ public abstract class MixinEntityLivingBase extends Entity {
         method = "moveEntityWithHeading",
         at = @At(value = "INVOKE", target = "Lnet/minecraft/world/World;blockExists(III)Z"))
     public boolean fixBlockExists(World instance, int x, int y, int z) {
-        return instance.blockExists(x, MathHelper.floor_double(this.posY), z);
+        int blockY = MathHelper.floor_double(this.posY);
+        ICubicWorld cubicWorld = (ICubicWorld) instance;
+        return blockY < cubicWorld.getMinHeight() || blockY >= cubicWorld.getMaxHeight()
+            || instance.blockExists(x, blockY, z);
     }
 
     @Definition(id = "posY", field = "Lnet/minecraft/entity/EntityLivingBase;posY:D")
