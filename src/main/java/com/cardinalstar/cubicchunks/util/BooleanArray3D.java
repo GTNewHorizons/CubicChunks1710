@@ -79,7 +79,7 @@ public class BooleanArray3D extends BitSet implements Iterable<Vector3ic> {
     }
 
     @Override
-    public BooleanArray2D clone() {
-        return (BooleanArray2D) super.clone();
+    public BooleanArray3D clone() {
+        return (BooleanArray3D) super.clone();
     }
 }
