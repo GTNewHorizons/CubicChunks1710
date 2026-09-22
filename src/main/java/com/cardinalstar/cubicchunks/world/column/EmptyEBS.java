@@ -14,7 +14,7 @@ public class EmptyEBS extends ExtendedBlockStorage {
     }
 
     @Override
-    public Block getBlockByExtId(int p_150819_1_, int p_150819_2_, int p_150819_3_) {
+    public Block getBlockByExtId(int x, int y, int z) {
         return Blocks.air;
     }
 

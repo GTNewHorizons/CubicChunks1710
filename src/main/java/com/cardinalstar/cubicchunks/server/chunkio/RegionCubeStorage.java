@@ -27,13 +27,11 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Collections;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-import net.minecraft.nbt.CompressedStreamTools;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.world.ChunkCoordIntPair;
 
@@ -54,9 +52,6 @@ import cubicchunks.regionlib.lib.ExtRegion;
 import cubicchunks.regionlib.lib.factory.SimpleRegionFactory;
 import cubicchunks.regionlib.lib.provider.SharedCachedRegionProvider;
 import cubicchunks.regionlib.util.Utils;
-import io.netty.buffer.ByteBuf;
-import io.netty.buffer.ByteBufOutputStream;
-import io.netty.buffer.UnpooledByteBufAllocator;
 import it.unimi.dsi.fastutil.Pair;
 
 /**
@@ -121,11 +116,9 @@ public class RegionCubeStorage implements ICubicStorage {
         }
     }
 
-    private final Path path;
     private SaveCubeColumns save;
 
     public RegionCubeStorage(Path path) throws IOException {
-        this.path = Objects.requireNonNull(path, "path");
         this.save = saveForPath(path);
     }
 
@@ -149,9 +142,7 @@ public class RegionCubeStorage implements ICubicStorage {
         Optional<ByteBuffer> data = this.save.load(new EntryLocation2D(pos.chunkXPos, pos.chunkZPos), true);
         if (!data.isPresent()) return null;
 
-        return CCNBTUtils.loadTag(
-            data.get()
-                .array());
+        return CCNBTUtils.loadTag(data.get());
     }
 
     @Override
@@ -160,9 +151,7 @@ public class RegionCubeStorage implements ICubicStorage {
         Optional<ByteBuffer> data = this.save.load(new EntryLocation3D(pos.getX(), pos.getY(), pos.getZ()), true);
         if (!data.isPresent()) return null;
 
-        return CCNBTUtils.loadTag(
-            data.get()
-                .array());
+        return CCNBTUtils.loadTag(data.get());
     }
 
     @Override
@@ -183,9 +172,7 @@ public class RegionCubeStorage implements ICubicStorage {
                                 .getEntryX(),
                             e.getKey()
                                 .getEntryZ()),
-                        CCNBTUtils.loadTag(
-                            e.getValue()
-                                .array()));
+                        CCNBTUtils.loadTag(e.getValue()));
                 } catch (IOException ex) {
                     throw new UncheckedIOException(ex);
                 }
@@ -204,9 +191,7 @@ public class RegionCubeStorage implements ICubicStorage {
                                 .getEntryY(),
                             e.getKey()
                                 .getEntryZ()),
-                        CCNBTUtils.loadTag(
-                            e.getValue()
-                                .array()));
+                        CCNBTUtils.loadTag(e.getValue()));
                 } catch (IOException ex) {
                     throw new UncheckedIOException(ex);
                 }
@@ -218,73 +203,49 @@ public class RegionCubeStorage implements ICubicStorage {
 
     @Override
     public void writeColumn(ChunkCoordIntPair pos, NBTTagCompound nbt) throws IOException {
-        ByteBuf compressedBuf = UnpooledByteBufAllocator.DEFAULT.ioBuffer();
-        try {
-            // compress NBT data
-            CompressedStreamTools.writeCompressed(nbt, new ByteBufOutputStream(compressedBuf));
+        ByteBuffer compressed = CCNBTUtils.saveTag(nbt, CubicChunksConfig.chunkCompression);
 
-            // write compressed data to disk
-            this.save.save2d(new EntryLocation2D(pos.chunkXPos, pos.chunkZPos), compressedBuf.nioBuffer());
-        } finally {
-            compressedBuf.release();
-        }
+        // write compressed data to disk
+        this.save.save2d(new EntryLocation2D(pos.chunkXPos, pos.chunkZPos), compressed);
     }
 
     @Override
     public void writeCube(CubePos pos, NBTTagCompound nbt) throws IOException {
-        ByteBuf compressedBuf = UnpooledByteBufAllocator.DEFAULT.ioBuffer();
-        try {
-            // compress NBT data
-            CompressedStreamTools.writeCompressed(nbt, new ByteBufOutputStream(compressedBuf));
+        ByteBuffer compressed = CCNBTUtils.saveTag(nbt, CubicChunksConfig.chunkCompression);
 
-            // write compressed data to disk
-            this.save.save3d(new EntryLocation3D(pos.getX(), pos.getY(), pos.getZ()), compressedBuf.nioBuffer());
-        } finally {
-            compressedBuf.release();
-        }
+        // write compressed data to disk
+        this.save.save3d(new EntryLocation3D(pos.getX(), pos.getY(), pos.getZ()), compressed);
     }
 
     @Override
     public void writeBatch(NBTBatch batch) throws IOException {
-        Map<EntryLocation2D, byte[]> compressedColumns = Collections.emptyMap();
-        Map<EntryLocation3D, byte[]> compressedCubes = Collections.emptyMap();
         // compress NBT data
-        compressedColumns = this
+        var compressedColumns = this
             .compressNBTForBatchWrite(batch.columns, pos -> new EntryLocation2D(pos.chunkXPos, pos.chunkZPos));
-        compressedCubes = this
+        var compressedCubes = this
             .compressNBTForBatchWrite(batch.cubes, pos -> new EntryLocation3D(pos.getX(), pos.getY(), pos.getZ()));
 
         // write compressed data to disk
         if (!compressedColumns.isEmpty()) {
-            this.save.save2d(
-                compressedColumns.entrySet()
-                    .stream()
-                    .collect(Collectors.toMap(Map.Entry::getKey, entry -> ByteBuffer.wrap(entry.getValue()))));
+            this.save.save2d(compressedColumns);
         }
         if (!compressedCubes.isEmpty()) {
-            this.save.save3d(
-                compressedCubes.entrySet()
-                    .stream()
-                    .collect(Collectors.toMap(Map.Entry::getKey, entry -> ByteBuffer.wrap(entry.getValue()))));
+            this.save.save3d(compressedCubes);
         }
     }
 
-    private <KI, KO> Map<KO, byte[]> compressNBTForBatchWrite(Map<KI, NBTTagCompound> nbt,
+    private <KI, KO> Map<KO, ByteBuffer> compressNBTForBatchWrite(Map<KI, NBTTagCompound> nbt,
         Function<KI, KO> keyMappingFunction) throws IOException {
         if (nbt.isEmpty()) { // avoid somewhat expensive stream creation if there are no entries
             return Collections.emptyMap();
         }
 
         try {
-            // if the following code throws an exception, something is VERY wrong, so i won't bother with needlessly
-            // complex code to ensure that any
-            // previously allocated buffers get released in the event of an exception being thrown
-
             return nbt.entrySet()
                 .parallelStream()
                 .collect(Collectors.toMap(entry -> keyMappingFunction.apply(entry.getKey()), entry -> {
                     try {
-                        return CCNBTUtils.saveTag(entry.getValue(), true);
+                        return CCNBTUtils.saveTag(entry.getValue(), CubicChunksConfig.chunkCompression);
                     } catch (IOException e) {
                         // wrap exception so that we can throw it from inside the lambda
                         throw new UncheckedIOException(e);
