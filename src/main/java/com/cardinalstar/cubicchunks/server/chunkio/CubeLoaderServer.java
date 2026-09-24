@@ -55,6 +55,9 @@ public class CubeLoaderServer implements ICubeLoader {
     private final XYZMap<CubeInfo> cubes = new XYZMap<>();
     private final XZMap<ColumnInfo> columns = new XZMap<>();
 
+    // GC is server-thread confined. Event callbacks may reenter loading/GC synchronously.
+    private boolean gcRunning;
+    private int activeLoadCalls;
     private int pauseLoadCalls;
     private final List<Pair<Cube, CubeInitLevel>> pendingCubeGenerates = new ArrayList<>();
     private final List<Cube> pendingCubeLoads = new ArrayList<>();
@@ -128,24 +131,49 @@ public class CubeLoaderServer implements ICubeLoader {
         return column != null ? column.column : null;
     }
 
-    private void unloadColumn(ColumnInfo column) {
-        if (!column.containedCubes.isEmpty()) {
-            throw new IllegalStateException("Cannot unload column that still contains cubes");
+    private boolean canUnloadColumn(ColumnInfo info, CubicPlayerManager players) {
+        if (pauseLoadCalls > 0 || activeLoadCalls > 0) return false;
+        if (columns.get(info.getX(), info.getZ()) != info || info.column == null) return false;
+        // Check both indexes: do not destroy resident cubes to make a stale candidate fit.
+        if (!info.containedCubes.isEmpty() || ((IColumn) info.column).hasLoadedCubes()) return false;
+        if (ForgeChunkManager.getPersistentChunksFor(world)
+            .containsKey(info.pos)) return false;
+        return !players.func_152621_a(info.getX(), info.getZ());
+    }
+
+    private boolean tryUnloadColumn(ColumnInfo info, CubicPlayerManager players) {
+        if (!canUnloadColumn(info, players)) return false;
+        boolean removed = false;
+        try {
+            info.column.onChunkUnload();
+            // ChunkEvent.Unload handlers may have loaded cubes or acquired tickets/watchers.
+            if (!canUnloadColumn(info, players)) return false;
+            // Keep the live indexes until serialization succeeds. SaveNBT is another callback boundary.
+            cubeIO.saveColumn(info.pos, info.column);
+            if (!canUnloadColumn(info, players)) return false;
+            columns.remove(info);
+            removed = true;
+            callback.onColumnUnloaded(info.column);
+            return true;
+        } finally {
+            if (!removed && columns.get(info.getX(), info.getZ()) == info && !info.column.isChunkLoaded) {
+                // Balance the unload notification, but do NOT insert the same column into the provider again.
+                info.column.isModified = true;
+                info.column.onChunkLoad();
+            }
         }
-
-        column.column.onChunkUnload();
-
-        for (var cube : new ArrayList<>(column.containedCubes)) {
-            cube.onCubeUnloaded();
-            cubes.remove(cube);
-        }
-
-        columns.remove(column);
-
-        column.onColumnUnloaded();
     }
 
     private ColumnInfo getColumnInfo(int x, int z, Requirement effort) {
+        activeLoadCalls++;
+        try {
+            return getColumnInfoInternal(x, z, effort);
+        } finally {
+            activeLoadCalls--;
+        }
+    }
+
+    private ColumnInfo getColumnInfoInternal(int x, int z, Requirement effort) {
         ColumnInfo column = columns.get(x, z);
 
         if (effort == Requirement.GET_CACHED) return column;
@@ -205,6 +233,15 @@ public class CubeLoaderServer implements ICubeLoader {
 
     @Override
     public Cube getCube(int x, int y, int z, Requirement effort) {
+        activeLoadCalls++;
+        try {
+            return getCubeInternal(x, y, z, effort);
+        } finally {
+            activeLoadCalls--;
+        }
+    }
+
+    private Cube getCubeInternal(int x, int y, int z, Requirement effort) {
         if (cache != null) {
             Cube cube = cache.get(x, y, z);
 
@@ -212,6 +249,10 @@ public class CubeLoaderServer implements ICubeLoader {
                 .ordinal()
                 >= CubeInitLevel.fromRequirement(effort)
                     .ordinal()) {
+                if (effort != Requirement.GET_CACHED) {
+                    CubeInfo cachedInfo = cubes.get(x, y, z);
+                    if (cachedInfo != null && cachedInfo.cube == cube) cachedInfo.lastAccess = now;
+                }
                 return cube;
             }
         }
@@ -221,7 +262,10 @@ public class CubeLoaderServer implements ICubeLoader {
         Cube loaded = cubeInfo != null ? cubeInfo.cube : null;
 
         // Don't need to do anything because the cube is already initialized to the requested level
-        if (loaded != null && cubeInfo.isInitedTo(effort)) return loaded;
+        if (loaded != null && cubeInfo.isInitedTo(effort)) {
+            if (effort != Requirement.GET_CACHED) cubeInfo.lastAccess = now;
+            return loaded;
+        }
 
         if (effort == Requirement.GET_CACHED) return null;
 
@@ -371,10 +415,37 @@ public class CubeLoaderServer implements ICubeLoader {
 
     @Override
     public void doGC() {
+        if (gcRunning || activeLoadCalls > 0
+            || pauseLoadCalls > 0
+            || !pendingColumnLoads.isEmpty()
+            || !pendingCubeLoads.isEmpty()
+            || !pendingCubeGenerates.isEmpty()) return;
+        gcRunning = true;
+        try {
+            collectGarbage();
+        } finally {
+            gcRunning = false;
+        }
+    }
+
+    private boolean canUnloadCube(CubeInfo info, CubicPlayerManager players, long expiry) {
+        Cube cube = info.cube;
+        if (cube == null || info.generating || info.lastAccess > expiry) return false;
+        if (cubes.get(info.getX(), info.getY(), info.getZ()) != info) return false;
+        if (ForgeChunkManager.getPersistentChunksFor(world)
+            .containsKey(
+                cube.getColumn()
+                    .getChunkCoordIntPair()))
+            return false;
+        return !players.isCubeWatched(info.getX(), info.getY(), info.getZ()) && cube.getTickets()
+            .canUnload();
+    }
+
+    private void collectGarbage() {
         var persistentChunks = ForgeChunkManager.getPersistentChunksFor(world);
         CubicPlayerManager playerManager = (CubicPlayerManager) world.getPlayerManager();
 
-        List<CubePos> pendingCubeUnloads = new ArrayList<>();
+        List<CubeInfo> pendingCubeUnloads = new ArrayList<>();
 
         int startCubes = cubes.getSize();
         int startCols = columns.getSize();
@@ -384,7 +455,7 @@ public class CubeLoaderServer implements ICubeLoader {
         for (CubeInfo cubeInfo : cubes) {
             Cube cube = cubeInfo.cube;
 
-            if (cube == null || cubeInfo.lastAccess > expiry) continue;
+            if (cube == null || cubeInfo.generating || cubeInfo.lastAccess > expiry) continue;
 
             if (persistentChunks.containsKey(
                 cube.getColumn()
@@ -395,15 +466,17 @@ public class CubeLoaderServer implements ICubeLoader {
 
             if (cube.getTickets()
                 .canUnload()) {
-                pendingCubeUnloads.add(cubeInfo.pos);
+                pendingCubeUnloads.add(cubeInfo);
             }
         }
 
-        for (CubePos pos : pendingCubeUnloads) {
-            unloadCube(pos.getX(), pos.getY(), pos.getZ());
+        int removedCubes = 0;
+        for (CubeInfo info : pendingCubeUnloads) {
+            // Earlier unload callbacks can replace, access or pin a later candidate.
+            if (!canUnloadCube(info, playerManager, expiry)) continue;
+            unloadCube(info.getX(), info.getY(), info.getZ());
+            removedCubes++;
         }
-
-        int autoCols = columns.getSize();
 
         List<ColumnInfo> pendingColumnUnloads = new ArrayList<>();
 
@@ -415,7 +488,7 @@ public class CubeLoaderServer implements ICubeLoader {
             if (persistentChunks.containsKey(columnInfo.pos)) continue;
 
             // It has loaded Cubes in it (Cubes are to Columns, as tickets are to Cubes... in a way)
-            if (!columnInfo.containedCubes.isEmpty()) continue;;
+            if (!columnInfo.containedCubes.isEmpty() || ((IColumn) column).hasLoadedCubes()) continue;
 
             // PlayerChunkMap may contain reference to a column that for a while doesn't yet have any cubes generated
             if (playerManager.func_152621_a(column.xPosition, column.zPosition)) continue;
@@ -423,19 +496,20 @@ public class CubeLoaderServer implements ICubeLoader {
             pendingColumnUnloads.add(columnInfo);
         }
 
+        int removedColumns = 0;
         for (ColumnInfo column : pendingColumnUnloads) {
-            unloadColumn(column);
+            if (tryUnloadColumn(column, playerManager)) removedColumns++;
         }
 
         CubicChunks.LOGGER.trace(
-            "Garbage collected {} columns ({} -> {}) and {} cubes ({} -> {}). Removed {} columns automatically because they were empty.",
-            pendingColumnUnloads.size(),
+            "Garbage collected {} columns ({} -> {}) and {} cubes ({} -> {}); deferred {} stale column candidates.",
+            removedColumns,
             startCols,
             columns.getSize(),
-            pendingCubeUnloads.size(),
+            removedCubes,
             startCubes,
             cubes.getSize(),
-            startCols - autoCols);
+            pendingColumnUnloads.size() - removedColumns);
     }
 
     @Override
@@ -644,13 +718,6 @@ public class CubeLoaderServer implements ICubeLoader {
             invokeLoadCallback(column);
         }
 
-        public void onColumnUnloaded() {
-            try {
-                cubeIO.saveColumn(pos, column);
-            } finally {
-                callback.onColumnUnloaded(column);
-            }
-        }
     }
 
     private class CubeInfo implements XYZAddressable {
@@ -940,9 +1007,8 @@ public class CubeLoaderServer implements ICubeLoader {
             cube.onCubeUnload();
             callback.onCubeUnloaded(cube);
 
-            if (column.containedCubes.isEmpty()) {
-                unloadColumn(column);
-            }
+            // Column collection is a separate guarded GC phase. A cube unload callback can load
+            // another cube, watch this column or force it; never recursively detach it here.
         }
 
         private void ensureColumn(Requirement effort) {
