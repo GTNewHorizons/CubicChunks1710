@@ -138,13 +138,13 @@ public class EIDSectionAdapter implements SectionAdapter {
 
     @Override
     public void readSectionData(NBTTagCompound section, CubeData data) {
-        if (section.hasKey("Block16")) {
+        if (section.hasKey("Blocks16")) {
             var blocks16 = section.getByteArray("Blocks16");
             var blocksShort = new short[blocks16.length >>> 1];
             ByteBuffer.wrap(blocks16).asShortBuffer().get(blocksShort);
 
             for (int i = 0; i < blocksShort.length; i++) {
-                data.blocks[i] = blocksShort[i];
+                data.blocks[i] = blocksShort[i] & 0xFFFF;
             }
         } else {
             readEIDBlockIds(section, data);
@@ -156,19 +156,20 @@ public class EIDSectionAdapter implements SectionAdapter {
             ByteBuffer.wrap(data16).asShortBuffer().get(dataShort);
 
             for (int i = 0; i < dataShort.length; i++) {
-                data.meta[i] = dataShort[i];
+                data.meta[i] = dataShort[i] & 0xFFFF;
             }
         } else {
             readMeta(section, data);
         }
 
         NibbleArray blockLightIn = new NibbleArray(section.getByteArray("BlockLight"), 4);
-        NibbleArray skyLightIn = new NibbleArray(section.getByteArray("SkyLight"), 4);
+        NibbleArray skyLightIn = section.hasKey("SkyLight", 7)
+            ? new NibbleArray(section.getByteArray("SkyLight"), 4) : null;
 
         for (int y = 0; y < 16; y++) {
             for (int z = 0; z < 16; z++) {
                 for (int x = 0; x < 16; x++) {
-                    data.skyLight[CubeData.index(x, y, z)] = skyLightIn.get(x, y, z);
+                    data.skyLight[CubeData.index(x, y, z)] = skyLightIn == null ? 0 : skyLightIn.get(x, y, z);
                 }
             }
         }
@@ -191,7 +192,7 @@ public class EIDSectionAdapter implements SectionAdapter {
                     for (int x = 0; x < 16; x++) {
                         int index = CubeData.index(x, y, z);
 
-                        data.meta[index] = blocks.get(index);
+                        data.meta[index] = blocks.get(index) & 0xFFFF;
                     }
                 }
             }
@@ -233,7 +234,7 @@ public class EIDSectionAdapter implements SectionAdapter {
                     for (int x = 0; x < 16; x++) {
                         int index = CubeData.index(x, y, z);
 
-                        data.blocks[index] = blocks.get(index);
+                        data.blocks[index] = blocks.get(index) & 0xFFFF;
                     }
                 }
             }

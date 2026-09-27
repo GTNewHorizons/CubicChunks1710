@@ -4,11 +4,17 @@ import java.io.DataInputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.SimpleFileVisitor;
+import java.nio.file.attribute.BasicFileAttributes;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -22,6 +28,7 @@ import net.minecraft.nbt.NBTTagList;
 import net.minecraft.world.ChunkCoordIntPair;
 import net.minecraft.world.chunk.storage.RegionFile;
 
+import com.cardinalstar.cubicchunks.CubicChunks;
 import com.cardinalstar.cubicchunks.api.ICube;
 import com.cardinalstar.cubicchunks.api.world.storage.ICubicStorage;
 import com.cardinalstar.cubicchunks.api.world.storage.ICubicStorage.NBTBatch;
@@ -34,13 +41,15 @@ import com.cardinalstar.cubicchunks.world.convert.adapter.SectionAdapterDiscover
 import com.cardinalstar.cubicchunks.world.convert.adapter.biome.BiomeAdapter;
 import com.cardinalstar.cubicchunks.world.convert.adapter.biome.BiomeAdapterDiscovery;
 import com.cardinalstar.cubicchunks.world.cube.Cube;
+import it.unimi.dsi.fastutil.Pair;
 
 /**
  * Converts a vanilla Anvil world ({@code region/*.mca}) into CubicChunks format
  * ({@code region2d/}, {@code region3d/}, {@code data/cubicchunks.world_format.dat}).
  *
  * <p>Runs offline — no world or server instance is required.
- * The existing vanilla data is left in place; only CC directories are added.
+ * Output is staged until every dimension succeeds. Original regions are retained
+ * in {@code .cubicchunks-anvil-backup} after a successful conversion.
  */
 @ParametersAreNonnullByDefault
 public final class VanillaToCCConverter implements IWorldConverter {
@@ -61,21 +70,136 @@ public final class VanillaToCCConverter implements IWorldConverter {
 
     @Override
     public void convert(File dimensionRoot, boolean isOverworld, ConversionProgress progress, AtomicBoolean cancelSignal) throws IOException {
+        convertDimensions(dimensionRoot.toPath(), Collections.singletonList(dimensionRoot.toPath()),
+            isOverworld, progress, cancelSignal);
+    }
+
+    @Override
+    public void convertWorld(File worldRoot, ConversionProgress progress, AtomicBoolean cancelSignal) throws IOException {
+        convertDimensions(worldRoot.toPath(), IWorldConverter.dimensionRoots(worldRoot.toPath()),
+            true, progress, cancelSignal);
+    }
+
+    private void convertDimensions(Path root, List<Path> dimensions, boolean writeMarker,
+                                   ConversionProgress progress, AtomicBoolean cancelSignal) throws IOException {
+        IWorldConverter.checkCancelled(cancelSignal);
+        Path backup = root.resolve(".cubicchunks-anvil-backup");
+        Path marker = root.resolve("data/cubicchunks.world_format.dat");
+        if (Files.exists(backup) || Files.exists(marker)) {
+            throw new IOException("Existing CC conversion data or backup in " + root + "; restore or move it before retrying");
+        }
+        for (Path dimension : dimensions) {
+            if (Files.exists(dimension.resolve("region2d")) || Files.exists(dimension.resolve("region3d"))) {
+                throw new IOException("Existing CC regions in " + dimension + "; refusing to overwrite them");
+            }
+        }
+
+        Path staging = root.resolve(".cubicchunks-conversion");
+        if (Files.exists(staging)) {
+            throw new IOException("Unfinished conversion in " + staging + "; recover it before retrying");
+        }
+        Files.createDirectory(staging);
+        List<Path> converted = new ArrayList<>();
+        List<Pair<Path, Path>> moves = new ArrayList<>();
+        boolean backupCreated = false;
+        try {
+            for (Path dimension : dimensions) {
+                IWorldConverter.checkCancelled(cancelSignal);
+                progress.setDimension(dimension.equals(root) ? "Overworld" : dimension.getFileName().toString());
+                Path output = staging.resolve(root.relativize(dimension));
+                if (convertDimension(dimension.toFile(), output, progress, cancelSignal)) converted.add(dimension);
+            }
+            if (!converted.isEmpty()) {
+                if (writeMarker) writeFormatMarker(staging.toFile());
+                IWorldConverter.checkCancelled(cancelSignal);
+                // Do not observe cancellation halfway through installing the completed output.
+                Files.createDirectory(backup);
+                backupCreated = true;
+                for (Path dimension : converted) {
+                    move(dimension.resolve("region"), backup.resolve(root.relativize(dimension)).resolve("region"), moves);
+                }
+                for (Path dimension : converted) {
+                    Path output = staging.resolve(root.relativize(dimension));
+                    for (String directory : new String[] { "region2d", "region3d" }) {
+                        if (Files.exists(output.resolve(directory))) {
+                            move(output.resolve(directory), dimension.resolve(directory), moves);
+                        }
+                    }
+                }
+                if (writeMarker) move(staging.resolve("data/cubicchunks.world_format.dat"), marker, moves);
+            }
+        } catch (IOException | RuntimeException failure) {
+            boolean restored = true;
+            for (int i = moves.size() - 1; i >= 0; i--) {
+                Pair<Path, Path> moved = moves.get(i);
+                try {
+                    Files.move(moved.right(), moved.left());
+                } catch (IOException restoreFailure) {
+                    failure.addSuppressed(restoreFailure);
+                    restored = false;
+                }
+            }
+            if (restored) {
+                try {
+                    deleteStaging(staging);
+                    if (backupCreated) deleteStaging(backup);
+                } catch (IOException cleanupFailure) {
+                    failure.addSuppressed(cleanupFailure);
+                }
+            }
+            throw failure;
+        }
+        try {
+            deleteStaging(staging);
+        } catch (IOException cleanupFailure) {
+            CubicChunks.LOGGER.warn("Conversion succeeded but could not remove staging directory {}", staging, cleanupFailure);
+        }
+        progress.update(progress.getCompleted(), progress.getTotal(), "Done.");
+    }
+
+    private static void move(Path source, Path destination, List<Pair<Path, Path>> moves) throws IOException {
+        Files.createDirectories(destination.getParent());
+        Files.move(source, destination);
+        moves.add(Pair.of(source, destination));
+    }
+
+    private static void deleteStaging(Path path) throws IOException {
+        Files.walkFileTree(path, new SimpleFileVisitor<Path>() {
+            @Override
+            public FileVisitResult visitFile(Path file, BasicFileAttributes attributes) throws IOException {
+                Files.delete(file);
+                return FileVisitResult.CONTINUE;
+            }
+
+            @Override
+            public FileVisitResult postVisitDirectory(Path directory, IOException failure) throws IOException {
+                if (failure != null) throw failure;
+                Files.delete(directory);
+                return FileVisitResult.CONTINUE;
+            }
+        });
+    }
+
+    private boolean convertDimension(File dimensionRoot, Path output, ConversionProgress progress,
+                                     AtomicBoolean cancelSignal) throws IOException {
         File regionDir = new File(dimensionRoot, "region");
         File[] mcaFiles = regionDir.listFiles((d, n) -> n.endsWith(".mca"));
 
-        if (mcaFiles == null || mcaFiles.length == 0) return;
+        if (mcaFiles == null) {
+            if (regionDir.exists()) throw new IOException("Cannot read Anvil region directory " + regionDir);
+            return false;
+        }
+        if (mcaFiles.length == 0) return false;
 
         int total = countChunks(mcaFiles);
         progress.update(0, total, "Starting...");
 
-        Path worldPath = dimensionRoot.toPath();
-        try (ICubicStorage storage = new RegionCubeStorage(worldPath)) {
+        try (ICubicStorage storage = new RegionCubeStorage(output)) {
             int done = 0;
 
             for (File mcaFile : mcaFiles) {
                 int[] regionCoords = parseRegionCoords(mcaFile.getName());
-                if (regionCoords == null) continue;
+                if (regionCoords == null) throw new IOException("Invalid Anvil region filename " + mcaFile);
 
                 int regionX = regionCoords[0];
                 int regionZ = regionCoords[1];
@@ -87,6 +211,7 @@ public final class VanillaToCCConverter implements IWorldConverter {
                 try {
                     for (int localX = 0; localX < 32; localX++) {
                         for (int localZ = 0; localZ < 32; localZ++) {
+                            IWorldConverter.checkCancelled(cancelSignal);
                             if (!regionFile.isChunkSaved(localX, localZ)) continue;
 
                             int chunkX = regionX * 32 + localX;
@@ -95,12 +220,14 @@ public final class VanillaToCCConverter implements IWorldConverter {
                             convertChunk(regionFile, localX, localZ, chunkX, chunkZ, columns, cubes);
                             done++;
 
-                            progress.update(done, total, chunkX + "," + chunkZ);
-                            if (cancelSignal.get()) {
+                            if (columns.size() >= 32) {
                                 storage.writeBatch(new NBTBatch(columns, cubes));
-                                storage.flush();
-                                return;
+                                columns.clear();
+                                cubes.clear();
                             }
+
+                            progress.update(done, total, chunkX + "," + chunkZ);
+                            IWorldConverter.checkCancelled(cancelSignal);
                         }
                     }
                 } finally {
@@ -113,33 +240,7 @@ public final class VanillaToCCConverter implements IWorldConverter {
             storage.flush();
         }
 
-        if (isOverworld) {
-            writeFormatMarker(dimensionRoot);
-        }
-
-        for (var mca : mcaFiles) {
-            Files.delete(mca.toPath());
-        }
-
-        if (isOverworld) {
-            Path worldFormat = dimensionRoot.toPath().resolve("data").resolve("cubicchunks.world_format.dat");
-
-            NBTTagCompound saveData = new NBTTagCompound();
-            saveData.setString("format", StorageFormatFactory.DEFAULT.toString());
-
-            NBTTagCompound container = new NBTTagCompound();
-            container.setTag("data", saveData);
-
-            try (FileOutputStream fileoutputstream = new FileOutputStream(worldFormat.toFile())) {
-                CompressedStreamTools.writeCompressed(container, fileoutputstream);
-            }
-        }
-
-        if (regionDir.list().length == 0) {
-            Files.delete(regionDir.toPath());
-        }
-
-        progress.update(progress.getCompleted(), progress.getTotal(), "Done.");
+        return true;
     }
 
     private void convertChunk(RegionFile regionFile, int localX, int localZ,
@@ -147,7 +248,7 @@ public final class VanillaToCCConverter implements IWorldConverter {
                                Map<ChunkCoordIntPair, NBTTagCompound> columns,
                                Map<CubePos, NBTTagCompound> cubes) throws IOException {
         DataInputStream in = regionFile.getChunkDataInputStream(localX, localZ);
-        if (in == null) return;
+        if (in == null) throw new IOException("Cannot read saved chunk " + chunkX + "," + chunkZ);
 
         NBTTagCompound root;
         try {
@@ -158,7 +259,12 @@ public final class VanillaToCCConverter implements IWorldConverter {
 
         NBTTagCompound level = root.getCompoundTag("Level");
 
-        columns.put(new ChunkCoordIntPair(chunkX, chunkZ), buildColumnNbt(level, chunkX, chunkZ));
+        if (!root.hasKey("Level", 10) || level.getInteger("xPos") != chunkX || level.getInteger("zPos") != chunkZ) {
+            throw new IOException("Invalid chunk coordinates at " + chunkX + "," + chunkZ);
+        }
+        NBTTagCompound column = buildColumnNbt(level, chunkX, chunkZ);
+        copyUnknownTags(root, column, java.util.Collections.singleton("Level"));
+        columns.put(new ChunkCoordIntPair(chunkX, chunkZ), column);
 
         boolean[] present = new boolean[16];
 
@@ -166,6 +272,8 @@ public final class VanillaToCCConverter implements IWorldConverter {
         for (int i = 0; i < vanillaSections.tagCount(); i++) {
             NBTTagCompound section = vanillaSections.getCompoundTagAt(i);
             int sectionY = section.getByte("Y") & 0xFF;
+
+            if (sectionY >= 16 || present[sectionY]) throw new IOException("Invalid or duplicate Anvil section " + sectionY);
 
             present[sectionY] = true;
 
@@ -180,6 +288,34 @@ public final class VanillaToCCConverter implements IWorldConverter {
             cubes.put(
                 new CubePos(chunkX, sectionY, chunkZ),
                 buildCubeNbt(level, null, chunkX, sectionY, chunkZ));
+        }
+
+        Set<Integer> extraSections = new HashSet<>();
+        NBTTagList entities = level.getTagList("Entities", 10);
+        int discardedEntities = 0;
+        for (int i = entities.tagCount() - 1; i >= 0; i--) {
+            NBTTagList pos = entities.getCompoundTagAt(i).getTagList("Pos", 6);
+            if (pos.tagCount() != 3) throw new IOException("Entity without position in " + chunkX + "," + chunkZ);
+            // Do not reserve empty terrain cubes for entities below the old world's floor.
+            if (pos.func_150309_d(1) < 0) {
+                entities.removeTag(i);
+                discardedEntities++;
+                continue;
+            }
+            extraSections.add((int) Math.floor(pos.func_150309_d(1) / 16));
+        }
+        if (discardedEntities > 0) {
+            CubicChunks.LOGGER.warn("Discarded {} entities below Y0 while converting chunk {},{}",
+                discardedEntities, chunkX, chunkZ);
+        }
+        for (String key : new String[] { "TileEntities", "TileTicks" }) {
+            NBTTagList tags = level.getTagList(key, 10);
+            for (int i = 0; i < tags.tagCount(); i++) extraSections.add(tags.getCompoundTagAt(i).getInteger("y") >> 4);
+        }
+        for (int sectionY : extraSections) {
+            if (sectionY < 0 || sectionY >= 16) {
+                cubes.put(new CubePos(chunkX, sectionY, chunkZ), buildCubeNbt(level, null, chunkX, sectionY, chunkZ));
+            }
         }
     }
 
@@ -294,22 +430,18 @@ public final class VanillaToCCConverter implements IWorldConverter {
     }
 
     /** Counts total saved chunks across all region files for progress tracking. */
-    private int countChunks(File[] mcaFiles) {
+    private int countChunks(File[] mcaFiles) throws IOException {
         int count = 0;
         for (File mcaFile : mcaFiles) {
-            if (parseRegionCoords(mcaFile.getName()) == null) continue;
-            try {
-                RegionFile rf = new RegionFile(mcaFile);
-                try {
-                    for (int lx = 0; lx < 32; lx++) {
-                        for (int lz = 0; lz < 32; lz++) {
-                            if (rf.isChunkSaved(lx, lz)) count++;
-                        }
-                    }
-                } finally {
-                    rf.close();
+            if (parseRegionCoords(mcaFile.getName()) == null) throw new IOException("Invalid Anvil region filename " + mcaFile);
+            long size = Files.size(mcaFile.toPath());
+            // RegionFile opens in read/write mode and would pad a truncated input file.
+            if (size < 8192 || (size & 4095) != 0) throw new IOException("Truncated Anvil region " + mcaFile);
+            try (DataInputStream header = new DataInputStream(Files.newInputStream(mcaFile.toPath()))) {
+                for (int i = 0; i < 1024; i++) {
+                    if (header.readInt() != 0) count++;
                 }
-            } catch (IOException ignored) {}
+            }
         }
         return count;
     }
@@ -336,10 +468,10 @@ public final class VanillaToCCConverter implements IWorldConverter {
      */
     private void writeFormatMarker(File dimensionRoot) throws IOException {
         File dataDir = new File(dimensionRoot, "data");
-        if (!dataDir.exists()) dataDir.mkdirs();
+        Files.createDirectories(dataDir.toPath());
 
         NBTTagCompound data = new NBTTagCompound();
-        data.setString("format", "cubicchunks:anvil3d");
+        data.setString("format", StorageFormatFactory.DEFAULT.toString());
 
         NBTTagCompound root = new NBTTagCompound();
         root.setTag("data", data);

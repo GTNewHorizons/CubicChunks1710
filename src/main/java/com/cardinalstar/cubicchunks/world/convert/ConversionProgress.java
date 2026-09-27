@@ -18,6 +18,7 @@ public final class ConversionProgress {
     private final AtomicReference<String> status = new AtomicReference<>("");
     private final AtomicBoolean done    = new AtomicBoolean(false);
     private final AtomicBoolean errored = new AtomicBoolean(false);
+    private final AtomicBoolean cancelled = new AtomicBoolean(false);
 
     @Nullable
     private volatile String errorMessage;
@@ -56,6 +57,10 @@ public final class ConversionProgress {
     public boolean isDone()    { return done.get(); }
 
     public boolean isErrored() { return errored.get(); }
+
+    public void markCancelled() { cancelled.set(true); }
+
+    public boolean isCancelled() { return cancelled.get(); }
 
     @Nullable
     public String getErrorMessage() { return errorMessage; }

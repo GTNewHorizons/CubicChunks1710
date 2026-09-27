@@ -22,7 +22,7 @@ public class EIDBiomeAdapter implements BiomeAdapter {
         short[] shorts = DataUtils.byteToShortArray(level.getByteArray("Biomes16v2"));
 
         for(int i = 0; i < 256; i++) {
-            biomeIds[i] = (short) biomeIds[i];
+            biomeIds[i] = shorts[i] & 0xFFFF;
         }
     }
 }

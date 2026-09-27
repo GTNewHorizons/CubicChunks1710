@@ -37,7 +37,7 @@ public class SectionAdapterDiscovery {
     public static SectionAdapter detect(NBTTagCompound section) {
         if (section.hasKey("BlocksB2Hi") || section.hasKey("BlocksB3")
                 || section.hasKey("Data1High") || section.hasKey("Data2")
-                || section.hasKey("Block16") || section.hasKey("Data16")) {
+                || section.hasKey("Blocks16") || section.hasKey("Data16")) {
             return EID;
         }
         return VANILLA;
