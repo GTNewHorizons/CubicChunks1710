@@ -439,6 +439,11 @@ public class CubeLoaderServer implements ICubeLoader {
     }
 
     @Override
+    public void trimCaches() {
+        cubeIO.trimCaches();
+    }
+
+    @Override
     public void flush() throws IOException {
         cubeIO.flush();
     }
