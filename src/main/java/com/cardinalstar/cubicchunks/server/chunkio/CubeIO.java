@@ -265,7 +265,8 @@ public class CubeIO implements ICubeIO {
     }
 
     /// Checks up to {@code maxChecks} of the oldest entries and removes those whose save has finished, while the cache
-    /// is larger than {@code limit}. Entries are normally kept until they expire, but while the cache is more than twice
+    /// is larger than {@code limit}. Entries are normally kept until they expire, but while the cache is more than
+    /// twice
     /// its limit (e.g. during LOD generation) unexpired entries are removed as well. Must be called while holding the
     /// cache's lock.
     private static <K> void trimCache(Object2ObjectLinkedOpenHashMap<K, SaveData> cache, int limit, int maxChecks,
