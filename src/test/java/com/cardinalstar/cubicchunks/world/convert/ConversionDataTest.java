@@ -145,7 +145,7 @@ public class ConversionDataTest {
     }
 
     @Test
-    void preservesRootTagsAndOutOfRangeEntities() throws Exception {
+    void preservesRootTagsAndNonnegativeEntities() throws Exception {
         CubicChunksConfig.useShadowPagingIO = false;
         CubicChunksConfig.chunkCompression = CCNBTUtils.TagCompression.GZIP;
         java.nio.file.Files.createDirectories(temp.resolve("region"));
@@ -157,13 +157,17 @@ public class ConversionDataTest {
         level.setInteger("zPos", 0);
         level.setByteArray("Biomes", new byte[256]);
         level.setString("mod-level-data", "retained");
-        NBTTagCompound entity = new NBTTagCompound();
-        entity.setString("id", "TestEntity");
-        NBTTagList pos = new NBTTagList();
-        for (double d : new double[] { 1, 300, 1 }) pos.appendTag(new NBTTagDouble(d));
-        entity.setTag("Pos", pos);
         NBTTagList entities = new NBTTagList();
-        entities.appendTag(entity);
+        java.util.Map<Integer, NBTTagCompound> retainedEntities = new java.util.LinkedHashMap<>();
+        for (double y : new double[] { -0.25, -16, -16.25, -64, 0, 255.5, 256, 300 }) {
+            NBTTagCompound entity = new NBTTagCompound();
+            entity.setString("id", "TestEntity");
+            NBTTagList pos = new NBTTagList();
+            for (double d : new double[] { 1, y, 1 }) pos.appendTag(new NBTTagDouble(d));
+            entity.setTag("Pos", pos);
+            entities.appendTag(entity);
+            if (y >= 0) retainedEntities.put((int) Math.floor(y / 16), entity);
+        }
         level.setTag("Entities", entities);
         RegionFile region = new RegionFile(
             temp.resolve("region/r.0.0.mca")
@@ -181,12 +185,16 @@ public class ConversionDataTest {
                 "retained",
                 column.getCompoundTag("Level")
                     .getString("mod-level-data"));
-            assertEquals(
-                1,
-                storage.readCube(new CubePos(0, 18, 0))
+            for (int cubeY : new int[] { -1, -2, -4 }) {
+                assertNull(storage.readCube(new CubePos(0, cubeY, 0)));
+            }
+            for (java.util.Map.Entry<Integer, NBTTagCompound> entry : retainedEntities.entrySet()) {
+                NBTTagList converted = storage.readCube(new CubePos(0, entry.getKey(), 0))
                     .getCompoundTag("Level")
-                    .getTagList("Entities", 10)
-                    .tagCount());
+                    .getTagList("Entities", 10);
+                assertEquals(1, converted.tagCount());
+                assertEquals(entry.getValue(), converted.getCompoundTagAt(0));
+            }
         }
     }
 }

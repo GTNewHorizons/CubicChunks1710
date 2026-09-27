@@ -22,6 +22,7 @@ import net.minecraft.nbt.NBTTagList;
 import net.minecraft.world.ChunkCoordIntPair;
 import net.minecraft.world.chunk.storage.RegionFile;
 
+import com.cardinalstar.cubicchunks.CubicChunks;
 import com.cardinalstar.cubicchunks.api.ICube;
 import com.cardinalstar.cubicchunks.api.world.storage.ICubicStorage;
 import com.cardinalstar.cubicchunks.api.world.storage.ICubicStorage.NBTBatch;
@@ -197,10 +198,21 @@ public final class VanillaToCCConverter implements IWorldConverter {
 
         Set<Integer> extraSections = new HashSet<>();
         NBTTagList entities = level.getTagList("Entities", 10);
-        for (int i = 0; i < entities.tagCount(); i++) {
+        int discardedEntities = 0;
+        for (int i = entities.tagCount() - 1; i >= 0; i--) {
             NBTTagList pos = entities.getCompoundTagAt(i).getTagList("Pos", 6);
             if (pos.tagCount() != 3) throw new IOException("Entity without position in " + chunkX + "," + chunkZ);
+            // Do not reserve empty terrain cubes for entities below the old world's floor.
+            if (pos.func_150309_d(1) < 0) {
+                entities.removeTag(i);
+                discardedEntities++;
+                continue;
+            }
             extraSections.add((int) Math.floor(pos.func_150309_d(1) / 16));
+        }
+        if (discardedEntities > 0) {
+            CubicChunks.LOGGER.warn("Discarded {} entities below Y0 while converting chunk {},{}",
+                discardedEntities, chunkX, chunkZ);
         }
         for (String key : new String[] { "TileEntities", "TileTicks" }) {
             NBTTagList tags = level.getTagList(key, 10);
