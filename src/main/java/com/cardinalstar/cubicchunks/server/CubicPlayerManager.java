@@ -76,6 +76,7 @@ public class CubicPlayerManager extends PlayerManager implements CubeLoaderCallb
     private int verticalViewDistance;
 
     private long lastChunkInhabitedUpdate;
+    private long lastCubeGc;
 
     // these player adds will be processed on the next tick
     // this exists as temporary workaround to player respawn code calling addPlayer() before spawning
@@ -170,6 +171,15 @@ public class CubicPlayerManager extends PlayerManager implements CubeLoaderCallb
         getWorldServer().theProfiler.endStartSection("tickEntries");
 
         getWorldServer().theProfiler.endStartSection("unload");
+
+        // updatePlayerPertinentChunks only runs the GC when a player moves into a new cube, so cubes loaded while
+        // players stand still (e.g. by LOD generators) would never be unloaded without this
+        if (now - this.lastCubeGc >= 20 * 30) {
+            this.lastCubeGc = now;
+
+            provider.getCubeLoader()
+                .doGC();
+        }
 
         // if there are no players - unload everything
         if (this.players.isEmpty()) {
