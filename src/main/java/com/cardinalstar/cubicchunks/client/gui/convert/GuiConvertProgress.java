@@ -86,8 +86,10 @@ public class GuiConvertProgress extends GuiScreen {
             } catch (InterruptedIOException e) {
                 if (cancelSignal.get()) progress.markCancelled();
                 else progress.markError(e.getMessage());
-            } catch (IOException | RuntimeException e) {
+            } catch (IOException | RuntimeException | Error e) {
                 progress.markError(e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName());
+                // Let fatal errors escape, but do not leave the GUI waiting for a dead worker.
+                if (e instanceof Error) throw (Error) e;
             }
         }, "CC-WorldConverter");
         workerThread.setDaemon(true);

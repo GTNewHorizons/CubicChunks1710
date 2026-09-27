@@ -19,6 +19,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import com.cardinalstar.cubicchunks.CubicChunksConfig;
 import com.cardinalstar.cubicchunks.server.chunkio.CCNBTUtils;
@@ -69,8 +71,10 @@ class ConversionSafetyTest {
         assertArrayEquals(originalOverworld, Files.readAllBytes(world.resolve(".cubicchunks-anvil-backup/region/r.0.0.mca")));
     }
 
-    @Test
-    void successConvertsAllDimensionsAndRetainsOriginals() throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = { false, true })
+    void successConvertsAllDimensionsAndRetainsOriginals(boolean shadowPaging) throws Exception {
+        CubicChunksConfig.useShadowPagingIO = shadowPaging;
         java.util.Map<Path, byte[]> originals = new java.util.LinkedHashMap<>();
         for (Path dimension : new Path[] { world, world.resolve("DIM-1"), world.resolve("PERSONAL_DIM7") }) {
             originals.put(dimension, Files.readAllBytes(writeRegion(dimension, 1, false)));
@@ -118,8 +122,10 @@ class ConversionSafetyTest {
         assertEquals(WorldSaveFormat.CC, WorldFormatDetector.detect(world.toFile()));
     }
 
-    @Test
-    void installFailureRollsBackBothDimensions() throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = { false, true })
+    void installFailureRollsBackBothDimensions(boolean shadowPaging) throws Exception {
+        CubicChunksConfig.useShadowPagingIO = shadowPaging;
         Path overworld = writeRegion(world, 1, false);
         Path nether = writeRegion(world.resolve("DIM-1"), 1, false);
         byte[] original = Files.readAllBytes(overworld);
