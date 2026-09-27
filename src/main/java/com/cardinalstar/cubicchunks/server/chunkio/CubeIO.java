@@ -35,7 +35,7 @@ import lombok.NoArgsConstructor;
 
 public class CubeIO implements ICubeIO {
 
-    private static final long EXPIRY = Duration.ofSeconds(120)
+    private static final long EXPIRY = Duration.ofSeconds(30)
         .toMillis();
 
     private final ICubicStorage storage;

@@ -35,8 +35,10 @@
  */
 dependencies {
     // ========================= Real Deps ========================= //
-    implementation("com.github.GTNewHorizons:GTNHLib:0.11.24:dev")
+    implementation("com.github.GTNewHorizons:GTNHLib:0.11.37:dev")
     implementation("com.github.GTNewHorizons:RegionLib:v0.1.0-GTNH:dev")
+
+    shadowImplementation("at.yawk.lz4:lz4-java:1.11.0")
 
 //    runtimeOnlyNonPublishable("maven.modrinth:archaicfix:0.8.0:dev")
 
@@ -44,14 +46,28 @@ dependencies {
     compileOnly('org.projectlombok:lombok:1.18.34')
     annotationProcessor('org.projectlombok:lombok:1.18.34')
 
+    shadowImplementation("at.yawk.lz4:lz4-java:1.11.0")
+
+    runtimeOnlyNonPublishable("com.github.GTNewHorizons:Angelica:2.1.54:dev")
+
     // ========================= Compat Deps ========================= //
 
     compileOnly("com.falsepattern:chunkapi-mc1.7.10:0.8.1:dev")
-    compileOnly("com.falsepattern:endlessids-mc1.7.10:1.7.1:dev")
-    compileOnly("ganymedes01.etfuturum:Et-Futurum-Requiem:2.6.2.21-GTNH-daily:dev")
+    compileOnly("com.falsepattern:endlessids-mc1.7.10:1.7.4:dev")
+    implementation("ganymedes01.etfuturum:Et-Futurum-Requiem:2.6.48-GTNH:dev")
 
     // ========================= Test Deps ========================= //
-    devOnlyNonPublishable("com.github.GTNewHorizons:NotEnoughItems:2.8.111-GTNH:dev")
-    testImplementation(platform('org.junit:junit-bom:5.9.2'))
+    devOnlyNonPublishable("com.github.GTNewHorizons:NotEnoughItems:2.8.125-GTNH:dev")
+    testImplementation(platform('org.junit:junit-bom:5.11.4'))
     testImplementation('org.junit.jupiter:junit-jupiter')
+
+    testRuntimeOnly("it.unimi.dsi:fastutil:8.5.18")
+    testRuntimeOnly("org.joml:joml:1.10.8") { transitive = false }
+
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher") {
+        because("Only needed to run tests in a version of IntelliJ IDEA that bundles older versions")
+    }
+    testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine")
+    testRuntimeOnly("org.junit.vintage:junit-vintage-engine")
+
 }
