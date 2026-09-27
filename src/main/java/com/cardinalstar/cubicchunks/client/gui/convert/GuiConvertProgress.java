@@ -2,12 +2,8 @@ package com.cardinalstar.cubicchunks.client.gui.convert;
 
 import java.io.File;
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.List;
+import java.io.InterruptedIOException;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.stream.Stream;
 
 import javax.annotation.ParametersAreNonnullByDefault;
 
@@ -26,7 +22,6 @@ import com.cardinalstar.cubicchunks.world.convert.adapter.SectionAdapterDiscover
 import com.cardinalstar.cubicchunks.world.convert.adapter.SectionAdapter;
 import com.cardinalstar.cubicchunks.world.convert.adapter.biome.BiomeAdapter;
 import com.cardinalstar.cubicchunks.world.convert.adapter.biome.BiomeAdapterDiscovery;
-import it.unimi.dsi.fastutil.Pair;
 
 /**
  * Shows a progress bar while a world format conversion runs on a background thread.
@@ -76,49 +71,22 @@ public class GuiConvertProgress extends GuiScreen {
         }
     }
 
-    private static final String[] DIM_PREFIXES = {
-        "DIM",
-        "PERSONAL_DIM"
-    };
-
     @Override
     public void initGui() {
         buttonList.clear();
         buttonList.add(new GuiButton(BTN_CANCEL, width / 2 - 75, height - 38, 150, 20,
             I18n.format("cubicchunks.gui.progress.cancel")));
+        buttonList.get(0).enabled = !cancelSignal.get();
+        if (workerThread != null) return;
 
         workerThread = new Thread(() -> {
-            List<Pair<Path, String>> dims = new ArrayList<>();
-
-            dims.add(Pair.of(worldDir.toPath(), "Overworld"));
-
-            try(Stream<Path> stream = Files.list(worldDir.toPath())) {
-                stream.filter(Files::isDirectory)
-                    .filter(p -> {
-                        var name = p.getFileName().toString();
-
-                        for (var prefix : DIM_PREFIXES) {
-                            if (name.startsWith(prefix)) return true;
-                        }
-
-                        return false;
-                    })
-                    .forEach(p -> {
-                        dims.add(Pair.of(p, p.getFileName().toString()));
-                    });
-            } catch (IOException e) {
-                throw new RuntimeException("Could not find dimension folders", e);
-            }
-
             try {
-                for (var dim : dims) {
-                    progress.setDimension(dim.right());
-
-                    buildConverter(targetFormat).convert(dim.left().toFile(), dim.right().equals("Overworld"), progress, cancelSignal);
-                }
-
+                buildConverter(targetFormat).convertWorld(worldDir, progress, cancelSignal);
                 progress.markDone();
-            } catch (IOException e) {
+            } catch (InterruptedIOException e) {
+                if (cancelSignal.get()) progress.markCancelled();
+                else progress.markError(e.getMessage());
+            } catch (IOException | RuntimeException e) {
                 progress.markError(e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName());
             }
         }, "CC-WorldConverter");
@@ -130,7 +98,10 @@ public class GuiConvertProgress extends GuiScreen {
     public void updateScreen() {
         if (shownResult) return;
 
-        if (progress.isDone()) {
+        if (progress.isCancelled()) {
+            shownResult = true;
+            mc.displayGuiScreen(parent);
+        } else if (progress.isDone()) {
             shownResult = true;
             mc.displayGuiScreen(makeResultScreen(
                 I18n.format("cubicchunks.gui.progress.title"),
@@ -172,9 +143,14 @@ public class GuiConvertProgress extends GuiScreen {
     protected void actionPerformed(GuiButton button) {
         if (button.id == BTN_CANCEL) {
             cancelSignal.set(true);
-            shownResult = true;
-            mc.displayGuiScreen(parent);
+            button.enabled = false;
         }
+    }
+
+    @Override
+    protected void keyTyped(char character, int keyCode) {
+        if (keyCode == 1) actionPerformed(buttonList.get(0));
+        else super.keyTyped(character, keyCode);
     }
 
     @Override

@@ -2,7 +2,13 @@ package com.cardinalstar.cubicchunks.world.convert;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.InterruptedIOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.stream.Stream;
 
 import javax.annotation.ParametersAreNonnullByDefault;
 
@@ -12,6 +18,34 @@ import javax.annotation.ParametersAreNonnullByDefault;
  */
 @ParametersAreNonnullByDefault
 public interface IWorldConverter {
+
+    /** Convert all supported dimensions. Implementations may defer finalization until all have succeeded. */
+    default void convertWorld(File worldRoot, ConversionProgress progress, AtomicBoolean cancelSignal) throws IOException {
+        for (Path dimension : dimensionRoots(worldRoot.toPath())) {
+            checkCancelled(cancelSignal);
+            boolean overworld = dimension.equals(worldRoot.toPath());
+            progress.setDimension(overworld ? "Overworld" : dimension.getFileName().toString());
+            convert(dimension.toFile(), overworld, progress, cancelSignal);
+            checkCancelled(cancelSignal);
+        }
+    }
+
+    static List<Path> dimensionRoots(Path worldRoot) throws IOException {
+        List<Path> dimensions = new ArrayList<>();
+        dimensions.add(worldRoot);
+        try (Stream<Path> children = Files.list(worldRoot)) {
+            children.filter(Files::isDirectory)
+                .filter(p -> p.getFileName().toString().startsWith("DIM")
+                    || p.getFileName().toString().startsWith("PERSONAL_DIM"))
+                .sorted()
+                .forEach(dimensions::add);
+        }
+        return dimensions;
+    }
+
+    static void checkCancelled(AtomicBoolean cancelSignal) throws InterruptedIOException {
+        if (cancelSignal.get()) throw new InterruptedIOException("World conversion cancelled");
+    }
 
     /**
      * Runs the conversion.
