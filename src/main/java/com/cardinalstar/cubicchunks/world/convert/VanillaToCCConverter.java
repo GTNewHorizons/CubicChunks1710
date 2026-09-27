@@ -95,6 +95,12 @@ public final class VanillaToCCConverter implements IWorldConverter {
                             convertChunk(regionFile, localX, localZ, chunkX, chunkZ, columns, cubes);
                             done++;
 
+                            if (columns.size() >= 32) {
+                                storage.writeBatch(new NBTBatch(columns, cubes));
+                                columns.clear();
+                                cubes.clear();
+                            }
+
                             progress.update(done, total, chunkX + "," + chunkZ);
                             if (cancelSignal.get()) {
                                 storage.writeBatch(new NBTBatch(columns, cubes));
@@ -147,7 +153,7 @@ public final class VanillaToCCConverter implements IWorldConverter {
                                Map<ChunkCoordIntPair, NBTTagCompound> columns,
                                Map<CubePos, NBTTagCompound> cubes) throws IOException {
         DataInputStream in = regionFile.getChunkDataInputStream(localX, localZ);
-        if (in == null) return;
+        if (in == null) throw new IOException("Cannot read saved chunk " + chunkX + "," + chunkZ);
 
         NBTTagCompound root;
         try {
@@ -158,7 +164,12 @@ public final class VanillaToCCConverter implements IWorldConverter {
 
         NBTTagCompound level = root.getCompoundTag("Level");
 
-        columns.put(new ChunkCoordIntPair(chunkX, chunkZ), buildColumnNbt(level, chunkX, chunkZ));
+        if (!root.hasKey("Level", 10) || level.getInteger("xPos") != chunkX || level.getInteger("zPos") != chunkZ) {
+            throw new IOException("Invalid chunk coordinates at " + chunkX + "," + chunkZ);
+        }
+        NBTTagCompound column = buildColumnNbt(level, chunkX, chunkZ);
+        copyUnknownTags(root, column, java.util.Collections.singleton("Level"));
+        columns.put(new ChunkCoordIntPair(chunkX, chunkZ), column);
 
         boolean[] present = new boolean[16];
 
@@ -166,6 +177,8 @@ public final class VanillaToCCConverter implements IWorldConverter {
         for (int i = 0; i < vanillaSections.tagCount(); i++) {
             NBTTagCompound section = vanillaSections.getCompoundTagAt(i);
             int sectionY = section.getByte("Y") & 0xFF;
+
+            if (sectionY >= 16 || present[sectionY]) throw new IOException("Invalid or duplicate Anvil section " + sectionY);
 
             present[sectionY] = true;
 
@@ -180,6 +193,23 @@ public final class VanillaToCCConverter implements IWorldConverter {
             cubes.put(
                 new CubePos(chunkX, sectionY, chunkZ),
                 buildCubeNbt(level, null, chunkX, sectionY, chunkZ));
+        }
+
+        Set<Integer> extraSections = new HashSet<>();
+        NBTTagList entities = level.getTagList("Entities", 10);
+        for (int i = 0; i < entities.tagCount(); i++) {
+            NBTTagList pos = entities.getCompoundTagAt(i).getTagList("Pos", 6);
+            if (pos.tagCount() != 3) throw new IOException("Entity without position in " + chunkX + "," + chunkZ);
+            extraSections.add((int) Math.floor(pos.func_150309_d(1) / 16));
+        }
+        for (String key : new String[] { "TileEntities", "TileTicks" }) {
+            NBTTagList tags = level.getTagList(key, 10);
+            for (int i = 0; i < tags.tagCount(); i++) extraSections.add(tags.getCompoundTagAt(i).getInteger("y") >> 4);
+        }
+        for (int sectionY : extraSections) {
+            if (sectionY < 0 || sectionY >= 16) {
+                cubes.put(new CubePos(chunkX, sectionY, chunkZ), buildCubeNbt(level, null, chunkX, sectionY, chunkZ));
+            }
         }
     }
 

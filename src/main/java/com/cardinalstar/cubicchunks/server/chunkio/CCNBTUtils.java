@@ -29,7 +29,6 @@ import org.apache.commons.lang3.mutable.MutableInt;
 import com.cardinalstar.cubicchunks.mixin.early.common.AccessorNBTTagCompound;
 import com.cardinalstar.cubicchunks.mixin.early.common.AccessorNBTTagList;
 import com.cardinalstar.cubicchunks.util.ByteBufferInputStream;
-import com.gtnewhorizon.gtnhlib.bytebuf.MemoryUtilities;
 
 public class CCNBTUtils {
 
@@ -51,20 +50,14 @@ public class CCNBTUtils {
         if (data.getInt(0) == LZ4_MAGIC_NUMBER) {
             int decompLen = data.getInt(4);
 
-            ByteBuffer decompressed = MemoryUtilities.memAlloc(decompLen);
+            // Dedicated servers do not provide the LWJGL JNI allocator used by MemoryUtilities.
+            ByteBuffer decompressed = ByteBuffer.allocate(decompLen);
+            LZ4Factory.fastestInstance()
+                .fastDecompressor()
+                .decompress(data, 8, decompressed, 0, decompLen);
 
-            try {
-                LZ4Factory.fastestInstance()
-                    .fastDecompressor()
-                    .decompress(data, 8, decompressed, 0, decompLen);
-
-                decompressed.limit(decompLen);
-
-                try (DataInputStream dos = new DataInputStream(new ByteBufferInputStream(decompressed))) {
-                    return CompressedStreamTools.func_152456_a(dos, NBTSizeTracker.field_152451_a);
-                }
-            } finally {
-                MemoryUtilities.memFree(decompressed);
+            try (DataInputStream dos = new DataInputStream(new ByteBufferInputStream(decompressed))) {
+                return CompressedStreamTools.func_152456_a(dos, NBTSizeTracker.field_152451_a);
             }
         }
 
@@ -140,6 +133,8 @@ public class CCNBTUtils {
     }
 
     private static int getTagSizeEstimate(NBTBase tag) {
+        // Offline conversion uses ordinary NBT classes without the mixin accessors.
+        if (tag instanceof NBTTagCompound && !(tag instanceof AccessorNBTTagCompound)) return 8192;
         switch (tag.getId()) {
             case NBT.TAG_BYTE -> {
                 return 2;
