@@ -179,6 +179,10 @@ public class CubicPlayerManager extends PlayerManager implements CubeLoaderCallb
 
             provider.getCubeLoader()
                 .doGC();
+
+            // unloading cubes above saves them, which fills CubeIO's caches, so trim them afterwards
+            provider.getCubeLoader()
+                .trimCaches();
         }
 
         // if there are no players - unload everything

@@ -37,6 +37,10 @@ public class CubeIO implements ICubeIO {
 
     private static final long EXPIRY = Duration.ofSeconds(120)
         .toMillis();
+    private static final int COLUMN_CACHE_LIMIT = 5000;
+    private static final int CUBE_CACHE_LIMIT = 30000;
+    // how many entries a single save may check when trimming, to keep saves fast
+    private static final int SAVE_TRIM_CHECKS = 100;
 
     private final ICubicStorage storage;
     private final IPreloadFailureDelegate preloadFailures;
@@ -246,6 +250,45 @@ public class CubeIO implements ICubeIO {
         }
     }
 
+    /// Trims both caches fully. Called periodically, because trimming on save alone never runs when nothing is saved.
+    @Override
+    public void trimCaches() {
+        long now = System.currentTimeMillis();
+
+        synchronized (columnCache) {
+            trimCache(columnCache, COLUMN_CACHE_LIMIT, Integer.MAX_VALUE, now);
+        }
+
+        synchronized (cubeCache) {
+            trimCache(cubeCache, CUBE_CACHE_LIMIT, Integer.MAX_VALUE, now);
+        }
+    }
+
+    /// Checks up to {@code maxChecks} of the oldest entries and removes those whose save has finished, while the cache
+    /// is larger than {@code limit}. Entries are normally kept until they expire, but while the cache is more than twice
+    /// its limit (e.g. during LOD generation) unexpired entries are removed as well. Must be called while holding the
+    /// cache's lock.
+    private static <K> void trimCache(Object2ObjectLinkedOpenHashMap<K, SaveData> cache, int limit, int maxChecks,
+        long now) {
+        int i = 0;
+
+        var iter = cache.object2ObjectEntrySet()
+            .fastIterator();
+
+        while (cache.size() > limit && i++ < maxChecks && iter.hasNext()) {
+            SaveData data = iter.next()
+                .getValue();
+
+            if (data.task != null && data.task.isDone()) {
+                data.task = null;
+            }
+
+            if (data.task == null && (data.lastAccess + EXPIRY < now || cache.size() > limit * 2)) {
+                iter.remove();
+            }
+        }
+    }
+
     public void saveColumn(ChunkCoordIntPair pos, Chunk column) {
         // NOTE: this function blocks the world thread
         // make it as fast as possible by offloading processing to the IO thread
@@ -266,26 +309,7 @@ public class CubeIO implements ICubeIO {
         synchronized (columnCache) {
             columnCache.put(pos, new SaveData(tag, task, now));
 
-            if (columnCache.size() > 5000) {
-                int i = 0;
-
-                var iter = columnCache.object2ObjectEntrySet()
-                    .fastIterator();
-
-                while (columnCache.size() > 5000 && i++ < 100) {
-                    var e = iter.next();
-
-                    SaveData data = e.getValue();
-
-                    if (data.task != null && data.task.isDone()) {
-                        data.task = null;
-                    }
-
-                    if (data.task == null && data.lastAccess + EXPIRY < now) {
-                        iter.remove();
-                    }
-                }
-            }
+            trimCache(columnCache, COLUMN_CACHE_LIMIT, SAVE_TRIM_CHECKS, now);
         }
     }
 
@@ -303,26 +327,7 @@ public class CubeIO implements ICubeIO {
         synchronized (cubeCache) {
             cubeCache.put(pos, new SaveData(tag, task, now));
 
-            if (cubeCache.size() > 30000) {
-                int i = 0;
-
-                var iter = cubeCache.object2ObjectEntrySet()
-                    .fastIterator();
-
-                while (cubeCache.size() > 30000 && i++ < 100) {
-                    var e = iter.next();
-
-                    SaveData data = e.getValue();
-
-                    if (data.task != null && data.task.isDone()) {
-                        data.task = null;
-                    }
-
-                    if (data.task == null && data.lastAccess + EXPIRY < now) {
-                        iter.remove();
-                    }
-                }
-            }
+            trimCache(cubeCache, CUBE_CACHE_LIMIT, SAVE_TRIM_CHECKS, now);
         }
     }
 

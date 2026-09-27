@@ -27,4 +27,6 @@ public interface ICubeIO extends Flushable, Closeable {
     void preloadColumn(ChunkCoordIntPair pos);
 
     void preloadCube(CubePos pos, CubeInitLevel level);
+
+    void trimCaches();
 }
