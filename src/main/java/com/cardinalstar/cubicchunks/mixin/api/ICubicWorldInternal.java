@@ -117,10 +117,6 @@ public interface ICubicWorldInternal extends ICubicWorld {
         SpawnCubes getSpawnArea();
 
         void setSpawnArea(SpawnCubes spawn);
-
-        void initCubicWorldServer();
-
-        // VanillaNetworkHandler getVanillaNetworkHandler();
     }
 
     interface Client extends ICubicWorldInternal {

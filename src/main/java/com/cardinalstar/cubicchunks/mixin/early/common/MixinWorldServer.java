@@ -31,14 +31,13 @@ import java.util.TreeSet;
 
 import javax.annotation.ParametersAreNonnullByDefault;
 
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.EntityTracker;
 import net.minecraft.server.management.PlayerManager;
 import net.minecraft.world.ChunkCoordIntPair;
 import net.minecraft.world.NextTickListEntry;
 import net.minecraft.world.SpawnerAnimals;
 import net.minecraft.world.World;
 import net.minecraft.world.WorldServer;
+import net.minecraft.world.WorldType;
 import net.minecraft.world.chunk.Chunk;
 import net.minecraft.world.chunk.IChunkProvider;
 import net.minecraft.world.chunk.storage.ExtendedBlockStorage;
@@ -46,11 +45,9 @@ import net.minecraft.world.chunk.storage.IChunkLoader;
 import net.minecraft.world.gen.ChunkProviderServer;
 import net.minecraftforge.common.ForgeChunkManager;
 
-import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Implements;
 import org.spongepowered.asm.mixin.Interface;
 import org.spongepowered.asm.mixin.Mixin;
-import org.spongepowered.asm.mixin.Mutable;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
@@ -64,6 +61,10 @@ import com.cardinalstar.cubicchunks.api.ICube;
 import com.cardinalstar.cubicchunks.api.ICubicWorldServer;
 import com.cardinalstar.cubicchunks.api.XYZMap;
 import com.cardinalstar.cubicchunks.api.XZMap;
+import com.cardinalstar.cubicchunks.api.world.ICubicWorldProvider;
+import com.cardinalstar.cubicchunks.api.world.ICubicWorldType;
+import com.cardinalstar.cubicchunks.api.worldgen.BuiltinWorldDecorators;
+import com.cardinalstar.cubicchunks.api.worldgen.IWorldGenerator;
 import com.cardinalstar.cubicchunks.mixin.api.ICubicWorldInternal;
 import com.cardinalstar.cubicchunks.server.CubeProviderServer;
 import com.cardinalstar.cubicchunks.server.CubicPlayerManager;
@@ -71,66 +72,38 @@ import com.cardinalstar.cubicchunks.server.SpawnCubes;
 import com.cardinalstar.cubicchunks.util.CubePos;
 import com.cardinalstar.cubicchunks.util.world.CubeSplitTicks;
 import com.cardinalstar.cubicchunks.world.CubeSpawnerAnimals;
-import com.cardinalstar.cubicchunks.world.ICubicWorldProvider;
 import com.cardinalstar.cubicchunks.world.ISpawnerAnimals;
 import com.cardinalstar.cubicchunks.world.chunkloader.CubicChunkManager;
 import com.cardinalstar.cubicchunks.world.savedata.WorldFormatSavedData;
+import com.cardinalstar.cubicchunks.worldgen.VanillaWorldGenerator;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 
 /**
  * Implementation of {@link ICubicWorldServer} interface.
  */
+@SuppressWarnings("AddedMixinMembersNamePattern")
 @ParametersAreNonnullByDefault
 @Mixin(WorldServer.class)
 @Implements(@Interface(iface = ICubicWorldServer.class, prefix = "world$"))
 public abstract class MixinWorldServer extends MixinWorld implements ICubicWorldInternal.Server {
 
-    @Shadow
-    @Mutable
-    @Final
-    private PlayerManager thePlayerManager;
-    @Shadow
-    @Mutable
-    @Final
-    private SpawnerAnimals animalSpawner;
-    @Shadow
-    @Mutable
-    @Final
-    private EntityTracker theEntityTracker;
-    @Shadow
-    public boolean levelSaving; // TODO DO WE NEED TO NEGATE THIS?
-
     @Unique
-    private Map<Chunk, Set<ICube>> forcedChunksCubes;
+    private final Map<Chunk, Set<ICube>> cc$forcedChunksCubes = new HashMap<>();
     @Unique
-    private XYZMap<ICube> forcedCubes;
+    private final XYZMap<ICube> cc$forcedCubes = new XYZMap<>();
     @Unique
-    private XZMap<IColumn> forcedColumns;
+    private final XZMap<IColumn> cc$forcedColumns = new XZMap<>();
     @Unique
-    private SpawnCubes spawnArea;
+    private SpawnCubes cc$spawnArea;
     @Unique
-    private boolean runningCompatibilityGenerator;
-    // private VanillaNetworkHandler vanillaNetworkHandler;
-
-    @Shadow
-    public abstract boolean addWeatherEffect(Entity entityIn);
+    private final CubeSplitTicks cc$cubeTicks = new CubeSplitTicks();
 
     @Shadow
     public abstract PlayerManager getPlayerManager();
 
     @Shadow
     public ChunkProviderServer theChunkProviderServer;
-    @Unique
-    private CubeSplitTicks cubeTicks;
-
-    @Override
-    public void initCubicWorldServer() {
-        this.forcedChunksCubes = new HashMap<>();
-        this.forcedCubes = new XYZMap<>();
-        this.forcedColumns = new XZMap<>();
-        cubeTicks = new CubeSplitTicks();
-    }
 
     @Redirect(
         method = "<init>", // constructor
@@ -152,12 +125,30 @@ public abstract class MixinWorldServer extends MixinWorld implements ICubicWorld
         return new CubicPlayerManager(server);
     }
 
-    @Redirect(
-        method = "createChunkProvider",
-        at = @At(value = "NEW", target = "net/minecraft/world/gen/ChunkProviderServer"))
-    private ChunkProviderServer redirectChunkProviderServer(WorldServer world, IChunkLoader chunkLoader,
-        IChunkProvider chunkGenerator) {
-        return new CubeProviderServer(world, chunkLoader, ((ICubicWorldProvider) world.provider).createCubeGenerator());
+    @Inject(method = "createChunkProvider", at = @At("HEAD"), cancellable = true)
+    private void interceptChunkProvider(CallbackInfoReturnable<IChunkProvider> cir) {
+        WorldServer self = (WorldServer) (Object) this;
+
+        WorldType terrainType = self.getWorldInfo()
+            .getTerrainType();
+
+        IChunkProvider chunkGenerator = self.provider.createChunkGenerator();
+
+        IWorldGenerator cubicGenerator;
+
+        if (terrainType instanceof ICubicWorldType cubicWorldType && cubicWorldType.hasCubicGeneratorForWorld(self)) {
+            cubicGenerator = cubicWorldType.createCubeGenerator(self, chunkGenerator);
+        } else if (self.provider instanceof ICubicWorldProvider cubicProvider) {
+            cubicGenerator = cubicProvider.createCubeGenerator(chunkGenerator);
+        } else {
+            cubicGenerator = new VanillaWorldGenerator(chunkGenerator, self, BuiltinWorldDecorators.VANILLA);
+        }
+
+        IChunkLoader chunkLoader = this.saveHandler.getChunkLoader(this.provider);
+
+        this.theChunkProviderServer = new CubeProviderServer(self, chunkLoader, cubicGenerator, chunkGenerator);
+
+        cir.setReturnValue(this.theChunkProviderServer);
     }
 
     @Inject(method = "getChunkSaveLocation", at = @At("HEAD"), cancellable = true, remap = false)
@@ -177,7 +168,7 @@ public abstract class MixinWorldServer extends MixinWorld implements ICubicWorld
         method = { "scheduleBlockUpdateWithPriority", "func_147446_b" },
         at = @At(value = "INVOKE", target = "Ljava/util/TreeSet;add(Ljava/lang/Object;)Z", remap = false))
     public boolean redirectAdd(TreeSet<NextTickListEntry> instance, Object o, Operation<Boolean> original) {
-        cubeTicks.add((NextTickListEntry) o);
+        cc$cubeTicks.add((NextTickListEntry) o);
         return original.call(instance, o);
     }
 
@@ -185,30 +176,30 @@ public abstract class MixinWorldServer extends MixinWorld implements ICubicWorld
         method = "tickUpdates",
         at = @At(value = "INVOKE", target = "Ljava/util/TreeSet;remove(Ljava/lang/Object;)Z", remap = false))
     public boolean redirectRemove(TreeSet<NextTickListEntry> instance, Object o, Operation<Boolean> original) {
-        cubeTicks.remove((NextTickListEntry) o);
+        cc$cubeTicks.remove((NextTickListEntry) o);
         return original.call(instance, o);
     }
 
     @Override
     public void setSpawnArea(SpawnCubes spawn) {
-        this.spawnArea = spawn;
+        this.cc$spawnArea = spawn;
     }
 
     @Override
     public SpawnCubes getSpawnArea() {
-        return spawnArea;
+        return cc$spawnArea;
     }
 
     @Override
     public CubeSplitTicks getScheduledTicks() {
-        return cubeTicks;
+        return cc$cubeTicks;
     }
 
     @Override
     public void tickCubicWorld() {
         getLightingManager().onTick();
-        if (this.spawnArea != null) {
-            this.spawnArea.update((World) (Object) this);
+        if (this.cc$spawnArea != null) {
+            this.cc$spawnArea.update((World) (Object) this);
         }
     }
 
@@ -219,36 +210,36 @@ public abstract class MixinWorldServer extends MixinWorld implements ICubicWorld
 
     @Override
     public void removeForcedCube(ICube cube) {
-        if (!forcedChunksCubes.get(cube.getColumn())
+        if (!cc$forcedChunksCubes.get(cube.getColumn())
             .remove(cube)) {
             CubicChunks.LOGGER.error("Trying to remove forced cube " + cube.getCoords() + ", but it's not forced!");
         }
-        forcedCubes.remove(cube);
-        if (forcedChunksCubes.get(cube.getColumn())
+        cc$forcedCubes.remove(cube);
+        if (cc$forcedChunksCubes.get(cube.getColumn())
             .isEmpty()) {
-            forcedChunksCubes.remove(cube.getColumn());
-            forcedColumns.remove(cube.getColumn());
+            cc$forcedChunksCubes.remove(cube.getColumn());
+            cc$forcedColumns.remove(cube.getColumn());
         }
     }
 
     @Override
     public void addForcedCube(ICube cube) {
-        if (!forcedChunksCubes.computeIfAbsent(cube.getColumn(), chunk -> new HashSet<>())
+        if (!cc$forcedChunksCubes.computeIfAbsent(cube.getColumn(), chunk -> new HashSet<>())
             .add(cube)) {
             CubicChunks.LOGGER.error("Trying to add forced cube " + cube.getCoords() + ", but it's already forced!");
         }
-        forcedCubes.put(cube);
-        forcedColumns.put(cube.getColumn());
+        cc$forcedCubes.put(cube);
+        cc$forcedColumns.put(cube.getColumn());
     }
 
     @Override
     public XYZMap<ICube> getForcedCubes() {
-        return forcedCubes;
+        return cc$forcedCubes;
     }
 
     @Override
     public XZMap<IColumn> getForcedColumns() {
-        return forcedColumns;
+        return cc$forcedColumns;
     }
 
     @Override
