@@ -48,11 +48,9 @@ import com.cardinalstar.cubicchunks.network.NetworkChannel;
 import com.cardinalstar.cubicchunks.server.ICubicChunksServer;
 import com.cardinalstar.cubicchunks.server.chunkio.RegionCubeStorage;
 import com.cardinalstar.cubicchunks.util.CompatHandler;
-import com.cardinalstar.cubicchunks.util.Mods;
 import com.cardinalstar.cubicchunks.util.SideUtils;
 import com.cardinalstar.cubicchunks.world.worldgen.WorldGenerators;
 import com.cardinalstar.cubicchunks.worldgen.WorldgenHangWatchdog;
-import com.falsepattern.chunk.api.DataRegistry;
 import com.gtnewhorizon.gtnhlib.config.ConfigException;
 import com.gtnewhorizon.gtnhlib.config.ConfigurationManager;
 
@@ -184,10 +182,6 @@ public class CubicChunks {
     @Mod.EventHandler
     public void postInit(FMLPostInitializationEvent event) {
         CompatHandler.init();
-
-        if (Mods.ChunkAPI.isModLoaded()) {
-            DataRegistry.disableDataManager("chunkapi", "lighting");
-        }
     }
 
     @Mod.EventHandler
