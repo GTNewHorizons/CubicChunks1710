@@ -21,20 +21,15 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 
-/** Offline, codec-independent packing of standard 512-byte-sector Anvil3D region files. */
+/** Codec-independent packing of standard 512-byte-sector Anvil3D files, before storage opens or offline. */
 public final class RegionCompactor {
 
     private static final int SECTOR_BYTES = 512;
 
     private RegionCompactor() {}
 
-    public static void main(String[] args) {
-        try {
-            run(args, System.out);
-        } catch (IOException | IllegalArgumentException e) {
-            System.err.println("Compaction stopped: " + e.getMessage());
-            System.exit(1);
-        }
+    public static void main(String[] args) throws IOException {
+        run(args, System.out);
     }
 
     static void run(String[] args, PrintStream out) throws IOException {
@@ -126,6 +121,40 @@ public final class RegionCompactor {
                 }
             }
             if (failure != null) throw failure;
+        }
+    }
+
+    // Only this dimension: other dimensions may already be open, or use a different storage backend.
+    // Caller holds its maintenance lease until storage has opened or the operation has failed.
+    static Summary compactDimensionLocked(Path dimension) throws IOException {
+        List<Path> files = new ArrayList<>();
+        findRegions(dimension.resolve("region2d"), "-?\\d+\\.-?\\d+\\.2dr", files);
+        findRegions(dimension.resolve("region3d"), "-?\\d+\\.-?\\d+\\.-?\\d+\\.3dr", files);
+        Collections.sort(files);
+        for (Path file : files) {
+            try (FileChannel input = openRead(file)) {
+                inspect(file, input);
+            }
+        }
+        int changed = 0;
+        long reclaimed = 0;
+        for (Path file : files) {
+            Result result = compactLocked(file, true);
+            if (result.before > result.after) changed++;
+            reclaimed += result.before - result.after;
+        }
+        return new Summary(files.size(), changed, reclaimed);
+    }
+
+    static final class Summary {
+
+        final int regions, changed;
+        final long reclaimed;
+
+        Summary(int regions, int changed, long reclaimed) {
+            this.regions = regions;
+            this.changed = changed;
+            this.reclaimed = reclaimed;
         }
     }
 

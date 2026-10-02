@@ -39,6 +39,7 @@ import net.minecraft.world.ChunkCoordIntPair;
 
 import org.jetbrains.annotations.NotNull;
 
+import com.cardinalstar.cubicchunks.CubicChunks;
 import com.cardinalstar.cubicchunks.CubicChunksConfig;
 import com.cardinalstar.cubicchunks.api.world.storage.ICubicStorage;
 import com.cardinalstar.cubicchunks.server.chunkio.region.ShadowPagingRegion;
@@ -60,6 +61,28 @@ import it.unimi.dsi.fastutil.Pair;
  * Implementation of {@link ICubicStorage} for the Cubic Chunks' standard Anvil3d storage format.
  */
 public class RegionCubeStorage implements ICubicStorage {
+
+    /** Called by the world storage factories, before any region handles or asynchronous I/O exist. */
+    public static ICubicStorage openForWorld(Path path, boolean compactEmpty) throws IOException {
+        if (!CubicChunksConfig.compactRegionsOnWorldLoad) {
+            return compactEmpty ? new CompactCubeStorage(path) : new RegionCubeStorage(path);
+        }
+        try (StorageMaintenanceLock lock = StorageMaintenanceLock.openMaintenance(path)) {
+            long start = System.nanoTime();
+            CubicChunks.LOGGER.info("Checking region compaction before opening {}", path);
+            RegionCompactor.Summary result = RegionCompactor.compactDimensionLocked(path);
+            CubicChunks.LOGGER.info(
+                "Region compaction for {}: {} regions checked, {} compacted, {} bytes reclaimed in {} ms",
+                path,
+                result.regions,
+                result.changed,
+                result.reclaimed,
+                (System.nanoTime() - start) / 1_000_000);
+            // Retain the OS lock until the storage constructor has acquired its own lease.
+            lock.allowStorage();
+            return compactEmpty ? new CompactCubeStorage(path) : new RegionCubeStorage(path);
+        }
+    }
 
     private static SaveCubeColumns saveForPath(Path path) throws IOException {
         if (CubicChunksConfig.useShadowPagingIO) {
