@@ -46,7 +46,6 @@ import com.cardinalstar.cubicchunks.event.handlers.ClientEventHandler;
 import com.cardinalstar.cubicchunks.event.handlers.CommonEventHandler;
 import com.cardinalstar.cubicchunks.network.NetworkChannel;
 import com.cardinalstar.cubicchunks.server.ICubicChunksServer;
-import com.cardinalstar.cubicchunks.server.chunkio.CompactCubeStorage;
 import com.cardinalstar.cubicchunks.server.chunkio.RegionCubeStorage;
 import com.cardinalstar.cubicchunks.util.CompatHandler;
 import com.cardinalstar.cubicchunks.util.Mods;
@@ -309,7 +308,7 @@ public class CubicChunks {
 
         @Override
         public ICubicStorage provideStorage(World world, Path path) throws IOException {
-            return compactEmpty ? new CompactCubeStorage(path) : new RegionCubeStorage(path);
+            return RegionCubeStorage.openForWorld(path, compactEmpty);
         }
     }
 }

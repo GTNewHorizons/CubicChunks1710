@@ -139,6 +139,13 @@ public class CubicChunksConfig {
     @Config.RequiresWorldRestart
     public static boolean useShadowPagingIO = true;
 
+    @Config.LangKey("cubicchunks.config.compact_regions_on_world_load")
+    @Config.Comment("Reclaim unused space in Anvil3D region files before opening each dimension's storage. "
+        + "Only files that can shrink are replaced; cube data and compression are unchanged. "
+        + "Large fragmented saves may take longer to load. Compaction never runs while that storage is in use.")
+    @Config.RequiresWorldRestart
+    public static boolean compactRegionsOnWorldLoad = true;
+
     @Config.LangKey("cubicchunks.config.disable_lighting")
     @Config.Comment("Disables all light propagation")
     public static boolean disableLighting = false;
