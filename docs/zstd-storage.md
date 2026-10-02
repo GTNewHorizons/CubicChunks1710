@@ -1,9 +1,10 @@
 # Zstandard save compression
 
-Set `S:chunkCompression=ZSTD` in `config/cubicchunks.cfg` to use Zstandard level 1
-without a dictionary for newly saved columns and cubes. GZIP remains the default,
-matching upstream master. LZ4 and uncompressed records are also optional.
-Both ordinary Anvil3D and experimental compact-empty storage support this codec.
+New configurations default to `S:chunkCompression=ZSTD` in `config/cubicchunks.cfg`:
+Zstandard level 1 without a dictionary for newly saved columns and cubes.
+GZIP, LZ4 and NONE remain available. An existing configured choice is not overwritten;
+set it to ZSTD explicitly to change that choice. Both ordinary Anvil3D and
+compact-empty storage support all four codecs.
 
 Each record is an independent standard Zstd frame, with content size and checksum.
 No other cube or external dictionary is needed to decode it. Native contexts are
