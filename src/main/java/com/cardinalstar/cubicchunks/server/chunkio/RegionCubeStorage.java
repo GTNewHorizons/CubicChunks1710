@@ -71,13 +71,21 @@ public class RegionCubeStorage implements ICubicStorage {
             long start = System.nanoTime();
             CubicChunks.LOGGER.info("Checking region compaction before opening {}", path);
             RegionCompactor.Summary result = RegionCompactor.compactDimensionLocked(path);
-            CubicChunks.LOGGER.info(
-                "Region compaction for {}: {} regions checked, {} compacted, {} bytes reclaimed in {} ms",
-                path,
-                result.regions,
-                result.changed,
-                result.reclaimed,
-                (System.nanoTime() - start) / 1_000_000);
+            if (result.skippedLink != null) {
+                CubicChunks.LOGGER.warn(
+                    "Skipping region compaction for {} because {} is a symbolic link; opening storage normally",
+                    path,
+                    result.skippedLink);
+            } else {
+                CubicChunks.LOGGER.info(
+                    "Region compaction for {}: {} regions checked, {} compacted, {} uninitialized skipped, {} bytes reclaimed in {} ms",
+                    path,
+                    result.regions,
+                    result.changed,
+                    result.uninitialized,
+                    result.reclaimed,
+                    (System.nanoTime() - start) / 1_000_000);
+            }
             // Retain the OS lock until the storage constructor has acquired its own lease.
             lock.allowStorage();
             return compactEmpty ? new CompactCubeStorage(path) : new RegionCubeStorage(path);
@@ -338,6 +346,7 @@ public class RegionCubeStorage implements ICubicStorage {
     @Override
     public void close() throws IOException {
         if (this.save == null) return;
+        // A failed close may leave live region handles. Do not permit maintenance until they are closed.
         this.save.close();
         this.save = null;
         this.storageLock.close();
