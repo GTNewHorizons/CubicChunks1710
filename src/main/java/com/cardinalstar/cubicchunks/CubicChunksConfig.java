@@ -99,7 +99,7 @@ public class CubicChunksConfig {
 
     @Config.LangKey("cubicchunks.config.storage_format")
     @Config.Comment("The storage format. Note: this will be used for all newly created worlds. Existing worlds will continue to use the format they were created with.\n"
-        + "If empty, the storage format for new worlds will be determined automatically.")
+        + "If empty, new worlds use compact-empty Anvil3D storage.")
     public static String storageFormat = "";
 
     @Config.LangKey("cubicchunks.config.spawn_generate_distance_horizontal")
@@ -147,7 +147,7 @@ public class CubicChunksConfig {
     @Config.Comment("Compression for newly saved chunks and cubes: GZIP, LZ4, NONE, or ZSTD (level 1, no dictionary). "
         + "Existing records remain readable regardless of this setting. Older CC versions may not read these codecs; "
         + "switching back only changes future writes, not existing records.")
-    public static TagCompression chunkCompression = TagCompression.GZIP;
+    public static TagCompression chunkCompression = TagCompression.ZSTD;
 
     @Config.Ignore
     public static int defaultMaxCubesPerChunkloadingTicket = 25 * 16;

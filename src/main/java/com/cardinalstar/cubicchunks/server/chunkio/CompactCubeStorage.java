@@ -38,7 +38,7 @@ import com.cardinalstar.cubicchunks.CubicChunksConfig;
 import com.cardinalstar.cubicchunks.api.world.storage.ICubicStorage;
 import com.cardinalstar.cubicchunks.util.CubePos;
 
-/** Opt-in Anvil3D storage with lossless, per-region templates for sectionless cubes. */
+/** Anvil3D storage with lossless, per-region templates for sectionless cubes. */
 public final class CompactCubeStorage implements ICubicStorage {
 
     public static final String DIRECTORY = "region3d-empty";

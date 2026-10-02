@@ -1,7 +1,8 @@
 # Experimental compact empty-cube storage
 
-Opt in for a new world by setting `storageFormat` to
-`cubicchunks:anvil3d-compact-empty`. Leaving it empty keeps ordinary Anvil3D.
+New worlds default to `cubicchunks:anvil3d-compact-empty` when `storageFormat` is
+empty. This format can also be selected explicitly. Set `storageFormat` to
+`cubicchunks:anvil3d` to explicitly create a world using ordinary Anvil3D.
 CC worlds with `data/cubicchunks.world_format.dat` keep their recorded format;
 changing the config does not migrate them. Very old or damaged worlds without
 that marker use the configured format on first load. Test only on backed-up copies;
