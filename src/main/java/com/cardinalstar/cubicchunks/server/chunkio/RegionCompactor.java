@@ -128,33 +128,49 @@ public final class RegionCompactor {
     // Caller holds its maintenance lease until storage has opened or the operation has failed.
     static Summary compactDimensionLocked(Path dimension) throws IOException {
         List<Path> files = new ArrayList<>();
+        for (String directory : new String[] { "region2d", "region3d" }) {
+            Path path = dimension.resolve(directory);
+            if (Files.isSymbolicLink(path)) return new Summary(0, 0, 0, 0, path);
+        }
         findRegions(dimension.resolve("region2d"), "-?\\d+\\.-?\\d+\\.2dr", files);
         findRegions(dimension.resolve("region3d"), "-?\\d+\\.-?\\d+\\.-?\\d+\\.3dr", files);
         Collections.sort(files);
         for (Path file : files) {
+            if (Files.isSymbolicLink(file)) return new Summary(0, 0, 0, 0, file);
+        }
+        List<Path> initialized = new ArrayList<>();
+        for (Path file : files) {
             try (FileChannel input = openRead(file)) {
+                // RegionLib initializes files shorter than a header as empty when it first opens them.
+                int headerBytes = file.toString()
+                    .endsWith(".3dr") ? 16384 : 4096;
+                if (input.size() < headerBytes) continue;
                 inspect(file, input);
+                initialized.add(file);
             }
         }
         int changed = 0;
         long reclaimed = 0;
-        for (Path file : files) {
+        for (Path file : initialized) {
             Result result = compactLocked(file, true);
             if (result.before > result.after) changed++;
             reclaimed += result.before - result.after;
         }
-        return new Summary(files.size(), changed, reclaimed);
+        return new Summary(files.size(), changed, reclaimed, files.size() - initialized.size(), null);
     }
 
     static final class Summary {
 
-        final int regions, changed;
+        final int regions, changed, uninitialized;
         final long reclaimed;
+        final Path skippedLink;
 
-        Summary(int regions, int changed, long reclaimed) {
+        Summary(int regions, int changed, long reclaimed, int uninitialized, Path skippedLink) {
             this.regions = regions;
             this.changed = changed;
             this.reclaimed = reclaimed;
+            this.uninitialized = uninitialized;
+            this.skippedLink = skippedLink;
         }
     }
 
