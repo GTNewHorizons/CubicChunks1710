@@ -46,6 +46,7 @@ import com.cardinalstar.cubicchunks.event.handlers.ClientEventHandler;
 import com.cardinalstar.cubicchunks.event.handlers.CommonEventHandler;
 import com.cardinalstar.cubicchunks.network.NetworkChannel;
 import com.cardinalstar.cubicchunks.server.ICubicChunksServer;
+import com.cardinalstar.cubicchunks.server.chunkio.CompactCubeStorage;
 import com.cardinalstar.cubicchunks.server.chunkio.RegionCubeStorage;
 import com.cardinalstar.cubicchunks.util.CompatHandler;
 import com.cardinalstar.cubicchunks.util.Mods;
@@ -202,7 +203,9 @@ public class CubicChunks {
     }
 
     public static void registerAnvil3dStorageFormatProvider() {
-        StorageFormatFactory.REGISTRY.register(StorageFormatFactory.DEFAULT, new DefaultStorageFormatFactory());
+        StorageFormatFactory.REGISTRY.register(StorageFormatFactory.DEFAULT, new DefaultStorageFormatFactory(false));
+        StorageFormatFactory.REGISTRY
+            .register(StorageFormatFactory.COMPACT_EMPTY, new DefaultStorageFormatFactory(true));
     }
 
     @NetworkCheckHandler
@@ -281,9 +284,14 @@ public class CubicChunks {
 
     private static class DefaultStorageFormatFactory extends StorageFormatFactory {
 
-        public DefaultStorageFormatFactory() {
-            setRegistryName(StorageFormatFactory.DEFAULT);
-            setUnlocalizedName("cubicchunks.gui.storagefmt.anvil3d");
+        private final boolean compactEmpty;
+
+        public DefaultStorageFormatFactory(boolean compactEmpty) {
+            this.compactEmpty = compactEmpty;
+            setRegistryName(compactEmpty ? StorageFormatFactory.COMPACT_EMPTY : StorageFormatFactory.DEFAULT);
+            setUnlocalizedName(
+                compactEmpty ? "cubicchunks.gui.storagefmt.anvil3d_compact_empty"
+                    : "cubicchunks.gui.storagefmt.anvil3d");
         }
 
         @Override
@@ -301,7 +309,7 @@ public class CubicChunks {
 
         @Override
         public ICubicStorage provideStorage(World world, Path path) throws IOException {
-            return new RegionCubeStorage(path);
+            return compactEmpty ? new CompactCubeStorage(path) : new RegionCubeStorage(path);
         }
     }
 }

@@ -29,6 +29,7 @@ import javax.annotation.ParametersAreNonnullByDefault;
 
 import net.minecraft.block.Block;
 
+import com.cardinalstar.cubicchunks.server.chunkio.CCNBTUtils.TagCompression;
 import com.cardinalstar.cubicchunks.worldgen.FillerInfo;
 import com.cardinalstar.cubicchunks.worldgen.HeightInfo;
 import com.gtnewhorizon.gtnhlib.config.Config;
@@ -141,6 +142,12 @@ public class CubicChunksConfig {
     @Config.LangKey("cubicchunks.config.disable_lighting")
     @Config.Comment("Disables all light propagation")
     public static boolean disableLighting = false;
+
+    @Config.LangKey("cubicchunks.config.chunk_compression")
+    @Config.Comment("Compression for newly saved chunks and cubes: GZIP, LZ4, NONE, or ZSTD (level 1, no dictionary). "
+        + "Existing records remain readable regardless of this setting. Older CC versions may not read these codecs; "
+        + "switching back only changes future writes, not existing records.")
+    public static TagCompression chunkCompression = TagCompression.GZIP;
 
     @Config.Ignore
     public static int defaultMaxCubesPerChunkloadingTicket = 25 * 16;
