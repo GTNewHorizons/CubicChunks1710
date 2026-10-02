@@ -25,7 +25,9 @@ import java.io.UncheckedIOException;
 import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.Consumer;
@@ -117,9 +119,45 @@ public class RegionCubeStorage implements ICubicStorage {
     }
 
     private SaveCubeColumns save;
+    private final Path cubeDirectory;
+    private final StorageMaintenanceLock storageLock;
 
     public RegionCubeStorage(Path path) throws IOException {
-        this.save = saveForPath(path);
+        this(path, false);
+    }
+
+    RegionCubeStorage(Path path, boolean compactDelegate) throws IOException {
+        if (!compactDelegate && Files.exists(path.resolve(CompactCubeStorage.DIRECTORY))) {
+            throw new IOException("This save uses compact empty cubes; open it with CompactCubeStorage");
+        }
+        this.storageLock = StorageMaintenanceLock.openStorage(path);
+        try {
+            this.save = saveForPath(path);
+        } catch (IOException | RuntimeException | Error e) {
+            try {
+                storageLock.close();
+            } catch (IOException close) {
+                e.addSuppressed(close);
+            }
+            throw e;
+        }
+        this.cubeDirectory = path.resolve("region3d");
+    }
+
+    void removeCubes(Collection<CubePos> positions) throws IOException {
+        Map<EntryLocation3D, ByteBuffer> removed = new HashMap<>();
+        Map<String, Boolean> regions = new HashMap<>();
+        for (CubePos pos : positions) {
+            EntryLocation3D location = new EntryLocation3D(pos.getX(), pos.getY(), pos.getZ());
+            String region = location.getRegionKey()
+                .getName();
+            boolean exists = regions.computeIfAbsent(
+                region,
+                name -> Files.exists(cubeDirectory.resolve(name))
+                    || Files.exists(cubeDirectory.resolve(name + ".ext")));
+            if (exists && cubeExists(pos)) removed.put(location, null);
+        }
+        if (!removed.isEmpty()) save.save3d(removed);
     }
 
     @Override
@@ -276,7 +314,9 @@ public class RegionCubeStorage implements ICubicStorage {
 
     @Override
     public void close() throws IOException {
+        if (this.save == null) return;
         this.save.close();
         this.save = null;
+        this.storageLock.close();
     }
 }

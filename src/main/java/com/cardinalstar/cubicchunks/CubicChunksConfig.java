@@ -144,8 +144,10 @@ public class CubicChunksConfig {
     public static boolean disableLighting = false;
 
     @Config.LangKey("cubicchunks.config.chunk_compression")
-    @Config.Comment("Controls the default compression algorithm used for chunks and cubes. Can be changed arbitrarily without corrupting worlds.")
-    public static TagCompression chunkCompression = TagCompression.LZ4;
+    @Config.Comment("Compression for newly saved chunks and cubes: GZIP, LZ4, NONE, or ZSTD (level 1, no dictionary). "
+        + "Existing records remain readable regardless of this setting. Older CC versions may not read these codecs; "
+        + "switching back only changes future writes, not existing records.")
+    public static TagCompression chunkCompression = TagCompression.GZIP;
 
     @Config.Ignore
     public static int defaultMaxCubesPerChunkloadingTicket = 25 * 16;
