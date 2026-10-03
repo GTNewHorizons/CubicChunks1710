@@ -1,17 +1,27 @@
-# Experimental compact empty-cube storage
+# Compact empty-cube storage
 
-New worlds default to `cubicchunks:anvil3d-compact-empty` when `storageFormat` is
-empty. This format can also be selected explicitly. Set `storageFormat` to
-`cubicchunks:anvil3d` to explicitly create a world using ordinary Anvil3D.
-CC worlds with `data/cubicchunks.world_format.dat` keep their recorded format;
-changing the config does not migrate them. Very old or damaged worlds without
-that marker use the configured format on first load. Test only on backed-up copies;
-there is no in-place migration command or automatic way back to ordinary Anvil3D.
+Compact-empty Anvil3D is the default storage format for new CubicChunks worlds.
+It stores repeated metadata for sectionless cubes once per region, while keeping
+columns and other cubes in ordinary Anvil3D region files. It uses
+[Zstandard compression](zstd-storage.md) by default and supports all four codecs.
+[Region compaction](region-compaction.md) automatically reclaims unused space in
+ordinary region files before each dimension's storage opens.
 
-This is a new, experimental on-disk format. Keep a backup before testing. Older
-CC jars and ordinary Anvil3D tools cannot read it. Reverse conversion is not yet
-supported: the ordinary storage reader refuses this format instead of dropping
-compact cubes. Do not remove the format marker or `region3d-empty` directory.
+## Format selection and compatibility
+
+Leave `storageFormat` empty in `config/cubicchunks.cfg` to use the default, or set
+it explicitly to `cubicchunks:anvil3d-compact-empty`. The alternative
+`cubicchunks:anvil3d` format stores all cubes in ordinary region files.
+
+Existing CC worlds with `data/cubicchunks.world_format.dat` retain their recorded
+format. Changing the config does not migrate them. A world without that marker
+uses the configured format, or the default if the setting is empty. There is no
+in-place migration command between the two formats.
+
+Keep backups before changing mod versions or save formats. CC versions and tools
+that only support ordinary Anvil3D cannot read the compact tables. The ordinary
+storage reader refuses this format instead of silently dropping compact cubes.
+Do not remove the format marker or `region3d-empty` directory to change formats.
 
 ## Representation
 
@@ -37,18 +47,18 @@ bytes. Unknown versions, truncated tables and invalid entries fail reads.
 
 ## Save Ordering
 
-Compact entries take precedence over ordinary entries during interrupted format
-transitions. Full data and headers are written before removing compact entries; replacement
-tables are written to a forced temporary file and atomically renamed before old
-full records are retired. Failed table writes leave the previous committed cache
-state intact. Unchanged templates do not rewrite tables.
+Compact entries take precedence over ordinary entries during interrupted transitions
+between a cube's two representations. Full data and headers are written before
+removing compact entries. Replacement tables are written to a forced temporary
+file and atomically renamed before old full records are retired. Failed table
+writes leave the previous committed cache state intact. Unchanged templates do
+not rewrite tables.
 
 The table cache targets 4 MiB/32 regions, counting shared arrays only once. It may
 retain one larger table (at most roughly 33 MiB) to avoid rereading it per cube.
 Batch operations retain their tables for the batch, independent of cache eviction.
 
-This does not make a whole world save or multi-region batch atomic. Directory
-fsync/power-loss recovery is not newly guaranteed. Tests cover caught write
-failures, close/reopen cycles, both RegionLib writers and all supported codecs, not
-machine power loss. Compact table rewrites add work when metadata changes; this
-is a disk-space/saving-cost tradeoff, not a claim of free performance.
+Atomic replacement applies to individual tables, not a whole world save or
+multi-region batch. It does not guarantee recovery of filesystem directory metadata
+after power loss. Keep regular backups. Changing metadata can require rewriting
+its compact table, so the storage savings can add work during saves.

@@ -140,7 +140,8 @@ public class CubicChunksConfig {
     public static boolean useShadowPagingIO = true;
 
     @Config.LangKey("cubicchunks.config.compact_regions_on_world_load")
-    @Config.Comment("Reclaim unused space in Anvil3D region files before opening each dimension's storage. "
+    @Config.Comment("Enabled by default. Reclaim unused space in Anvil3D region files whenever a dimension's storage opens, "
+        + "during world startup or later dimension initialization. "
         + "Only files that can shrink are replaced; cube data and compression are unchanged. "
         + "Large fragmented saves may take longer to load. Compaction never runs while that storage is in use.")
     @Config.RequiresWorldRestart
@@ -151,7 +152,7 @@ public class CubicChunksConfig {
     public static boolean disableLighting = false;
 
     @Config.LangKey("cubicchunks.config.chunk_compression")
-    @Config.Comment("Compression for newly saved chunks and cubes: GZIP, LZ4, NONE, or ZSTD (level 1, no dictionary). "
+    @Config.Comment("Compression for newly saved chunks and cubes: ZSTD (default, level 1), GZIP, LZ4, or NONE. "
         + "Existing records remain readable regardless of this setting. Older CC versions may not read these codecs; "
         + "switching back only changes future writes, not existing records.")
     public static TagCompression chunkCompression = TagCompression.ZSTD;
