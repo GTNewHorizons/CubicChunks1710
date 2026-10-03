@@ -37,6 +37,8 @@ public final class StartupRegionCompaction {
 
         Files.createDirectories(world);
         Path root = world.toRealPath();
+        // Fail closed for storage being opened. The explicitly selected world root may itself be a symlink.
+        compact(dimension.equals(world) ? root : dimension);
         if (!worlds.contains(root)) {
             List<Path> savedDimensions = new ArrayList<>();
             savedDimensions.add(root);
@@ -44,18 +46,27 @@ public final class StartupRegionCompaction {
                 for (Path child : children) {
                     if (child.getFileName()
                         .toString()
-                        .matches("DIM-?\\d+")
+                        .matches("DIM(?:_SPACESTATION)?-?\\d+")
                         && (Files.isDirectory(child, LinkOption.NOFOLLOW_LINKS) || Files.isSymbolicLink(child))) {
                         savedDimensions.add(child);
                     }
                 }
             }
             Collections.sort(savedDimensions);
-            for (Path saved : savedDimensions) compact(saved);
+            for (Path saved : savedDimensions) {
+                try {
+                    compact(saved);
+                } catch (IOException e) {
+                    CubicChunks.LOGGER.warn(
+                        "Skipping startup compaction for saved dimension {}: {}. "
+                            + "It will be checked again if opened during startup. "
+                            + "Set compactRegionsOnWorldLoad=false to disable automatic compaction.",
+                        saved,
+                        e.getMessage());
+                }
+            }
             worlds.add(root);
         }
-        // Custom dimension paths are covered when opened during startup, without searching unrelated folders.
-        compact(dimension);
     }
 
     private static void compact(Path dimension) throws IOException {

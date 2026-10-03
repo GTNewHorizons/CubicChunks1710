@@ -141,7 +141,8 @@ public class CubicChunksConfig {
 
     @Config.LangKey("cubicchunks.config.compact_regions_on_world_load")
     @Config.Comment("Enabled by default. Reclaim unused space in Anvil3D region files only during server/world startup. "
-        + "Includes existing DIM<number> folders without loading their chunks, plus custom paths opened during startup. "
+        + "Includes existing DIM<number> and DIM_SPACESTATION<number> folders without loading their chunks, "
+        + "plus custom paths opened during startup. "
         + "Only files that can shrink are replaced; cube data and compression are unchanged. "
         + "Large fragmented saves may take longer to start. Gameplay dimension loads and reloads never compact.")
     @Config.RequiresWorldRestart
