@@ -47,6 +47,7 @@ import com.cardinalstar.cubicchunks.event.handlers.CommonEventHandler;
 import com.cardinalstar.cubicchunks.network.NetworkChannel;
 import com.cardinalstar.cubicchunks.server.ICubicChunksServer;
 import com.cardinalstar.cubicchunks.server.chunkio.RegionCubeStorage;
+import com.cardinalstar.cubicchunks.server.chunkio.StartupRegionCompaction;
 import com.cardinalstar.cubicchunks.util.CompatHandler;
 import com.cardinalstar.cubicchunks.util.Mods;
 import com.cardinalstar.cubicchunks.util.SideUtils;
@@ -64,6 +65,8 @@ import cpw.mods.fml.common.event.FMLInitializationEvent;
 import cpw.mods.fml.common.event.FMLPostInitializationEvent;
 import cpw.mods.fml.common.event.FMLPreInitializationEvent;
 import cpw.mods.fml.common.event.FMLServerAboutToStartEvent;
+import cpw.mods.fml.common.event.FMLServerStartedEvent;
+import cpw.mods.fml.common.event.FMLServerStoppedEvent;
 import cpw.mods.fml.common.network.NetworkCheckHandler;
 import cpw.mods.fml.common.network.NetworkRegistry;
 import cpw.mods.fml.common.network.internal.NetworkModHolder;
@@ -192,6 +195,7 @@ public class CubicChunks {
 
     @Mod.EventHandler
     public void onServerAboutToStart(FMLServerAboutToStartEvent event) {
+        StartupRegionCompaction.begin();
         SideUtils.runForSide(() -> () -> {
             MinecraftServer server = event.getServer();
             server.setBuildLimit(CubicChunks.MAX_SUPPORTED_BLOCK_Y);
@@ -199,6 +203,16 @@ public class CubicChunks {
         }, () -> () -> {
             // no-op, done by mixin
         });
+    }
+
+    @Mod.EventHandler
+    public void onServerStarted(FMLServerStartedEvent event) {
+        StartupRegionCompaction.finish();
+    }
+
+    @Mod.EventHandler
+    public void onServerStopped(FMLServerStoppedEvent event) {
+        StartupRegionCompaction.finish();
     }
 
     public static void registerAnvil3dStorageFormatProvider() {
@@ -308,7 +322,12 @@ public class CubicChunks {
 
         @Override
         public ICubicStorage provideStorage(World world, Path path) throws IOException {
-            return RegionCubeStorage.openForWorld(path, compactEmpty);
+            return RegionCubeStorage.openForWorld(
+                world.getSaveHandler()
+                    .getWorldDirectory()
+                    .toPath(),
+                path,
+                compactEmpty);
         }
     }
 }
