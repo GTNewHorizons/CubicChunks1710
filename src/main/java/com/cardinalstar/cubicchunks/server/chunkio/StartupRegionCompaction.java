@@ -65,15 +65,9 @@ public final class StartupRegionCompaction {
         }
     }
 
-    private static void updateProgress(Path dimension, RegionCompactor.Phase phase, int completed, int total,
+    private static void updateProgress(String dimension, RegionCompactor.Phase phase, int completed, int total,
         long started) {
-        Progress snapshot = new Progress(
-            dimension.getFileName()
-                .toString(),
-            phase,
-            completed,
-            total,
-            started);
+        Progress snapshot = new Progress(dimension, phase, completed, total, started);
         progress = snapshot;
         long now = System.nanoTime();
         if (now - lastProgressLog >= 5_000_000_000L) {
@@ -94,7 +88,7 @@ public final class StartupRegionCompaction {
         Files.createDirectories(world);
         Path root = world.toRealPath();
         // Fail closed for storage being opened. The explicitly selected world root may itself be a symlink.
-        compact(dimension.equals(world) ? root : dimension);
+        compact(dimension.equals(world) ? root : dimension, root);
         if (!worlds.contains(root)) {
             List<Path> savedDimensions = new ArrayList<>();
             savedDimensions.add(root);
@@ -111,7 +105,7 @@ public final class StartupRegionCompaction {
             Collections.sort(savedDimensions);
             for (Path saved : savedDimensions) {
                 try {
-                    compact(saved);
+                    compact(saved, root);
                 } catch (IOException e) {
                     CubicChunks.LOGGER.warn(
                         "Skipping startup compaction for saved dimension {}: {}. "
@@ -125,7 +119,7 @@ public final class StartupRegionCompaction {
         }
     }
 
-    private static void compact(Path dimension) throws IOException {
+    private static void compact(Path dimension, Path root) throws IOException {
         if (Files.isSymbolicLink(dimension)) {
             CubicChunks.LOGGER.warn("Skipping startup region compaction for symbolic link {}", dimension);
             return;
@@ -133,6 +127,9 @@ public final class StartupRegionCompaction {
         if (!Files.isDirectory(dimension)) return;
         Path path = dimension.toRealPath();
         if (dimensions.contains(path)) return;
+        String label = path.equals(root) ? "DIM0"
+            : path.getFileName()
+                .toString();
 
         try (StorageMaintenanceLock ignored = StorageMaintenanceLock.openMaintenance(path)) {
             long start = System.nanoTime();
@@ -140,7 +137,7 @@ public final class StartupRegionCompaction {
             CubicChunks.LOGGER.info("Checking region compaction during server startup for {}", path);
             RegionCompactor.Summary result = RegionCompactor.compactDimensionLocked(
                 path,
-                (phase, completed, total) -> updateProgress(path, phase, completed, total, start));
+                (phase, completed, total) -> updateProgress(label, phase, completed, total, start));
             if (result.skippedLink != null) {
                 CubicChunks.LOGGER
                     .warn("Skipping region compaction for {} because {} is a symbolic link", path, result.skippedLink);
