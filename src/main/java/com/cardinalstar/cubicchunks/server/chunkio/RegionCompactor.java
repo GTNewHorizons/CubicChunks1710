@@ -127,6 +127,23 @@ public final class RegionCompactor {
     // Only this dimension: other dimensions may already be open, or use a different storage backend.
     // Caller holds its maintenance lease until this pass has finished or failed.
     static Summary compactDimensionLocked(Path dimension) throws IOException {
+        return compactDimensionLocked(dimension, (phase, completed, total) -> {});
+    }
+
+    enum Phase {
+        DISCOVERING,
+        CHECKING,
+        COMPACTING
+    }
+
+    @FunctionalInterface
+    interface ProgressListener {
+
+        void update(Phase phase, int completed, int total);
+    }
+
+    static Summary compactDimensionLocked(Path dimension, ProgressListener progress) throws IOException {
+        progress.update(Phase.DISCOVERING, 0, 0);
         List<Path> files = new ArrayList<>();
         for (String directory : new String[] { "region2d", "region3d" }) {
             Path path = dimension.resolve(directory);
@@ -139,22 +156,29 @@ public final class RegionCompactor {
             if (Files.isSymbolicLink(file)) return new Summary(0, 0, 0, 0, file);
         }
         List<Path> initialized = new ArrayList<>();
+        int checked = 0;
+        progress.update(Phase.CHECKING, 0, files.size());
         for (Path file : files) {
             try (FileChannel input = openRead(file)) {
                 // RegionLib initializes files shorter than a header as empty when it first opens them.
                 int headerBytes = file.toString()
                     .endsWith(".3dr") ? 16384 : 4096;
-                if (input.size() < headerBytes) continue;
-                inspect(file, input);
-                initialized.add(file);
+                if (input.size() >= headerBytes) {
+                    inspect(file, input);
+                    initialized.add(file);
+                }
             }
+            progress.update(Phase.CHECKING, ++checked, files.size());
         }
         int changed = 0;
         long reclaimed = 0;
+        int packed = 0;
+        progress.update(Phase.COMPACTING, 0, initialized.size());
         for (Path file : initialized) {
             Result result = compactLocked(file, true);
             if (result.before > result.after) changed++;
             reclaimed += result.before - result.after;
+            progress.update(Phase.COMPACTING, ++packed, initialized.size());
         }
         return new Summary(files.size(), changed, reclaimed, files.size() - initialized.size(), null);
     }

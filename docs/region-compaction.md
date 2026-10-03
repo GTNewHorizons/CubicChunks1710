@@ -32,6 +32,11 @@ The delay depends on the region files and unused space. The log reports the numb
 of checked and compacted regions, reclaimed bytes and elapsed time. Set `compactRegionsOnWorldLoad=false`
 to disable the automatic pass without changing compression or the storage format.
 
+Singleplayer shows a loading bar with the current dimension, checking/packing phase,
+region count and elapsed seconds. The bar covers that dimension's two passes, not an
+estimate of remaining time or total world startup. Dedicated servers report progress
+in the log about every five seconds while processing regions, as well as a final summary.
+
 Files shorter than a complete region header are left for RegionLib to initialize. If a selected region file,
 `region2d` directory or `region3d` directory is a symbolic link, automatic compaction skips that dimension and
 logs a warning; normal storage opening still proceeds. Maintenance failures in extra saved folders found by

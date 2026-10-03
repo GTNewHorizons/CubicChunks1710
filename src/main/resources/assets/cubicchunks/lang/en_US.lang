@@ -40,3 +40,8 @@ generator.VanillaCubic=Vanilla + Cubic
 #################################
 
 cubicchunks.build.too.low=Minimum building depth reached
+
+cubicchunks.compaction.title=Compacting world regions
+cubicchunks.compaction.discovering=%1$s: finding regions (%4$s s)
+cubicchunks.compaction.checking=%1$s: checking %2$s/%3$s regions (%4$s s)
+cubicchunks.compaction.compacting=%1$s: packing %2$s/%3$s regions (%4$s s)
