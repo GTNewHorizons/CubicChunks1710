@@ -75,13 +75,6 @@ public final class StorageMaintenanceLock implements AutoCloseable {
         return new IOException("CubicChunks storage is in use; stop the world/other maintenance first: " + directory);
     }
 
-    void allowStorage() {
-        synchronized (StorageMaintenanceLock.class) {
-            if (closed || !owner.maintenance) throw new IllegalStateException("Not an active maintenance lease");
-            owner.maintenance = false;
-        }
-    }
-
     static Path lockFile(Path directory) throws IOException {
         // POSIX releases a process's record locks when ANY descriptor for the inode closes. Keep the lock
         // outside the save/instance tree, where in-game world backups might open and close every file.
@@ -151,7 +144,7 @@ public final class StorageMaintenanceLock implements AutoCloseable {
 
         final FileChannel channel;
         final FileLock lock;
-        boolean maintenance;
+        final boolean maintenance;
         int references = 1;
 
         Owner(FileChannel channel, FileLock lock, boolean maintenance) {

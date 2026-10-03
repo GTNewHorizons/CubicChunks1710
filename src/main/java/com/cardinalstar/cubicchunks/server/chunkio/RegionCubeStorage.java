@@ -39,7 +39,6 @@ import net.minecraft.world.ChunkCoordIntPair;
 
 import org.jetbrains.annotations.NotNull;
 
-import com.cardinalstar.cubicchunks.CubicChunks;
 import com.cardinalstar.cubicchunks.CubicChunksConfig;
 import com.cardinalstar.cubicchunks.api.world.storage.ICubicStorage;
 import com.cardinalstar.cubicchunks.server.chunkio.region.ShadowPagingRegion;
@@ -62,34 +61,10 @@ import it.unimi.dsi.fastutil.Pair;
  */
 public class RegionCubeStorage implements ICubicStorage {
 
-    /** Runs load-time maintenance for this dimension before opening its region storage or starting asynchronous I/O. */
-    public static ICubicStorage openForWorld(Path path, boolean compactEmpty) throws IOException {
-        if (!CubicChunksConfig.compactRegionsOnWorldLoad) {
-            return compactEmpty ? new CompactCubeStorage(path) : new RegionCubeStorage(path);
-        }
-        try (StorageMaintenanceLock lock = StorageMaintenanceLock.openMaintenance(path)) {
-            long start = System.nanoTime();
-            CubicChunks.LOGGER.info("Checking region compaction before opening {}", path);
-            RegionCompactor.Summary result = RegionCompactor.compactDimensionLocked(path);
-            if (result.skippedLink != null) {
-                CubicChunks.LOGGER.warn(
-                    "Skipping region compaction for {} because {} is a symbolic link; opening storage normally",
-                    path,
-                    result.skippedLink);
-            } else {
-                CubicChunks.LOGGER.info(
-                    "Region compaction for {}: {} regions checked, {} compacted, {} uninitialized skipped, {} bytes reclaimed in {} ms",
-                    path,
-                    result.regions,
-                    result.changed,
-                    result.uninitialized,
-                    result.reclaimed,
-                    (System.nanoTime() - start) / 1_000_000);
-            }
-            // Retain the OS lock until the storage constructor has acquired its own lease.
-            lock.allowStorage();
-            return compactEmpty ? new CompactCubeStorage(path) : new RegionCubeStorage(path);
-        }
+    /** Runs startup-only maintenance before opening storage; gameplay dimension loads never compact. */
+    public static ICubicStorage openForWorld(Path worldRoot, Path path, boolean compactEmpty) throws IOException {
+        StartupRegionCompaction.beforeOpen(worldRoot, path);
+        return compactEmpty ? new CompactCubeStorage(path) : new RegionCubeStorage(path);
     }
 
     private static SaveCubeColumns saveForPath(Path path) throws IOException {

@@ -24,7 +24,7 @@ Reads recognize legacy raw NBT, GZIP, LZ4, NONE and ZSTD regardless of the selec
 writer. Changing `chunkCompression` affects future writes, not existing records;
 mixed-codec worlds are supported. It does not migrate storage backends or trigger
 compaction. [Automatic region compaction](region-compaction.md) runs separately
-when each dimension's storage opens and preserves the existing compressed bytes.
+during server/world startup and preserves the existing compressed bytes.
 
 Back up before changing mod versions. Older CC versions may not support every
 codec or storage format used by a save. Selecting GZIP does not make already

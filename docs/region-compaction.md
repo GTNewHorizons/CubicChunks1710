@@ -1,6 +1,6 @@
 # Region compaction
 
-CubicChunks automatically compacts region files before opening each dimension's storage. Region writes reuse
+CubicChunks automatically compacts region files during server/world startup. Region writes reuse
 free sectors, but unused space can remain inside files or at their ends. Compaction packs the current records
 together and rebuilds their offsets. It does not decode or recompress the records, change the save format,
 or change the selected compression codec.
@@ -8,23 +8,33 @@ or change the selected compression codec.
 ## Automatic compaction
 
 `B:compactRegionsOnWorldLoad=true` in `config/cubicchunks.cfg` enables compaction by default for both built-in
-Anvil3D storage formats. Each dimension is checked when its chunk provider initializes, before its region files
-are opened for normal reads and writes. This includes dimensions initialized during world/server startup and
-dimensions initialized later on demand. Unloading a dimension and opening it again runs the check again.
-This is not a scan of every saved dimension whenever the Overworld loads, and it does not run on individual
-chunk/cube loads, autosaves or while the dimension's storage is in use.
+Anvil3D storage formats. When built-in storage first opens during startup, the pass checks the world directory
+and its existing direct `DIM<number>` directories, including dimensions that will only be visited later.
+It reads their saved region files without initializing those dimensions, loading their chunks or generating
+terrain. A saved Galacticraft space station in a standard dimension folder is included regardless of whether
+it has a chunk loader.
 
-Only `region2d/*.2dr` and `region3d/*.3dr` in the dimension being opened are processed, one file at a time.
+A dimension using a custom save path is also checked if its built-in storage opens during startup. Other custom
+paths are not discovered recursively; use the offline tool for those. Each canonical dimension path is checked
+at most once during startup. Linked dimension directories are skipped with a warning.
+
+The startup window ends at Forge's server-started event, before normal server ticking. Later dimension loads,
+transfers and reloads never trigger compaction. There is no pass on individual chunk/cube loads or autosaves.
+Quitting and reopening a singleplayer world starts a new server and therefore a new startup pass.
+
+Only `region2d/*.2dr` and `region3d/*.3dr` in the selected dimensions are processed, one file at a time.
 Oversized `.ext` entries and compact-empty `.cce` tables are not changed. Already packed files are checked but
-not replaced. Normal play can create new holes, which a later load can reclaim. Large fragmented dimensions
-can take longer to load; the delay depends on their region files and unused space. The log reports the number
+not replaced. Normal play can create new holes, which the next server/world startup can reclaim. Large fragmented
+saves can take longer to start; this synchronous work delays startup, not a player's later dimension transfer.
+The delay depends on the region files and unused space. The log reports the number
 of checked and compacted regions, reclaimed bytes and elapsed time. Set `compactRegionsOnWorldLoad=false`
 to disable the automatic pass without changing compression or the storage format.
 
 Files shorter than a complete region header are left for RegionLib to initialize. If a selected region file,
 `region2d` directory or `region3d` directory is a symbolic link, automatic compaction skips that dimension and
 logs a warning; normal storage opening still proceeds. Invalid allocations in initialized region files stop
-the pass before any region is replaced and prevent that storage from opening. Compaction is not a repair tool.
+startup before any region in that dimension is replaced. Previously processed dimensions may already be
+compacted. Compaction is not a repair tool.
 
 ## Optional offline tool
 
@@ -58,9 +68,10 @@ run the compactor itself.
 
 ## Safety and limitations
 
-`RegionCubeStorage` holds an OS lock for the lifetime of its cached region storage. Automatic compaction holds
-an exclusive maintenance lease, then hands the lock to normal storage without releasing it in between. The
-offline tool takes the same exclusive lock for every selected dimension. A second server/compactor that uses
+`RegionCubeStorage` holds an OS lock for the lifetime of its cached region storage. Startup compaction holds
+an exclusive maintenance lease for each dimension while checking and packing it, then releases it. Storage
+opening later acquires its own lease before any region handles are opened; no pre-compaction handles are kept.
+The offline tool takes the same exclusive lock for every selected dimension. A second server/compactor that uses
 these locks on the same machine/account/Java home is rejected rather than allowed to use stale file handles.
 Multiple storage wrappers within one JVM share a reference-counted normal storage lease; maintenance never
 shares that lease.

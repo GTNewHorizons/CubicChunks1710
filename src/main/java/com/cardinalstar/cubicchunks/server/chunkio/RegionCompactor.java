@@ -21,7 +21,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 
-/** Packs Anvil3D region files at dimension load; also provides an optional offline maintenance command. */
+/** Packs Anvil3D region files at server startup; also provides an optional offline maintenance command. */
 public final class RegionCompactor {
 
     private static final int SECTOR_BYTES = 512;
@@ -125,7 +125,7 @@ public final class RegionCompactor {
     }
 
     // Only this dimension: other dimensions may already be open, or use a different storage backend.
-    // Caller holds its maintenance lease until storage has opened or the operation has failed.
+    // Caller holds its maintenance lease until this pass has finished or failed.
     static Summary compactDimensionLocked(Path dimension) throws IOException {
         List<Path> files = new ArrayList<>();
         for (String directory : new String[] { "region2d", "region3d" }) {
