@@ -62,7 +62,7 @@ import it.unimi.dsi.fastutil.Pair;
  */
 public class RegionCubeStorage implements ICubicStorage {
 
-    /** Called by the world storage factories, before any region handles or asynchronous I/O exist. */
+    /** Runs load-time maintenance for this dimension before opening its region storage or starting asynchronous I/O. */
     public static ICubicStorage openForWorld(Path path, boolean compactEmpty) throws IOException {
         if (!CubicChunksConfig.compactRegionsOnWorldLoad) {
             return compactEmpty ? new CompactCubeStorage(path) : new RegionCubeStorage(path);

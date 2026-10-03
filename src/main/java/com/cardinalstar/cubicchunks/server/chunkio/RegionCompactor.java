@@ -21,7 +21,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 
-/** Codec-independent packing of standard 512-byte-sector Anvil3D files, before storage opens or offline. */
+/** Packs Anvil3D region files at dimension load; also provides an optional offline maintenance command. */
 public final class RegionCompactor {
 
     private static final int SECTOR_BYTES = 512;
