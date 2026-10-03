@@ -62,7 +62,7 @@ public final class StartupRegionCompaction {
                             + "It will be checked again if opened during startup. "
                             + "Set compactRegionsOnWorldLoad=false to disable automatic compaction.",
                         saved,
-                        e.getMessage());
+                        e.toString());
                 }
             }
             worlds.add(root);
