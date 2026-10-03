@@ -19,17 +19,73 @@ public final class StartupRegionCompaction {
 
     private static Set<Path> worlds;
     private static Set<Path> dimensions;
+    // Immutable snapshots are published by the server and rendered only on the client thread.
+    private static volatile Progress progress;
+    private static long lastProgressLog;
 
     private StartupRegionCompaction() {}
 
     public static void begin() {
+        progress = null;
         worlds = new HashSet<>();
         dimensions = new HashSet<>();
     }
 
     public static void finish() {
+        progress = null;
         worlds = null;
         dimensions = null;
+    }
+
+    public static Progress getProgress() {
+        return progress;
+    }
+
+    public static final class Progress {
+
+        public final String dimension;
+        public final String phase;
+        public final int completed, total, percent;
+        private final long started;
+
+        Progress(String dimension, RegionCompactor.Phase phase, int completed, int total, long started) {
+            this.dimension = dimension;
+            this.phase = phase.name()
+                .toLowerCase(java.util.Locale.ROOT);
+            this.completed = completed;
+            this.total = total;
+            this.started = started;
+            this.percent = phase == RegionCompactor.Phase.DISCOVERING ? -1
+                : (phase == RegionCompactor.Phase.COMPACTING ? 50 : 0)
+                    + (total == 0 ? 50 : (int) (50L * completed / total));
+        }
+
+        public long elapsedSeconds() {
+            return (System.nanoTime() - started) / 1_000_000_000;
+        }
+    }
+
+    private static void updateProgress(Path dimension, RegionCompactor.Phase phase, int completed, int total,
+        long started) {
+        Progress snapshot = new Progress(
+            dimension.getFileName()
+                .toString(),
+            phase,
+            completed,
+            total,
+            started);
+        progress = snapshot;
+        long now = System.nanoTime();
+        if (now - lastProgressLog >= 5_000_000_000L) {
+            lastProgressLog = now;
+            CubicChunks.LOGGER.info(
+                "Region compaction {}: {} {}/{} regions ({} s)",
+                snapshot.dimension,
+                snapshot.phase,
+                completed,
+                total,
+                snapshot.elapsedSeconds());
+        }
     }
 
     static void beforeOpen(Path world, Path dimension) throws IOException {
@@ -80,8 +136,11 @@ public final class StartupRegionCompaction {
 
         try (StorageMaintenanceLock ignored = StorageMaintenanceLock.openMaintenance(path)) {
             long start = System.nanoTime();
+            lastProgressLog = start;
             CubicChunks.LOGGER.info("Checking region compaction during server startup for {}", path);
-            RegionCompactor.Summary result = RegionCompactor.compactDimensionLocked(path);
+            RegionCompactor.Summary result = RegionCompactor.compactDimensionLocked(
+                path,
+                (phase, completed, total) -> updateProgress(path, phase, completed, total, start));
             if (result.skippedLink != null) {
                 CubicChunks.LOGGER
                     .warn("Skipping region compaction for {} because {} is a symbolic link", path, result.skippedLink);
@@ -95,6 +154,8 @@ public final class StartupRegionCompaction {
                     result.reclaimed,
                     (System.nanoTime() - start) / 1_000_000);
             }
+        } finally {
+            progress = null;
         }
         dimensions.add(path);
     }

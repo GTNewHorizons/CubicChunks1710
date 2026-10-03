@@ -237,6 +237,10 @@ public enum Mixins implements IMixins {
     // =============================================================
     // Client Mixins
     // =============================================================
+    MIXIN_COMPACTION_PROGRESS(new MixinBuilder("Show region compaction progress while loading a world")
+        .addClientMixins("client.MixinLoadingScreenRenderer")
+        .setPhase(Phase.EARLY)
+        .setApplyIf(() -> true)),
     MIXIN_I_CHUNK_PROVIDER_CLIENT(new MixinBuilder("Implements IChunkProviderClient on ChunkProviderClient")
         .addClientMixins("client.IChunkProviderClient")
         .setPhase(Phase.EARLY)
