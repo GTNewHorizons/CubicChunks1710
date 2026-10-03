@@ -39,6 +39,7 @@ dependencies {
     implementation("com.github.GTNewHorizons:RegionLib:v0.1.0-GTNH:dev")
 
     shadowImplementation("at.yawk.lz4:lz4-java:1.11.0")
+    shadowImplementation("com.github.luben:zstd-jni:1.5.7-6")
 
 //    runtimeOnlyNonPublishable("maven.modrinth:archaicfix:0.8.0:dev")
 

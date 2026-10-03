@@ -24,6 +24,8 @@ public final class ByteBufferInputStream extends InputStream {
 
     @Override
     public int read(byte @NotNull [] bytes, int off, int len) throws IOException {
+        if (off < 0 || len < 0 || off > bytes.length - len) throw new IndexOutOfBoundsException();
+        if (len == 0) return 0;
         if (!buffer.hasRemaining()) {
             return -1;
         }
