@@ -9,14 +9,16 @@ or change the selected compression codec.
 
 `B:compactRegionsOnWorldLoad=true` in `config/cubicchunks.cfg` enables compaction by default for both built-in
 Anvil3D storage formats. When built-in storage first opens during startup, the pass checks the world directory
-and its existing direct `DIM<number>` directories, including dimensions that will only be visited later.
+and its existing direct `DIM<number>` and `DIM_SPACESTATION<number>` directories, including dimensions that
+will only be visited later.
 It reads their saved region files without initializing those dimensions, loading their chunks or generating
-terrain. A saved Galacticraft space station in a standard dimension folder is included regardless of whether
+terrain. A saved Galacticraft space station is included regardless of whether
 it has a chunk loader.
 
 A dimension using a custom save path is also checked if its built-in storage opens during startup. Other custom
 paths are not discovered recursively; use the offline tool for those. Each canonical dimension path is checked
-at most once during startup. Linked dimension directories are skipped with a warning.
+at most once successfully during startup. Linked dimension directories are skipped with a warning; an explicitly
+selected world root that is a link is resolved normally.
 
 The startup window ends at Forge's server-started event, before normal server ticking. Later dimension loads,
 transfers and reloads never trigger compaction. There is no pass on individual chunk/cube loads or autosaves.
@@ -32,9 +34,11 @@ to disable the automatic pass without changing compression or the storage format
 
 Files shorter than a complete region header are left for RegionLib to initialize. If a selected region file,
 `region2d` directory or `region3d` directory is a symbolic link, automatic compaction skips that dimension and
-logs a warning; normal storage opening still proceeds. Invalid allocations in initialized region files stop
-startup before any region in that dimension is replaced. Previously processed dimensions may already be
-compacted. Compaction is not a repair tool.
+logs a warning; normal storage opening still proceeds. Maintenance failures in extra saved folders found by
+the scan produce a warning and do not stop the server. A failed folder is retried if its storage actually opens
+during startup; maintenance failures on that path stop loading. Invalid allocations fail before any region in
+that dimension is replaced. Other I/O failures can leave it partially compacted, with earlier successful
+replacements still valid. Compaction does not repair corruption or make a damaged dimension safe to enter.
 
 ## Optional offline tool
 
