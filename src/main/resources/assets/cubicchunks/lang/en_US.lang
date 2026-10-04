@@ -10,6 +10,9 @@ cubicchunks.gui.worldmenu.cc_default=CubicChunks: Default
 #################################
 
 cubicchunks.gui.vertical_cube_load_distance=Vertical Distance: %d cubes
+cubicchunks.gui.storagefmt.anvil3d_compact_empty=Anvil3D with compact empty cubes
+cubicchunks.config.chunk_compression=Chunk and cube compression
+cubicchunks.config.compact_regions_on_world_load=Compact region files at server startup
 
 #################################
 ###         commands          ###
@@ -37,3 +40,8 @@ generator.VanillaCubic=Vanilla + Cubic
 #################################
 
 cubicchunks.build.too.low=Minimum building depth reached
+
+cubicchunks.compaction.title=Compacting world regions
+cubicchunks.compaction.discovering=%1$s: finding regions (%4$s s)
+cubicchunks.compaction.checking=%1$s: checking %2$s/%3$s regions (%4$s s)
+cubicchunks.compaction.compacting=%1$s: packing %2$s/%3$s regions (%4$s s)
