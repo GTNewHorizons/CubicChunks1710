@@ -690,8 +690,7 @@ public class CubeLoaderServer implements ICubeLoader {
 
         public boolean initialize(Requirement effort) throws IOException {
             if (pos.getY() < minCube || pos.getY() > maxCube) {
-                loadBoundaryCube();
-                return true;
+                return loadBoundaryCube(effort);
             }
 
             if (effort == Requirement.GET_CACHED) {
@@ -722,23 +721,17 @@ public class CubeLoaderServer implements ICubeLoader {
             return generate(requestedInitLevel);
         }
 
-        private void loadBoundaryCube() {
-            ensureColumn(Requirement.LOAD);
+        private boolean loadBoundaryCube(Requirement effort) {
+            // Boundary cubes are synthetic, so a new neighbor may not have a saved column yet.
+            ensureColumn(effort.contains(Requirement.GENERATE) ? Requirement.GENERATE : Requirement.LOAD);
 
             if (this.column == null) {
-                CubicChunks.LOGGER.error(
-                    "Tried to load a cube that did not have a saved column: it will be regenerated ({},{},{})",
-                    getX(),
-                    getY(),
-                    getZ(),
-                    new Exception());
-                this.cube = null;
-                this.tag = null;
-                return;
+                return false;
             }
 
             this.cube = new BoundaryCube(this.column.column, this.getY());
             onCubeLoaded();
+            return true;
         }
 
         private boolean loadNBT() {
