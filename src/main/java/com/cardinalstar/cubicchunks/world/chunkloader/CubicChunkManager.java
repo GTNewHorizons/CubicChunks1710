@@ -20,6 +20,7 @@
  */
 package com.cardinalstar.cubicchunks.world.chunkloader;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -39,7 +40,6 @@ import com.cardinalstar.cubicchunks.CubicChunksConfig;
 import com.cardinalstar.cubicchunks.mixin.early.common.forge.IForgeChunkManager;
 import com.cardinalstar.cubicchunks.util.Coords;
 import com.cardinalstar.cubicchunks.util.CubePos;
-import com.cardinalstar.cubicchunks.util.ITicket;
 import com.cardinalstar.cubicchunks.world.ICubicWorld;
 import com.cardinalstar.cubicchunks.world.core.ICubicTicketInternal;
 import com.cardinalstar.cubicchunks.world.cube.Cube;
@@ -144,9 +144,24 @@ public class CubicChunkManager {
         }
         ((ICubicTicketInternal) ticket).removeRequestedCube(chunk);
         MinecraftForge.EVENT_BUS.post(new UnforceCubeEvent(ticket, chunk));
-        Cube cube = (Cube) ((ICubicWorld) ticket.world).getCubeFromCubeCoords(chunk);
-        cube.getTickets()
+        Cube cube = (Cube) ((ICubicWorld) ticket.world).getCubeCache()
+            .getLoadedCube(chunk);
+        if (cube != null) cube.getTickets()
             .remove((ICubicTicketInternal) ticket);
+    }
+
+    public static void releaseCubes(ForgeChunkManager.Ticket ticket) {
+        if (ticket == null || !(ticket.world instanceof ICubicWorld)) return;
+        ICubicTicketInternal cubic = (ICubicTicketInternal) ticket;
+        // Snapshot before unforce removes entries. Deserialized coordinates may not be loaded yet.
+        for (var entry : new ArrayList<>(
+            cubic.getAllForcedChunkCubes()
+                .entrySet())) {
+            for (int y : entry.getValue()
+                .toIntArray()) {
+                unforceChunk(ticket, new CubePos(entry.getKey().chunkXPos, y, entry.getKey().chunkZPos));
+            }
+        }
     }
 
     // internals
@@ -250,15 +265,10 @@ public class CubicChunkManager {
         if (forcedCubes == null) {
             return;
         }
-        for (int cubeY : forcedCubes) {
-            // A cube that is not loaded holds no ticket: after a restart the saved Y values are known before the mod
-            // forces its columns again. Loading it here would only load or generate it to remove nothing.
-            Cube cube = (Cube) ((ICubicWorld) world).getCubeCache()
-                .getLoadedCube(event.location.chunkXPos, cubeY, event.location.chunkZPos);
-            if (cube != null) {
-                cube.getTickets()
-                    .remove((ITicket) ticket);
-            }
+        // unforceChunk only touches loaded cubes: after a restart the saved Y values are known before the mod
+        // forces its columns again, and loading them here would only load or generate them to remove nothing.
+        for (int cubeY : forcedCubes.toIntArray()) {
+            unforceChunk(ticket, new CubePos(event.location.chunkXPos, cubeY, event.location.chunkZPos));
         }
         ((ICubicTicketInternal) ticket).clearForcedChunkCubes(event.location);
     }

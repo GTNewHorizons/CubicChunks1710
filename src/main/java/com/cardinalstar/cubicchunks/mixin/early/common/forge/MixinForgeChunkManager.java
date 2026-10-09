@@ -39,6 +39,11 @@ import com.llamalad7.mixinextras.sugar.Local;
 @Mixin(ForgeChunkManager.class)
 public abstract class MixinForgeChunkManager {
 
+    @Inject(method = "releaseTicket", at = @At("HEAD"), remap = false)
+    private static void releaseCubeTickets(Ticket ticket, CallbackInfo ci) {
+        CubicChunkManager.releaseCubes(ticket);
+    }
+
     @WrapOperation(
         method = "loadWorld",
         at = @At(value = "NEW", target = "net/minecraftforge/common/ForgeChunkManager$Ticket"),
