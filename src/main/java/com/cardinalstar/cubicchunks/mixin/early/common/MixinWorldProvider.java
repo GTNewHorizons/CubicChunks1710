@@ -77,7 +77,8 @@ public abstract class MixinWorldProvider implements ICubicWorldProvider {
     @Inject(method = "getActualHeight", at = @At("HEAD"), cancellable = true, remap = false)
     private void getActualHeight(CallbackInfoReturnable<Integer> cir) {
         if (worldObj == null || !(worldObj.getWorldInfo()
-            .getTerrainType() instanceof ICubicWorldType)) {
+            .getTerrainType() instanceof ICubicWorldType cubicWorldType)
+            || !cubicWorldType.hasCubicGeneratorForWorld(worldObj)) {
             return;
         }
         cir.setReturnValue(((ICubicWorld) worldObj).getMaxGenerationHeight());

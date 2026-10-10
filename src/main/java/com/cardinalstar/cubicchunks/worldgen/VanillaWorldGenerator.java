@@ -67,6 +67,7 @@ import com.cardinalstar.cubicchunks.world.cube.Cube;
 import com.cardinalstar.cubicchunks.world.cube.blockview.ChunkBlockView;
 import com.cardinalstar.cubicchunks.world.cube.blockview.IBlockView;
 import com.cardinalstar.cubicchunks.world.cube.blockview.UniformBlockView;
+import com.cardinalstar.cubicchunks.world.cube.blockview.VerticallyStretchedBlockView;
 import com.gtnewhorizon.gtnhlib.util.data.BlockMeta;
 import com.gtnewhorizon.gtnhlib.util.data.ImmutableBlockMeta;
 
@@ -74,9 +75,8 @@ import it.unimi.dsi.fastutil.objects.Object2IntMap;
 import it.unimi.dsi.fastutil.objects.Object2IntOpenHashMap;
 
 /**
- * A cube generator that tries to mirror vanilla world generation. Cubes in the normal world range will be copied from a
- * vanilla chunk generator, cubes above and below that will be filled with the most common block in the
- * topmost/bottommost layers.
+ * A cube generator that mirrors vanilla chunk terrain. Source layers can optionally be repeated vertically. Cubes
+ * outside the generation range use the most common block in the source chunk's top or bottom layers.
  */
 @ParametersAreNonnullByDefault
 public class VanillaWorldGenerator implements IWorldGenerator, IPreloadFailureDelegate {
@@ -90,6 +90,7 @@ public class VanillaWorldGenerator implements IWorldGenerator, IPreloadFailureDe
 
     private final int vanillaGenerationHeight;
     private final int vanillaGenerationHeightCubes;
+    private final int verticalScale;
 
     private FillerInfo fillerInfo;
 
@@ -100,12 +101,18 @@ public class VanillaWorldGenerator implements IWorldGenerator, IPreloadFailureDe
      * @param world   The world in which cubes are being generated
      */
     public VanillaWorldGenerator(IChunkProvider vanilla, World world, IWorldDecorator decorator) {
+        this(vanilla, world, decorator, 1);
+    }
+
+    public VanillaWorldGenerator(IChunkProvider vanilla, World world, IWorldDecorator decorator, int verticalScale) {
+        if (verticalScale < 1) throw new IllegalArgumentException("verticalScale must be positive");
         this.fillerInfo = CubicChunksSavedData.get(world)
             .getFillerInfo();
 
         this.vanilla = vanilla;
         this.world = world;
         this.decorator = decorator;
+        this.verticalScale = verticalScale;
 
         vanillaGenerationHeight = ((ICubicWorld) this.world).getMaxGenerationHeight();
         vanillaGenerationHeightCubes = Coords.blockCeilToCube(vanillaGenerationHeight);
@@ -183,8 +190,7 @@ public class VanillaWorldGenerator implements IWorldGenerator, IPreloadFailureDe
     private ImmutableBlockMeta analyzeTopFiller(IBlockView blockView) {
         Object2IntOpenHashMap<ImmutableBlockMeta> histogram = new Object2IntOpenHashMap<>();
 
-        int top = blockView.getBounds()
-            .getY2();
+        int top = vanillaGenerationHeight / verticalScale;
 
         // Scan three layers for top and bottom cubes to guard against bedrock walls
         for (int y = top - 1; y > top - 4; y--) {
@@ -225,10 +231,10 @@ public class VanillaWorldGenerator implements IWorldGenerator, IPreloadFailureDe
 
         ExtendedBlockStorage[] ebses = base.getBlockStorageArray();
 
-        for (int ebsY = 0; ebsY < 16; ebsY++) {
-            var ebs = ebsY >= vanillaGenerationHeightCubes ? null : ebses[ebsY];
-
-            Cube c = new Cube(base, ebsY, ebs);
+        int cubeCount = verticalScale == 1 ? 16 : vanillaGenerationHeightCubes;
+        for (int ebsY = 0; ebsY < cubeCount; ebsY++) {
+            Cube c = verticalScale == 1 ? new Cube(base, ebsY, ebsY >= vanillaGenerationHeightCubes ? null : ebses[ebsY])
+                : new Cube(base, ebsY, new VerticallyStretchedBlockView(ebses, ebsY, verticalScale));
 
             try {
                 decorator.generate(world, c);
@@ -253,7 +259,7 @@ public class VanillaWorldGenerator implements IWorldGenerator, IPreloadFailureDe
 
     @Override
     public void recreateStructures(Chunk column) {
-        vanilla.recreateStructures(column.xPosition, column.zPosition);
+        if (verticalScale == 1) vanilla.recreateStructures(column.xPosition, column.zPosition);
     }
 
     @Override
@@ -264,20 +270,20 @@ public class VanillaWorldGenerator implements IWorldGenerator, IPreloadFailureDe
             List<Chunk> generatedColumns = new ArrayList<>();
             List<Cube> generatedCubes = new ArrayList<>();
 
-            if (cubeY >= 0 && cubeY < 16 || chunk == null) {
+            int cubeCount = verticalScale == 1 ? 16 : vanillaGenerationHeightCubes;
+            if (cubeY >= 0 && cubeY < cubeCount || chunk == null) {
                 Chunk base = vanilla.provideChunk(cubeX, cubeZ);
 
-                boolean newChunk = true;
-
-                if (chunk != null) {
-                    newChunk = false;
-
-                    CubicChunks.LOGGER.error(
-                        "Needed to regenerate a cube within the vanilla chunk for a chunk that already exists: something is fucky ({},{},{})",
-                        cubeX,
-                        cubeY,
-                        cubeZ,
-                        new Exception());
+                boolean newChunk = chunk == null;
+                if (!newChunk) {
+                    if (verticalScale == 1) {
+                        CubicChunks.LOGGER.error(
+                            "Needed to regenerate a cube within the vanilla chunk for a chunk that already exists: something is fucky ({},{},{})",
+                            cubeX,
+                            cubeY,
+                            cubeZ,
+                            new Exception());
+                    }
                 } else {
                     chunk = base;
                     generatedColumns.add(chunk);
@@ -285,10 +291,16 @@ public class VanillaWorldGenerator implements IWorldGenerator, IPreloadFailureDe
 
                 ExtendedBlockStorage[] ebses = base.getBlockStorageArray();
 
-                for (int ebsY = 0; ebsY < 16; ebsY++) {
-                    var ebs = ebsY >= vanillaGenerationHeightCubes ? null : ebses[ebsY];
-
-                    Cube c = new Cube(base, ebsY, ebs);
+                Chunk cubeColumn = chunk;
+                int firstCube = verticalScale > 1 && !newChunk ? cubeY : 0;
+                int lastCube = verticalScale > 1 && !newChunk ? cubeY + 1 : cubeCount;
+                for (int ebsY = firstCube; ebsY < lastCube; ebsY++) {
+                    Cube c = verticalScale == 1
+                        ? new Cube(cubeColumn, ebsY, ebsY >= vanillaGenerationHeightCubes ? null : ebses[ebsY])
+                        : new Cube(
+                            cubeColumn,
+                            ebsY,
+                            new VerticallyStretchedBlockView(ebses, ebsY, verticalScale));
 
                     try {
                         decorator.generate(world, c);
@@ -306,7 +318,7 @@ public class VanillaWorldGenerator implements IWorldGenerator, IPreloadFailureDe
                 }
             }
 
-            if (cubeY < 0 || cubeY >= 16) {
+            if (cubeY < 0 || cubeY >= cubeCount) {
                 ImmutableBlockMeta filler = cubeY < 0 ? getBottomFillerInfo() : getTopFillerInfo();
                 IBlockView cubeData = new UniformBlockView(filler);
 
@@ -359,7 +371,7 @@ public class VanillaWorldGenerator implements IWorldGenerator, IPreloadFailureDe
                 if (!center.isPopulated()) {
                     decorator.populate(world, center);
 
-                    if (v.y() == 0) {
+                    if (verticalScale == 1 && v.y() == 0) {
                         // For some bizarre reason, MC offsets its block positions by +8 when populating. This means
                         // that when a chunk
                         // gets populated, it's actually populating the 16x16 blocks centered on the +x/+z corner. This
@@ -376,7 +388,7 @@ public class VanillaWorldGenerator implements IWorldGenerator, IPreloadFailureDe
                 }
             }
 
-            if (cy >= 0 && cy < 16) {
+            if (verticalScale == 1 && cy >= 0 && cy < 16) {
                 // A later neighboring population tile can grow leaves into this completed column after its snow pass.
                 reconcileSnowCover(cx, cz);
             }
@@ -403,7 +415,7 @@ public class VanillaWorldGenerator implements IWorldGenerator, IPreloadFailureDe
     // Cube.POP_011, Cube.POP_111, };
 
     private Box getRelevantCubes(int x, int y, int z) {
-        if (y >= 0 && y < 16) {
+        if (verticalScale == 1 && y >= 0 && y < 16) {
             return new Box(x - 1, -1, z - 1, x + 1, 16, z + 1);
         } else {
             return new Box(x - 1, y - 1, z - 1, x + 1, y + 1, z + 1);
@@ -411,7 +423,7 @@ public class VanillaWorldGenerator implements IWorldGenerator, IPreloadFailureDe
     }
 
     private Box getCubesToPopulate(int x, int y, int z) {
-        if (y >= 0 && y < 16) {
+        if (verticalScale == 1 && y >= 0 && y < 16) {
             return new Box(x - 1, -1, z - 1, x, 15, z);
         } else {
             return new Box(x - 1, y - 1, z - 1, x, y, z);
@@ -419,7 +431,7 @@ public class VanillaWorldGenerator implements IWorldGenerator, IPreloadFailureDe
     }
 
     private Box getFullyPopulatedCubes(int x, int y, int z) {
-        if (y >= 0 && y < 16) {
+        if (verticalScale == 1 && y >= 0 && y < 16) {
             return new Box(x, 0, z, x, 15, z);
         } else {
             return new Box(x, y, z, x, y, z);
@@ -523,11 +535,13 @@ public class VanillaWorldGenerator implements IWorldGenerator, IPreloadFailureDe
 
     @Override
     public List<BiomeGenBase.SpawnListEntry> getPossibleCreatures(EnumCreatureType creatureType, int x, int y, int z) {
-        return vanilla.getPossibleCreatures(creatureType, x, y, z);
+        return vanilla.getPossibleCreatures(creatureType, x, Math.floorDiv(y, verticalScale), z);
     }
 
     @Override
     public ChunkPosition getNearestStructure(String name, int x, int y, int z) {
-        return vanilla.func_147416_a(world, name, x, y, z);
+        ChunkPosition source = vanilla.func_147416_a(world, name, x, Math.floorDiv(y, verticalScale), z);
+        if (source == null || verticalScale == 1) return source;
+        return new ChunkPosition(source.chunkPosX, source.chunkPosY * verticalScale, source.chunkPosZ);
     }
 }
