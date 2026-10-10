@@ -36,6 +36,7 @@ import net.minecraft.client.multiplayer.WorldClient;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.player.EntityPlayerMP;
+import net.minecraft.init.Blocks;
 import net.minecraft.profiler.Profiler;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.AxisAlignedBB;
@@ -86,6 +87,7 @@ import com.cardinalstar.cubicchunks.util.ReflectionUtil;
 import com.cardinalstar.cubicchunks.world.CubicChunksSavedData;
 import com.cardinalstar.cubicchunks.world.ICubicWorld;
 import com.cardinalstar.cubicchunks.world.cube.Cube;
+import com.cardinalstar.cubicchunks.world.cube.ICubeProvider;
 import com.cardinalstar.cubicchunks.world.cube.ICubeProviderInternal;
 import com.google.common.collect.ImmutableList;
 import com.gtnewhorizon.gtnhlib.blockpos.BlockPos;
@@ -564,6 +566,24 @@ public abstract class MixinWorld implements ICubicWorldInternal {
 
     private boolean shouldSkipWorld(World world) {
         return !allowedServerWorldClasses.contains(world.getClass());
+    }
+
+    @WrapOperation(
+        method = "func_147467_a",
+        at = @At(
+            value = "INVOKE",
+            target = "Lnet/minecraft/world/chunk/Chunk;getBlock(III)Lnet/minecraft/block/Block;"),
+        require = 1)
+    private Block getLoadedBlockForCaveAmbience(Chunk chunk, int x, int y, int z, Operation<Block> original) {
+        if (this.chunkProvider instanceof ICubeProvider
+            && ((ICubeProvider) this.chunkProvider).getLoadedCube(chunk.xPosition, blockToCube(y), chunk.zPosition)
+                == null) {
+            // A non-air result skips this sound candidate without loading terrain. Do not cancel the whole
+            // method: the lighting work after the ambience check must still run.
+            return Blocks.stone;
+        }
+
+        return original.call(chunk, x, y, z);
     }
 
     @WrapOperation(
