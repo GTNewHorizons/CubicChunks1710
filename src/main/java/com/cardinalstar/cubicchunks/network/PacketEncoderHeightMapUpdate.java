@@ -20,6 +20,9 @@
  */
 package com.cardinalstar.cubicchunks.network;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import javax.annotation.ParametersAreNonnullByDefault;
 
 import net.minecraft.world.ChunkCoordIntPair;
@@ -30,22 +33,24 @@ import net.minecraft.world.chunk.EmptyChunk;
 import org.joml.Vector2ic;
 
 import com.cardinalstar.cubicchunks.CubicChunks;
-import com.cardinalstar.cubicchunks.api.IColumn;
 import com.cardinalstar.cubicchunks.client.CubeProviderClient;
 import com.cardinalstar.cubicchunks.lighting.ILightingManager;
 import com.cardinalstar.cubicchunks.mixin.api.ICubicWorldInternal;
+import com.cardinalstar.cubicchunks.mixin.api.ICubicWorldInternal.Client;
+import com.cardinalstar.cubicchunks.util.AddressTools;
 import com.cardinalstar.cubicchunks.util.BooleanArray2D;
-import com.cardinalstar.cubicchunks.world.core.ClientHeightMap;
 import com.cardinalstar.cubicchunks.world.core.IColumnInternal;
+import com.cardinalstar.cubicchunks.world.cube.Cube;
+import com.cardinalstar.cubicchunks.world.heightmap.HeightMap3D;
 import com.github.bsideup.jabel.Desugar;
 
-import it.unimi.dsi.fastutil.ints.IntArrayList;
+import io.netty.buffer.Unpooled;
 
 @ParametersAreNonnullByDefault
 public class PacketEncoderHeightMapUpdate extends CCPacketEncoder<PacketEncoderHeightMapUpdate.PacketHeightMapUpdate> {
 
     @Desugar
-    public record PacketHeightMapUpdate(ChunkCoordIntPair chunk, BooleanArray2D updates, IntArrayList heights)
+    public record PacketHeightMapUpdate(ChunkCoordIntPair chunk, BooleanArray2D updates, List<CCPacketBuffer> data)
         implements CCPacket {
 
         @Override
@@ -56,15 +61,22 @@ public class PacketEncoderHeightMapUpdate extends CCPacketEncoder<PacketEncoderH
 
     public PacketEncoderHeightMapUpdate() {}
 
-    public static PacketHeightMapUpdate createPacket(BooleanArray2D updates, Chunk chunk) {
-        ChunkCoordIntPair pos = chunk.getChunkCoordIntPair();
-        IntArrayList heights = new IntArrayList();
+    public static PacketHeightMapUpdate createPacket(Chunk column, BooleanArray2D updates) {
+        ChunkCoordIntPair pos = column.getChunkCoordIntPair();
+
+        List<CCPacketBuffer> data = new ArrayList<>();
+
+        HeightMap3D opacityIndex = (HeightMap3D) ((IColumnInternal) column).getOpacityIndex();
 
         for (Vector2ic v : updates) {
-            heights.add(((IColumnInternal) chunk).getTopYWithStaging(v.x(), v.y()));
+            CCPacketBuffer buffer = new CCPacketBuffer(Unpooled.buffer());
+
+            opacityIndex.writeData(v.x(), v.y(), buffer);
+
+            data.add(buffer);
         }
 
-        return new PacketHeightMapUpdate(pos, updates.clone(), heights);
+        return new PacketHeightMapUpdate(pos, updates.clone(), data);
     }
 
     @Override
@@ -77,7 +89,7 @@ public class PacketEncoderHeightMapUpdate extends CCPacketEncoder<PacketEncoderH
         buffer.writeChunkPos(packet.chunk);
 
         buffer.writeByteArray(packet.updates.toByteArray());
-        buffer.writeIntArray(packet.heights.toIntArray());
+        buffer.writeList(packet.data, CCPacketBuffer::writeByteBuf);
     }
 
     @Override
@@ -85,14 +97,14 @@ public class PacketEncoderHeightMapUpdate extends CCPacketEncoder<PacketEncoderH
         ChunkCoordIntPair pos = buffer.readChunkPos();
 
         BooleanArray2D updates = new BooleanArray2D(16, 16, buffer.readByteArray());
-        int[] heights = buffer.readIntArray();
+        List<CCPacketBuffer> data = buffer.readList(buf -> new CCPacketBuffer(buf.readByteBuf()));
 
-        return new PacketHeightMapUpdate(pos, updates, IntArrayList.wrap(heights));
+        return new PacketHeightMapUpdate(pos, updates, data);
     }
 
     @Override
     public void process(World world, PacketHeightMapUpdate packet) {
-        ICubicWorldInternal.Client worldClient = (ICubicWorldInternal.Client) world;
+        Client worldClient = (Client) world;
         CubeProviderClient cubeCache = worldClient.getCubeCache();
 
         Chunk column = cubeCache.provideColumn(packet.chunk.chunkXPos, packet.chunk.chunkZPos);
@@ -102,17 +114,35 @@ public class PacketEncoderHeightMapUpdate extends CCPacketEncoder<PacketEncoderH
             return;
         }
 
-        ClientHeightMap index = (ClientHeightMap) ((IColumn) column).getOpacityIndex();
-        ILightingManager lm = worldClient.getLightingManager();
+        ILightingManager lm = ((ICubicWorldInternal) column.worldObj).getLightingManager();
+        HeightMap3D opacityIndex = (HeightMap3D) ((IColumnInternal) column).getOpacityIndex();
+
+        int[] oldHeights = new int[Cube.SIZE * Cube.SIZE];
+
+        IColumnInternal columnInternal = (IColumnInternal) column;
+
+        for (int dx = 0; dx < Cube.SIZE; dx++) {
+            for (int dz = 0; dz < Cube.SIZE; dz++) {
+                oldHeights[AddressTools.getLocalAddress(dx, dz)] = columnInternal.getTopYWithStaging(dx, dz);
+            }
+        }
 
         int i = 0;
 
-        for (Vector2ic v : packet.updates) {
-            int height = packet.heights.getInt(i++);
+        for (Vector2ic update : packet.updates) {
+            opacityIndex.readData(update.x(), update.y(), packet.data.get(i++));
+        }
 
-            int oldHeight = index.getTopBlockY(v.x(), v.y());
-            index.setHeight(v.x(), v.y(), height);
-            lm.updateLightBetween(column, v.x(), oldHeight, height, v.y());
+        for (Vector2ic update : packet.updates) {
+            int lX = update.x();
+            int lZ = update.y();
+
+            int oldY = oldHeights[AddressTools.getLocalAddress(lX, lZ)];
+            int newY = columnInternal.getTopYWithStaging(lX, lZ);
+
+            if (oldY != newY) {
+                lm.updateLightBetween(column, lX, oldY, newY, lZ);
+            }
         }
     }
 }

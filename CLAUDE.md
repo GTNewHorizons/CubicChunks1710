@@ -1,0 +1,3 @@
+This is a minecraft 1.7.10 mod that removes the Y limits from the world. Instead of spanning from 0 to 256, it is instead infinite. It works by wrapping ExtendedBlockStorages in a Cube container, then converting Chunks from an EBS container to a Cube container. Most world-related systems have been adapted or rewritten to work with this new design.
+
+The primary design philosophy with this mod is to emulate the corresponding vanilla behaviour as much as possible, except where it's impossible or would take an unreasonable amount of work. Keep this in mind when designing solutions for bugs or features.
