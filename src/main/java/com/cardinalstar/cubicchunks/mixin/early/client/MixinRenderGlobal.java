@@ -95,6 +95,13 @@ public class MixinRenderGlobal {
         return 33 * 2; // TODO STORE THIS MAX RENDER DISTANCE SOMEWHERE
     }
 
+    // Vanilla selects at most two distant dirty renderers per updateRenderers call. Cubic worlds
+    // have many more render sections, so allow up to 100x as many in each call.
+    @ModifyConstant(method = "updateRenderers", constant = @Constant(intValue = 2), require = 1)
+    private int increaseDistantRendererUpdates(int original) {
+        return original * 100;
+    }
+
     @Definition(
         id = "theWorld",
         field = "Lnet/minecraft/client/renderer/RenderGlobal;theWorld:Lnet/minecraft/client/multiplayer/WorldClient;")
