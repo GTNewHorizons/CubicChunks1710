@@ -239,7 +239,9 @@ public class VanillaWorldGenerator implements IWorldGenerator, IPreloadFailureDe
 
         ExtendedBlockStorage[] ebses = cacheBaseStorages(columnX, columnZ, base);
 
-        int cubeCount = verticalScale == 1 ? 16 : vanillaGenerationHeightCubes;
+        // The vanilla chunk yields all 16 cubes at once. Stretched cubes are each built separately from the cached
+        // vanilla chunk, so they're only generated when requested, the generation range can hold thousands of them.
+        int cubeCount = verticalScale == 1 ? 16 : 0;
         for (int ebsY = 0; ebsY < cubeCount; ebsY++) {
             Cube c = verticalScale == 1 ? new Cube(base, ebsY, ebsY >= vanillaGenerationHeightCubes ? null : ebses[ebsY])
                 : new Cube(base, ebsY, new VerticallyStretchedBlockView(ebses, ebsY, verticalScale));
@@ -334,9 +336,21 @@ public class VanillaWorldGenerator implements IWorldGenerator, IPreloadFailureDe
                     }
                 }
 
+                // stretched cubes are only generated when requested, see provideColumn
                 Chunk cubeColumn = chunk;
-                int firstCube = verticalScale > 1 && !newChunk ? cubeY : 0;
-                int lastCube = verticalScale > 1 && !newChunk ? cubeY + 1 : cubeCount;
+                int firstCube;
+                int lastCube;
+                if (verticalScale == 1) {
+                    firstCube = 0;
+                    lastCube = cubeCount;
+                } else if (cubeY >= 0 && cubeY < cubeCount) {
+                    firstCube = cubeY;
+                    lastCube = cubeY + 1;
+                } else {
+                    // only the new column, the filler cube is generated below
+                    firstCube = 0;
+                    lastCube = 0;
+                }
                 for (int ebsY = firstCube; ebsY < lastCube; ebsY++) {
                     Cube c = verticalScale == 1
                         ? new Cube(cubeColumn, ebsY, ebsY >= vanillaGenerationHeightCubes ? null : ebses[ebsY])
