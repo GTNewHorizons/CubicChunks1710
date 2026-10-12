@@ -71,6 +71,7 @@ import com.cardinalstar.cubicchunks.world.cube.blockview.VerticallyStretchedBloc
 import com.gtnewhorizon.gtnhlib.util.data.BlockMeta;
 import com.gtnewhorizon.gtnhlib.util.data.ImmutableBlockMeta;
 
+import it.unimi.dsi.fastutil.longs.Long2ObjectLinkedOpenHashMap;
 import it.unimi.dsi.fastutil.objects.Object2IntMap;
 import it.unimi.dsi.fastutil.objects.Object2IntOpenHashMap;
 
@@ -93,6 +94,13 @@ public class VanillaWorldGenerator implements IWorldGenerator, IPreloadFailureDe
     private final int verticalScale;
 
     private FillerInfo fillerInfo;
+
+    /**
+     * Stretched cubes each need the whole vanilla chunk, so the block storages of recently generated vanilla chunks
+     * are kept instead of generating the chunk again for every cube. Only used when the vertical scale is above 1.
+     */
+    private static final int BASE_STORAGE_CACHE_SIZE = 64;
+    private final Long2ObjectLinkedOpenHashMap<ExtendedBlockStorage[]> baseStorageCache = new Long2ObjectLinkedOpenHashMap<>();
 
     /**
      * Create a new VanillaCompatibilityGenerator
@@ -229,7 +237,7 @@ public class VanillaWorldGenerator implements IWorldGenerator, IPreloadFailureDe
 
         List<Cube> cubes = new ArrayList<>();
 
-        ExtendedBlockStorage[] ebses = base.getBlockStorageArray();
+        ExtendedBlockStorage[] ebses = cacheBaseStorages(columnX, columnZ, base);
 
         int cubeCount = verticalScale == 1 ? 16 : vanillaGenerationHeightCubes;
         for (int ebsY = 0; ebsY < cubeCount; ebsY++) {
@@ -245,11 +253,45 @@ public class VanillaWorldGenerator implements IWorldGenerator, IPreloadFailureDe
             cubes.add(c);
         }
 
-        Arrays.fill(ebses, null);
+        Arrays.fill(base.getBlockStorageArray(), null);
 
         ((IColumnInternal) base).setColumn(true);
 
         return new GenerationResult<>(base, null, cubes);
+    }
+
+    /**
+     * @return the block storages of the vanilla chunk at the given position, generated if they aren't cached.
+     *         They must not be modified.
+     */
+    private ExtendedBlockStorage[] getBaseStorages(int columnX, int columnZ) {
+        if (verticalScale > 1) {
+            ExtendedBlockStorage[] cached;
+            synchronized (baseStorageCache) {
+                cached = baseStorageCache.getAndMoveToLast(ChunkCoordIntPair.chunkXZ2Int(columnX, columnZ));
+            }
+            if (cached != null) return cached;
+        }
+
+        return cacheBaseStorages(columnX, columnZ, vanilla.provideChunk(columnX, columnZ));
+    }
+
+    /**
+     * @return the block storages of the generated vanilla chunk. When stretching, they're a cached copy of the
+     *         chunk's array, since new columns reuse the vanilla chunk and clear its storages.
+     */
+    private ExtendedBlockStorage[] cacheBaseStorages(int columnX, int columnZ, Chunk base) {
+        if (verticalScale == 1) return base.getBlockStorageArray();
+
+        ExtendedBlockStorage[] storages = base.getBlockStorageArray()
+            .clone();
+        synchronized (baseStorageCache) {
+            baseStorageCache.putAndMoveToLast(ChunkCoordIntPair.chunkXZ2Int(columnX, columnZ), storages);
+            if (baseStorageCache.size() > BASE_STORAGE_CACHE_SIZE) {
+                baseStorageCache.removeFirst();
+            }
+        }
+        return storages;
     }
 
     @Override
@@ -272,10 +314,16 @@ public class VanillaWorldGenerator implements IWorldGenerator, IPreloadFailureDe
 
             int cubeCount = verticalScale == 1 ? 16 : vanillaGenerationHeightCubes;
             if (cubeY >= 0 && cubeY < cubeCount || chunk == null) {
-                Chunk base = vanilla.provideChunk(cubeX, cubeZ);
-
                 boolean newChunk = chunk == null;
-                if (!newChunk) {
+                ExtendedBlockStorage[] ebses;
+                if (newChunk) {
+                    chunk = vanilla.provideChunk(cubeX, cubeZ);
+                    generatedColumns.add(chunk);
+
+                    ebses = cacheBaseStorages(cubeX, cubeZ, chunk);
+                } else {
+                    ebses = getBaseStorages(cubeX, cubeZ);
+
                     if (verticalScale == 1) {
                         CubicChunks.LOGGER.error(
                             "Needed to regenerate a cube within the vanilla chunk for a chunk that already exists: something is fucky ({},{},{})",
@@ -284,12 +332,7 @@ public class VanillaWorldGenerator implements IWorldGenerator, IPreloadFailureDe
                             cubeZ,
                             new Exception());
                     }
-                } else {
-                    chunk = base;
-                    generatedColumns.add(chunk);
                 }
-
-                ExtendedBlockStorage[] ebses = base.getBlockStorageArray();
 
                 Chunk cubeColumn = chunk;
                 int firstCube = verticalScale > 1 && !newChunk ? cubeY : 0;
@@ -312,9 +355,9 @@ public class VanillaWorldGenerator implements IWorldGenerator, IPreloadFailureDe
                 }
 
                 if (newChunk) {
-                    Arrays.fill(base.getBlockStorageArray(), null);
+                    Arrays.fill(chunk.getBlockStorageArray(), null);
 
-                    ((IColumnInternal) base).setColumn(true);
+                    ((IColumnInternal) chunk).setColumn(true);
                 }
             }
 
