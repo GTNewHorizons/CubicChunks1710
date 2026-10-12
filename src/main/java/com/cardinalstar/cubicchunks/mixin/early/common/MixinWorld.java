@@ -261,11 +261,12 @@ public abstract class MixinWorld implements ICubicWorldInternal {
             generationRange = ((ICubicWorldType) type).calculateGenerationHeightRange(worldServer);
         }
 
-        this.chunkProvider = createChunkProvider();
-
         CubicChunksSavedData savedData = CubicChunksSavedData.get(worldServer);
 
         this.initCubicWorld(new IntRange(savedData.minHeight, savedData.maxHeight), generationRange);
+
+        // after initCubicWorld, the generator reads the generation range in its constructor
+        this.chunkProvider = createChunkProvider();
 
         this.lightingManager = new LightingManager((World) (Object) this);
     }
