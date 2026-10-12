@@ -925,7 +925,10 @@ public class CubeLoaderServer implements ICubeLoader {
         }
 
         public void onCubeUnloaded() {
-            if (this.isInitedTo(CubeInitLevel.Generated)) {
+            // Cubes are unloaded constantly while players move, only save the ones that changed.
+            // Cubes that weren't loaded from disk are always saved, generated cubes aren't necessarily marked modified.
+            if (this.isInitedTo(CubeInitLevel.Generated)
+                && (this.source != ObjectSource.Disk || cube.needsSaving(true))) {
                 cubeIO.saveCube(pos, cube);
             }
 
