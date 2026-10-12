@@ -35,8 +35,17 @@ import lombok.NoArgsConstructor;
 
 public class CubeIO implements ICubeIO {
 
-    private static final long EXPIRY = Duration.ofSeconds(120)
+    /**
+     * Cached tags are only needed until they're written (saves) or read (preloads), and to serve reloads shortly
+     * after. A cube tag is around 10 KB, so they're dropped quickly.
+     */
+    private static final long EXPIRY = Duration.ofSeconds(10)
         .toMillis();
+    /** written and preloaded tags above this are dropped even if they haven't expired, pending saves are kept */
+    private static final int MAX_CACHED_COLUMNS = 2048;
+    private static final int MAX_CACHED_CUBES = 8192;
+    /** limits how many pending saves one eviction can skip over */
+    private static final int MAX_EVICTION_STEPS = 256;
 
     private final ICubicStorage storage;
     private final IPreloadFailureDelegate preloadFailures;
@@ -190,7 +199,7 @@ public class CubeIO implements ICubeIO {
             SaveData data = columnCache.get(pos);
 
             if (data != null) {
-                return data.tag == null ? null : (NBTTagCompound) data.tag.copy();
+                return consume(columnCache, pos, data);
             }
         }
 
@@ -221,7 +230,7 @@ public class CubeIO implements ICubeIO {
             SaveData data = cubeCache.get(pos);
 
             if (data != null) {
-                return data.tag == null ? null : (NBTTagCompound) data.tag.copy();
+                return consume(cubeCache, pos, data);
             }
         }
 
@@ -246,6 +255,49 @@ public class CubeIO implements ICubeIO {
         }
     }
 
+    /**
+     * The loaded column or cube holds the data from now on, so the entry is removed unless its save is still pending
+     * (it must keep answering reads until it's written). Must hold the cache's lock.
+     *
+     * @return the cached tag, null if the column or cube doesn't exist
+     */
+    @Nullable
+    private static <K> NBTTagCompound consume(Object2ObjectLinkedOpenHashMap<K, SaveData> cache, K pos,
+        SaveData data) {
+        if (data.task != null && !data.task.isDone()) {
+            return data.tag == null ? null : (NBTTagCompound) data.tag.copy();
+        }
+
+        // nothing else references the tag anymore
+        cache.remove(pos);
+        return data.tag;
+    }
+
+    /**
+     * Removes expired entries, and the oldest ones while the cache is above its max size. Pending saves are kept.
+     * Entries are ordered by age, so this stops at the first one that doesn't need removing. Must hold the cache's
+     * lock.
+     */
+    private static <K> void evict(Object2ObjectLinkedOpenHashMap<K, SaveData> cache, int maxSize, long now) {
+        var iter = cache.object2ObjectEntrySet()
+            .fastIterator();
+
+        for (int i = 0; i < MAX_EVICTION_STEPS && iter.hasNext(); i++) {
+            SaveData data = iter.next()
+                .getValue();
+
+            if (data.lastAccess + EXPIRY >= now && cache.size() <= maxSize) break;
+
+            if (data.task != null && data.task.isDone()) {
+                data.task = null;
+            }
+
+            if (data.task == null) {
+                iter.remove();
+            }
+        }
+    }
+
     public void saveColumn(ChunkCoordIntPair pos, Chunk column) {
         // NOTE: this function blocks the world thread
         // make it as fast as possible by offloading processing to the IO thread
@@ -264,28 +316,9 @@ public class CubeIO implements ICubeIO {
         long now = System.currentTimeMillis();
 
         synchronized (columnCache) {
-            columnCache.put(pos, new SaveData(tag, task, now));
+            columnCache.putAndMoveToLast(pos, new SaveData(tag, task, now));
 
-            if (columnCache.size() > 5000) {
-                int i = 0;
-
-                var iter = columnCache.object2ObjectEntrySet()
-                    .fastIterator();
-
-                while (columnCache.size() > 5000 && i++ < 100) {
-                    var e = iter.next();
-
-                    SaveData data = e.getValue();
-
-                    if (data.task != null && data.task.isDone()) {
-                        data.task = null;
-                    }
-
-                    if (data.task == null && data.lastAccess + EXPIRY < now) {
-                        iter.remove();
-                    }
-                }
-            }
+            evict(columnCache, MAX_CACHED_COLUMNS, now);
         }
     }
 
@@ -301,28 +334,9 @@ public class CubeIO implements ICubeIO {
         long now = System.currentTimeMillis();
 
         synchronized (cubeCache) {
-            cubeCache.put(pos, new SaveData(tag, task, now));
+            cubeCache.putAndMoveToLast(pos, new SaveData(tag, task, now));
 
-            if (cubeCache.size() > 30000) {
-                int i = 0;
-
-                var iter = cubeCache.object2ObjectEntrySet()
-                    .fastIterator();
-
-                while (cubeCache.size() > 30000 && i++ < 100) {
-                    var e = iter.next();
-
-                    SaveData data = e.getValue();
-
-                    if (data.task != null && data.task.isDone()) {
-                        data.task = null;
-                    }
-
-                    if (data.task == null && data.lastAccess + EXPIRY < now) {
-                        iter.remove();
-                    }
-                }
-            }
+            evict(cubeCache, MAX_CACHED_CUBES, now);
         }
     }
 
@@ -375,7 +389,10 @@ public class CubeIO implements ICubeIO {
                     return;
                 }
 
-                columnCache.put(pos, new SaveData(tag.orElse(null), null, System.currentTimeMillis()));
+                long now = System.currentTimeMillis();
+                columnCache.put(pos, new SaveData(tag.orElse(null), null, now));
+
+                evict(columnCache, MAX_CACHED_COLUMNS, now);
             }
 
             if (!tag.isPresent()) {
@@ -396,7 +413,10 @@ public class CubeIO implements ICubeIO {
                     return;
                 }
 
-                cubeCache.put(pos, new SaveData(tag.orElse(null), null, System.currentTimeMillis()));
+                long now = System.currentTimeMillis();
+                cubeCache.put(pos, new SaveData(tag.orElse(null), null, now));
+
+                evict(cubeCache, MAX_CACHED_CUBES, now);
             }
 
             CubeInitLevel actual = !tag.isPresent() ? CubeInitLevel.None : IONbtReader.getCubeInitLevel(tag.get());
