@@ -41,6 +41,7 @@ import org.apache.logging.log4j.Logger;
 import com.cardinalstar.cubicchunks.api.world.storage.ICubicStorage;
 import com.cardinalstar.cubicchunks.api.world.storage.StorageFormatFactory;
 import com.cardinalstar.cubicchunks.api.worldtype.VanillaCubicWorldType;
+import com.cardinalstar.cubicchunks.api.worldtype.MountainWorldType;
 import com.cardinalstar.cubicchunks.api.worldtype.VanillaStretch100WorldType;
 import com.cardinalstar.cubicchunks.api.worldtype.VanillaStretch10WorldType;
 import com.cardinalstar.cubicchunks.async.TaskPool;
@@ -123,6 +124,7 @@ public class CubicChunks {
         VanillaCubicWorldType.init();
         VanillaStretch10WorldType.init();
         VanillaStretch100WorldType.init();
+        MountainWorldType.init();
 
         LOGGER.debug("Registered world types");
 

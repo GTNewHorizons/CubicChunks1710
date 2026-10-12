@@ -31,6 +31,7 @@ cubicchunks.config.optimizations=Optimizations
 cubicchunks.config.optimizations.background_threads=Background Threads
 
 generator.VanillaCubic=Vanilla + Cubic
+generator.CubicMountains=Cubic Mountains
 
 #################################
 ###          misc             ###
