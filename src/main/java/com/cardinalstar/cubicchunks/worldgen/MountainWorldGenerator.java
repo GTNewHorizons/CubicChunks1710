@@ -16,6 +16,7 @@ import net.minecraft.world.ChunkPosition;
 import net.minecraft.world.World;
 import net.minecraft.world.biome.BiomeGenBase;
 import net.minecraft.world.chunk.Chunk;
+import net.minecraft.world.chunk.storage.ExtendedBlockStorage;
 import net.minecraft.world.gen.NoiseGeneratorSimplex;
 import net.minecraft.world.gen.feature.WorldGenTrees;
 
@@ -25,6 +26,7 @@ import com.cardinalstar.cubicchunks.CubicChunks;
 import com.cardinalstar.cubicchunks.api.ICube;
 import com.cardinalstar.cubicchunks.api.util.Box;
 import com.cardinalstar.cubicchunks.api.worldgen.GenerationResult;
+import com.cardinalstar.cubicchunks.api.worldgen.ITerrainHeightProvider;
 import com.cardinalstar.cubicchunks.api.worldgen.IWorldGenerator;
 import com.cardinalstar.cubicchunks.mixin.api.ICubicWorldInternal;
 import com.cardinalstar.cubicchunks.server.chunkio.ICubeLoader;
@@ -40,7 +42,7 @@ import it.unimi.dsi.fastutil.longs.Long2ObjectLinkedOpenHashMap;
  * and scattered trees. Terrain is a single 2D heightmap, so there are no caves or overhangs.
  */
 @ParametersAreNonnullByDefault
-public class MountainWorldGenerator implements IWorldGenerator {
+public class MountainWorldGenerator implements IWorldGenerator, ITerrainHeightProvider {
 
     /** the highest terrain block, kept below the top of the generation range so trees fit */
     public static final int MAX_TERRAIN_Y = 19900;
@@ -149,6 +151,16 @@ public class MountainWorldGenerator implements IWorldGenerator {
         return heights;
     }
 
+    @Override
+    public int getMaxTerrainHeight(int columnX, int columnZ) {
+        // water fills the valleys up to the sea level
+        int maxHeight = SEA_LEVEL - 1;
+        for (int height : getColumnHeights(columnX, columnZ)) {
+            maxHeight = Math.max(maxHeight, height);
+        }
+        return maxHeight;
+    }
+
     private static Block getBlock(int blockY, int terrainHeight) {
         if (blockY > terrainHeight) {
             return (blockY < SEA_LEVEL) ? Blocks.water : Blocks.air;
@@ -193,6 +205,24 @@ public class MountainWorldGenerator implements IWorldGenerator {
 
             int[] heights = getColumnHeights(cubeX, cubeZ);
             int minBlockY = cubeY * Cube.SIZE;
+            int maxBlockY = minBlockY + Cube.SIZE - 1;
+
+            // most cubes are entirely inside a mountain or above the terrain, skip the per-block fill for those
+            int minHeight = Integer.MAX_VALUE;
+            int maxHeight = Integer.MIN_VALUE;
+            for (int height : heights) {
+                minHeight = Math.min(minHeight, height);
+                maxHeight = Math.max(maxHeight, height);
+            }
+            if (maxBlockY < (minHeight - FILLER_DEPTH)) {
+                Cube cube = new Cube(chunk, cubeY, createUniformStorage(minBlockY, Blocks.stone));
+                return new GenerationResult<>(cube, generatedColumns, null);
+            }
+            if (minBlockY > maxHeight && minBlockY >= SEA_LEVEL) {
+                Cube cube = new Cube(chunk, cubeY, (ExtendedBlockStorage) null);
+                return new GenerationResult<>(cube, generatedColumns, null);
+            }
+
             Cube cube = new Cube(chunk, cubeY, new IBlockView() {
 
                 @Override
@@ -210,6 +240,32 @@ public class MountainWorldGenerator implements IWorldGenerator {
         } finally {
             WorldgenHangWatchdog.endWorldGen();
         }
+    }
+
+    /**
+     * Fills the storage's block array directly, instead of setting every block separately, which looks up the block's
+     * ID for each one.
+     */
+    private ExtendedBlockStorage createUniformStorage(int minBlockY, Block block) {
+        ExtendedBlockStorage storage = new ExtendedBlockStorage(minBlockY, !world.provider.hasNoSky);
+
+        int id = Block.getIdFromBlock(block);
+        if (id > 0xFF) {
+            // would need the MSB array, which can only be created on the client
+            for (int x = 0; x < Cube.SIZE; x++) {
+                for (int y = 0; y < Cube.SIZE; y++) {
+                    for (int z = 0; z < Cube.SIZE; z++) {
+                        storage.func_150818_a(x, y, z, block);
+                    }
+                }
+            }
+            return storage;
+        }
+
+        Arrays.fill(storage.getBlockLSBArray(), (byte) id);
+        // counts the blocks, an empty storage counts as air
+        storage.removeInvalidBlocks();
+        return storage;
     }
 
     // ============//

@@ -116,6 +116,10 @@ public class CubeProviderServer extends ChunkProviderServer
 
     private final ObjectLinkedOpenHashSet<CubeLoaderCallback> callbacks = new ObjectLinkedOpenHashSet<>();
 
+    public IWorldGenerator getWorldGenerator() {
+        return worldGenerator;
+    }
+
     public CubeProviderServer(WorldServer worldServer, IChunkLoader chunkLoader, IWorldGenerator worldGenerator) {
         super(
             worldServer,
