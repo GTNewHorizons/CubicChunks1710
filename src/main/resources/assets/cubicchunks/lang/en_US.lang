@@ -37,3 +37,45 @@ generator.VanillaCubic=Vanilla + Cubic
 #################################
 
 cubicchunks.build.too.low=Minimum building depth reached
+
+#################################
+###      world select gui      ###
+#################################
+
+cubicchunks.gui.worldselect.convert=Convert
+cubicchunks.gui.worldselect.badge.cc=[CC]
+cubicchunks.gui.worldselect.badge.vanilla=[Vanilla]
+cubicchunks.gui.worldselect.badge.mixed=[Mixed]
+
+#################################
+###    vanilla world warning   ###
+#################################
+
+cubicchunks.gui.warning.vanilla_world.title=Vanilla World Detected
+cubicchunks.gui.warning.vanilla_world.body=This world is in Vanilla format. CC data will not be loaded.
+cubicchunks.gui.warning.vanilla_world.load_anyway=Load Anyway
+cubicchunks.gui.warning.vanilla_world.convert=Convert First
+
+#################################
+###      convert world gui     ###
+#################################
+
+cubicchunks.gui.convert.title=Convert: %s
+cubicchunks.gui.convert.source=Current format: %s
+cubicchunks.gui.convert.target_label=Convert to:
+cubicchunks.gui.convert.convert=Convert
+cubicchunks.gui.convert.back=Back
+cubicchunks.gui.convert.backup_prompt=Back up your world first. This cannot be undone. Proceed?
+cubicchunks.gui.convert.backup_yes=I have a backup. Convert.
+
+cubicchunks.gui.progress.title=Converting World...
+cubicchunks.gui.progress.status=%d / %d chunks
+cubicchunks.gui.progress.done=Conversion complete.
+cubicchunks.gui.progress.error=Error: %s
+cubicchunks.gui.progress.cancel=Cancel
+
+cubicchunks.format.cc=Cubic Chunks (Anvil3D)
+cubicchunks.format.vanilla=Vanilla (Anvil)
+cubicchunks.format.block.vanilla=Vanilla (12-bit)
+cubicchunks.format.block.eid=EndlessIDs (EID)
+cubicchunks.gui.convert.block_format_label=Block format:

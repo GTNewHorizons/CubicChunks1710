@@ -35,7 +35,7 @@ import lombok.NoArgsConstructor;
 
 public class CubeIO implements ICubeIO {
 
-    private static final long EXPIRY = Duration.ofSeconds(120)
+    private static final long EXPIRY = Duration.ofSeconds(30)
         .toMillis();
     private static final int COLUMN_CACHE_LIMIT = 5000;
     private static final int CUBE_CACHE_LIMIT = 30000;
