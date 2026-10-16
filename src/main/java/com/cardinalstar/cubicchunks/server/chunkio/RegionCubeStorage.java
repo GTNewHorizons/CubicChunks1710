@@ -59,6 +59,12 @@ import it.unimi.dsi.fastutil.Pair;
  */
 public class RegionCubeStorage implements ICubicStorage {
 
+    /** Runs startup-only maintenance before opening storage; gameplay dimension loads never compact. */
+    public static ICubicStorage openForWorld(Path worldRoot, Path path) throws IOException {
+        StartupRegionCompaction.beforeOpen(worldRoot, path);
+        return new RegionCubeStorage(path);
+    }
+
     private static SaveCubeColumns saveForPath(Path path) throws IOException {
         if (CubicChunksConfig.useShadowPagingIO) {
             Utils.createDirectories(path);
@@ -117,9 +123,20 @@ public class RegionCubeStorage implements ICubicStorage {
     }
 
     private SaveCubeColumns save;
+    private final StorageMaintenanceLock storageLock;
 
     public RegionCubeStorage(Path path) throws IOException {
-        this.save = saveForPath(path);
+        this.storageLock = StorageMaintenanceLock.openStorage(path);
+        try {
+            this.save = saveForPath(path);
+        } catch (IOException | RuntimeException | Error e) {
+            try {
+                storageLock.close();
+            } catch (IOException close) {
+                e.addSuppressed(close);
+            }
+            throw e;
+        }
     }
 
     @Override
@@ -276,7 +293,10 @@ public class RegionCubeStorage implements ICubicStorage {
 
     @Override
     public void close() throws IOException {
+        if (this.save == null) return;
+        // A failed close may leave live region handles. Do not permit maintenance until they are closed.
         this.save.close();
         this.save = null;
+        this.storageLock.close();
     }
 }
