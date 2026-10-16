@@ -10,6 +10,7 @@ cubicchunks.gui.worldmenu.cc_default=CubicChunks: Default
 #################################
 
 cubicchunks.gui.vertical_cube_load_distance=Vertical Distance: %d cubes
+cubicchunks.config.chunk_compression=Chunk and cube compression
 
 #################################
 ###         commands          ###
