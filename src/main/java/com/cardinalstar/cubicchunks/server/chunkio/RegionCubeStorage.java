@@ -61,8 +61,9 @@ import it.unimi.dsi.fastutil.Pair;
  */
 public class RegionCubeStorage implements ICubicStorage {
 
-    /** Opens the selected built-in storage format. */
+    /** Runs startup-only maintenance before opening storage; gameplay dimension loads never compact. */
     public static ICubicStorage openForWorld(Path worldRoot, Path path, boolean compactEmpty) throws IOException {
+        StartupRegionCompaction.beforeOpen(worldRoot, path);
         return compactEmpty ? new CompactCubeStorage(path) : new RegionCubeStorage(path);
     }
 
@@ -125,6 +126,7 @@ public class RegionCubeStorage implements ICubicStorage {
 
     private SaveCubeColumns save;
     private final Path cubeDirectory;
+    private final StorageMaintenanceLock storageLock;
 
     public RegionCubeStorage(Path path) throws IOException {
         this(path, false);
@@ -134,7 +136,17 @@ public class RegionCubeStorage implements ICubicStorage {
         if (!compactDelegate && Files.exists(path.resolve(CompactCubeStorage.DIRECTORY))) {
             throw new IOException("This save uses compact empty cubes; open it with CompactCubeStorage");
         }
-        this.save = saveForPath(path);
+        this.storageLock = StorageMaintenanceLock.openStorage(path);
+        try {
+            this.save = saveForPath(path);
+        } catch (IOException | RuntimeException | Error e) {
+            try {
+                storageLock.close();
+            } catch (IOException close) {
+                e.addSuppressed(close);
+            }
+            throw e;
+        }
         this.cubeDirectory = path.resolve("region3d");
     }
 
@@ -309,7 +321,9 @@ public class RegionCubeStorage implements ICubicStorage {
     @Override
     public void close() throws IOException {
         if (this.save == null) return;
+        // A failed close may leave live region handles. Do not permit maintenance until they are closed.
         this.save.close();
         this.save = null;
+        this.storageLock.close();
     }
 }

@@ -4,6 +4,8 @@ Compact-empty Anvil3D is the default storage format for new CubicChunks worlds.
 It stores repeated metadata for sectionless cubes once per region, while keeping
 columns and other cubes in ordinary Anvil3D region files. It uses
 [Zstandard compression](zstd-storage.md) by default and supports all four codecs.
+[Region compaction](region-compaction.md) automatically reclaims unused space in
+ordinary region files during server/world startup, never on gameplay dimension loads.
 
 ## Format selection and compatibility
 
