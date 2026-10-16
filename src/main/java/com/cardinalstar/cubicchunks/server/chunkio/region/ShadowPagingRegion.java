@@ -236,6 +236,8 @@ public class ShadowPagingRegion<K extends IKey<K>> implements IRegion<K> {
                 // if deleting an entry, there's no need to change anything on disk! the only thing that needs
                 // to be changed is the headers.
                 if (value != null) {
+                    // Oversized entries were recorded for the fallback provider during reservation.
+                    if (!entryLocationsToUse.containsKey(key)) continue;
                     int size = value.remaining();
                     int bytesOffset = entryLocationsToUse.get(key)
                         .getOffset() * this.sectorSize;
