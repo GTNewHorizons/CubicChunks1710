@@ -202,7 +202,9 @@ public class CubicChunks {
     }
 
     public static void registerAnvil3dStorageFormatProvider() {
-        StorageFormatFactory.REGISTRY.register(StorageFormatFactory.DEFAULT, new DefaultStorageFormatFactory());
+        StorageFormatFactory.REGISTRY.register(StorageFormatFactory.ANVIL3D, new DefaultStorageFormatFactory(false));
+        StorageFormatFactory.REGISTRY
+            .register(StorageFormatFactory.COMPACT_EMPTY, new DefaultStorageFormatFactory(true));
     }
 
     @NetworkCheckHandler
@@ -281,9 +283,14 @@ public class CubicChunks {
 
     private static class DefaultStorageFormatFactory extends StorageFormatFactory {
 
-        public DefaultStorageFormatFactory() {
-            setRegistryName(StorageFormatFactory.DEFAULT);
-            setUnlocalizedName("cubicchunks.gui.storagefmt.anvil3d");
+        private final boolean compactEmpty;
+
+        public DefaultStorageFormatFactory(boolean compactEmpty) {
+            this.compactEmpty = compactEmpty;
+            setRegistryName(compactEmpty ? StorageFormatFactory.COMPACT_EMPTY : StorageFormatFactory.ANVIL3D);
+            setUnlocalizedName(
+                compactEmpty ? "cubicchunks.gui.storagefmt.anvil3d_compact_empty"
+                    : "cubicchunks.gui.storagefmt.anvil3d");
         }
 
         @Override
@@ -301,7 +308,12 @@ public class CubicChunks {
 
         @Override
         public ICubicStorage provideStorage(World world, Path path) throws IOException {
-            return new RegionCubeStorage(path);
+            return RegionCubeStorage.openForWorld(
+                world.getSaveHandler()
+                    .getWorldDirectory()
+                    .toPath(),
+                path,
+                compactEmpty);
         }
     }
 }

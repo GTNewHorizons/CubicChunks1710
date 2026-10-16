@@ -3,8 +3,8 @@
 Zstandard level 1 is the default compression for saved columns and cubes. The
 `chunkCompression` setting in `config/cubicchunks.cfg` accepts `ZSTD`, `GZIP`,
 `LZ4` and `NONE`. An existing configured choice is not overwritten; set
-`S:chunkCompression=ZSTD` to switch future writes to the default.
-Ordinary Anvil3D storage supports all four codecs.
+`S:chunkCompression=ZSTD` to switch future writes to the default. Both ordinary
+Anvil3D and [compact-empty storage](compact-empty-storage.md) support all four codecs.
 
 ## Record format
 
@@ -14,7 +14,8 @@ The bundled zstd-jni library works without client-side LWJGL. Its Java packages
 must not be relocated or minimized, because native entry points depend on them.
 
 Zstd record decoding requires a known size of at most 64 MiB and exactly one
-complete frame. Unusually large NBT records exceeding the Zstd bound are written using the existing GZIP
+complete frame. Compact templates retain their stricter 8 KiB bound. Unusually
+large NBT records exceeding the Zstd bound are written using the existing GZIP
 codec instead, so selecting ZSTD does not prevent them from being saved.
 
 ## Configuration and compatibility

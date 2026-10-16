@@ -34,7 +34,9 @@ import cpw.mods.fml.common.registry.GameRegistry.UniqueIdentifier;
 
 public abstract class StorageFormatFactory extends AbstractRegistryEntry<StorageFormatFactory> {
 
-    public static final UniqueIdentifier DEFAULT = new UniqueIdentifier("cubicchunks:anvil3d");
+    public static final UniqueIdentifier ANVIL3D = new UniqueIdentifier("cubicchunks:anvil3d");
+    public static final UniqueIdentifier COMPACT_EMPTY = new UniqueIdentifier("cubicchunks:anvil3d-compact-empty");
+    public static final UniqueIdentifier DEFAULT = COMPACT_EMPTY;
     public static final Registry<StorageFormatFactory> REGISTRY = new Registry<>();
 
     public abstract Path getWorldSaveDirectory(ISaveHandler saveHandler, WorldServer worldServer);
