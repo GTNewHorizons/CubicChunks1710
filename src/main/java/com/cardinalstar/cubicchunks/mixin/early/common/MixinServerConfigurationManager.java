@@ -65,7 +65,7 @@ public abstract class MixinServerConfigurationManager implements ICubicPlayerLis
 
     @Override
     public int getVerticalViewDistance() {
-        return verticalViewDistance < 0 ? viewDistance : verticalViewDistance;
+        return MathHelper.clamp_int(verticalViewDistance < 0 ? viewDistance : verticalViewDistance, 3, 32);
     }
 
     @Override
@@ -80,8 +80,10 @@ public abstract class MixinServerConfigurationManager implements ICubicPlayerLis
         if (this.mcServer.worldServers != null) {
             for (WorldServer worldserver : this.mcServer.worldServers) {
                 if (worldserver != null) {
-                    ((CubicPlayerManager) worldserver.getPlayerManager()).setPlayerViewDistance(viewDistance, dist);
-                    ((ICubicEntityTracker) worldserver.getEntityTracker()).setVertViewDistance(dist);
+                    ((CubicPlayerManager) worldserver.getPlayerManager())
+                        .setPlayerViewDistance(viewDistance, getVerticalViewDistance());
+                    ((ICubicEntityTracker) worldserver.getEntityTracker())
+                        .setVertViewDistance(getVerticalViewDistance());
                 }
             }
         }
