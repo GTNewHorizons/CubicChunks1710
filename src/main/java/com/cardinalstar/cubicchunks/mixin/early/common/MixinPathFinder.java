@@ -27,6 +27,8 @@ import com.llamalad7.mixinextras.expression.Expression;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.llamalad7.mixinextras.sugar.Local;
+import com.llamalad7.mixinextras.sugar.Share;
+import com.llamalad7.mixinextras.sugar.ref.LocalIntRef;
 
 @Mixin(PathFinder.class)
 public class MixinPathFinder {
@@ -38,9 +40,6 @@ public class MixinPathFinder {
     @Mutable
     private IntHashMap pointMap;
 
-    @Unique
-    private int cc$floorLimit;
-
     @Inject(method = "<init>", at = @At("TAIL"))
     private void cc$hookInit(IBlockAccess p_i2137_1_, boolean p_i2137_2_, boolean p_i2137_3_, boolean p_i2137_4_,
         boolean p_i2137_5_, CallbackInfo ci) {
@@ -49,21 +48,22 @@ public class MixinPathFinder {
 
     @Inject(method = "getSafePoint", at = @At("HEAD"))
     private void cc$captureFloorLimit(Entity entity, int x, int y, int z, PathPoint p_75858_5_, int p_75858_6_,
-        CallbackInfoReturnable<PathPoint> cir) {
-        cc$floorLimit = Math.max(((ICubicWorld) entity.worldObj).getMinHeight(), y - entity.getMaxSafePointTries());
+        CallbackInfoReturnable<PathPoint> cir, @Share("cc$floorLimit") LocalIntRef floorLimit) {
+        floorLimit.set(Math.max(((ICubicWorld) entity.worldObj).getMinHeight(), y - entity.getMaxSafePointTries()));
     }
 
     @Definition(id = "p_75858_3_", local = @Local(type = int.class, ordinal = 1, argsOnly = true))
     @Expression("p_75858_3_ > 0")
     @WrapOperation(method = "getSafePoint", at = @At("MIXINEXTRAS:EXPRESSION"))
-    private boolean redirectLessThan0Comparison(int yPosition, int zero, Operation<Boolean> original) {
-        return yPosition > cc$floorLimit;
+    private boolean cc$redirectLessThan0Comparison(int yPosition, int zero, Operation<Boolean> original,
+        @Share("cc$floorLimit") LocalIntRef floorLimit) {
+        return yPosition > floorLimit.get();
     }
 
     @Definition(id = "getBlock", method = "Lnet/minecraft/world/World;getBlock(III)Lnet/minecraft/block/Block;")
     @Expression("?.getBlock(?, ?, ?)")
     @Redirect(method = "func_82565_a", at = @At("MIXINEXTRAS:EXPRESSION"))
-    private static Block CheckWorldLoaded(World world, int x, int y, int z) {
+    private static Block cc$checkWorldLoaded(World world, int x, int y, int z) {
         if (world.blockExists(x, y, z)) {
             return world.getBlock(x, y, z);
         }
@@ -80,18 +80,16 @@ public class MixinPathFinder {
     @Redirect(
         method = "openPoint",
         at = @At(value = "INVOKE", target = "Lnet/minecraft/util/IntHashMap;lookup(I)Ljava/lang/Object;"))
-    private Object cc$interceptPointMapLookup(IntHashMap instance, int p_76041_1_,
-        @Local(argsOnly = true, name = "p_75854_1_") int x, @Local(argsOnly = true, name = "p_75854_2_") int y,
-        @Local(argsOnly = true, name = "p_75854_3_") int z) {
-        return cc$pointMap.get(x, y, z);
+    private Object cc$interceptPointMapLookup(IntHashMap instance, int p_76041_1_, int p_75854_1_, int p_75854_2_,
+        int p_75854_3_) {
+        return cc$pointMap.get(p_75854_1_, p_75854_2_, p_75854_3_);
     }
 
     @Redirect(
         method = "openPoint",
         at = @At(value = "INVOKE", target = "Lnet/minecraft/util/IntHashMap;addKey(ILjava/lang/Object;)V"))
-    private void cc$interceptPointMapAddKey(IntHashMap instance, int p_76038_1_, Object p_76038_2_,
-        @Local(argsOnly = true, name = "p_75854_1_") int x, @Local(argsOnly = true, name = "p_75854_2_") int y,
-        @Local(argsOnly = true, name = "p_75854_3_") int z) {
-        cc$pointMap.put(x, y, z, (PathPoint) p_76038_2_);
+    private void cc$interceptPointMapAddKey(IntHashMap instance, int p_76038_1_, Object p_76038_2_, int p_75854_1_,
+        int p_75854_2_, int p_75854_3_) {
+        cc$pointMap.put(p_75854_1_, p_75854_2_, p_75854_3_, (PathPoint) p_76038_2_);
     }
 }
