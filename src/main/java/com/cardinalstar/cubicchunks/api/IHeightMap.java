@@ -28,12 +28,12 @@ public interface IHeightMap {
     /**
      * Sets the opacity at the given position to the given value.
      *
-     * @param localX  local block x-coordinate (0..15)
-     * @param blockY  global block y-coordinate
-     * @param localZ  local block zPosition-coordinate (0..15)
-     * @param opacity new opacity (0..255)
+     * @param localX   local block x-coordinate (0..15)
+     * @param blockY   global block y-coordinate
+     * @param localZ   local block zPosition-coordinate (0..15)
+     * @param occluded true when the block should be tracked by the heightmap
      */
-    void onOpacityChange(int localX, int blockY, int localZ, int opacity);
+    void onOpacityChange(int localX, int blockY, int localZ, boolean occluded);
 
     /**
      * Returns true if the block at the given position is occluded by a known non-opaque block further up.
@@ -63,49 +63,10 @@ public interface IHeightMap {
      * Returns the y-coordinate of the highest non-transparent block that is below the given blockY.
      *
      * @param localX local block x-coordinate (0..15)
-     * @param localZ local block zPosition-coordinate (0..15)
      * @param blockY only positions below or at this Y coordinate will be retuirned
-     *
+     * @param localZ local block zPosition-coordinate (0..15)
      * @return Y position of the top non-transparent block below blockY, or very low (far below the min world height) if
      *         one doesn't exist
      */
-    @Deprecated
-    int getTopBlockYBelow(int localX, int localZ, int blockY);
-
-    /**
-     * Out of the highest non-opaque blocks from all block columns in the column, returns the y-coordinate of the lowest
-     * block.
-     *
-     * @return the minimum of all top block coordinates in this heightmap instance
-     */
-    int getLowestTopBlockY();
-
-    // This class exists only because I don't want to introduce many off-by-one errors when modifying height tracking
-    // code to store
-    // height-above-the-top-block instead of height-of-the-top-block (which is done so that the heightmap array can be
-    // shared with vanilla)
-    final class HeightMap {
-
-        private int[] data;
-
-        public HeightMap(int[] heightmap) {
-            this.data = heightmap;
-        }
-
-        public int get(int index) {
-            return data[index] - 1;
-        }
-
-        public void set(int index, int value) {
-            data[index] = value + 1;
-        }
-
-        public void increment(int index) {
-            data[index]++;
-        }
-
-        public void decrement(int index) {
-            data[index]--;
-        }
-    }
+    int getTopBlockYBelow(int localX, int blockY, int localZ);
 }
