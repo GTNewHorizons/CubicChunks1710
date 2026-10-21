@@ -72,14 +72,16 @@ public class MixinPathFinder {
 
     @Redirect(
         method = "createEntityPathTo(Lnet/minecraft/entity/Entity;DDDF)Lnet/minecraft/pathfinding/PathEntity;",
-        at = @At(value = "INVOKE", target = "Lnet/minecraft/util/IntHashMap;clearMap()V"), require = 1)
+        at = @At(value = "INVOKE", target = "Lnet/minecraft/util/IntHashMap;clearMap()V"),
+        require = 1)
     private void cc$interceptPointMapClear(IntHashMap instance) {
         cc$pointMap.clear();
     }
 
     @Redirect(
         method = "openPoint",
-        at = @At(value = "INVOKE", target = "Lnet/minecraft/util/IntHashMap;lookup(I)Ljava/lang/Object;"), require = 1)
+        at = @At(value = "INVOKE", target = "Lnet/minecraft/util/IntHashMap;lookup(I)Ljava/lang/Object;"),
+        require = 1)
     private Object cc$interceptPointMapLookup(IntHashMap instance, int p_76041_1_, int p_75854_1_, int p_75854_2_,
         int p_75854_3_) {
         return cc$pointMap.get(p_75854_1_, p_75854_2_, p_75854_3_);
@@ -87,7 +89,8 @@ public class MixinPathFinder {
 
     @Redirect(
         method = "openPoint",
-        at = @At(value = "INVOKE", target = "Lnet/minecraft/util/IntHashMap;addKey(ILjava/lang/Object;)V"), require = 1)
+        at = @At(value = "INVOKE", target = "Lnet/minecraft/util/IntHashMap;addKey(ILjava/lang/Object;)V"),
+        require = 1)
     private void cc$interceptPointMapAddKey(IntHashMap instance, int p_76038_1_, Object p_76038_2_, int p_75854_1_,
         int p_75854_2_, int p_75854_3_) {
         cc$pointMap.put(p_75854_1_, p_75854_2_, p_75854_3_, (PathPoint) p_76038_2_);
