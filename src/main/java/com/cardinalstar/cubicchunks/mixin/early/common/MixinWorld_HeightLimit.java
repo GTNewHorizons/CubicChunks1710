@@ -123,8 +123,10 @@ public abstract class MixinWorld_HeightLimit implements ICubicWorld {
     boolean redirectChunkExistsCubeExists(World instance, int p_72916_1_, int p_72916_2_,
         @Local(argsOnly = true, name = "p_72899_1_") int x, @Local(argsOnly = true, name = "p_72899_2_") int y,
         @Local(argsOnly = true, name = "p_72899_3_") int z) {
-        if (chunkProvider instanceof ICubeProviderInternal) {
-            return cubeExists(x >> 4, y >> 4, z >> 4);
+        if (chunkProvider instanceof ICubeProviderInternal cubeProvider) {
+            // Vanilla server blockExists tests residency, not saved terrain. Keep the client's permissive check.
+            return isRemote ? cubeExists(x >> 4, y >> 4, z >> 4)
+                : cubeProvider.getLoadedCube(x >> 4, y >> 4, z >> 4) != null;
         } else {
             return chunkExists(x >> 4, z >> 4);
         }
