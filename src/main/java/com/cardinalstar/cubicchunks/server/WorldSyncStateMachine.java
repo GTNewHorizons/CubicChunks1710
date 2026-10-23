@@ -172,7 +172,7 @@ public class WorldSyncStateMachine {
                 Chunk column = provider.getLoadedColumn(e.getX(), e.getZ());
 
                 if (column != null) {
-                    PacketEncoderHeightMapUpdate.createPacket(e.getValue(), column)
+                    PacketEncoderHeightMapUpdate.createPacket(column, e.getValue())
                         .sendToPlayer(player.player);
                 }
             }
