@@ -69,7 +69,8 @@ public class ClientEventHandler {
         ICubicPlayerList playerList = ((ICubicPlayerList) FMLCommonHandler.instance()
             .getMinecraftServerInstance()
             .getConfigurationManager());
-        int prevDist = playerList.getVerticalViewDistance();
+        // Compare saved settings: the effective server distance may be clamped.
+        int prevDist = playerList.getRawVerticalViewDistance();
         int newDist = CubicChunksConfig.verticalCubeLoadDistance;
         if (prevDist != newDist) {
             CubicChunks.LOGGER.info("Changing vertical view distance to {}, from {}", newDist, prevDist);

@@ -78,8 +78,8 @@ public class CubicChunksConfig {
     public static String[] dimensional_height_overrides = { "0:bottom:-64" };
 
     @Config.LangKey("cubicchunks.config.vert_view_distance")
-    @Config.Comment("Similar to Minecraft's view distance, only for vertical chunks. Automatically adjusted by vertical view distance slider on the"
-        + " client. Does not affect rendering, only what chunks are sent to client.")
+    @Config.Comment("Client vertical render distance and integrated-server vertical loading radius, adjusted by the vertical view distance slider."
+        + " Dedicated servers use vertical-view-distance in server.properties instead.")
     public static int verticalCubeLoadDistance = 8;
 
     @Config.LangKey("cubicchunks.config.enable_chunk_debugging")
