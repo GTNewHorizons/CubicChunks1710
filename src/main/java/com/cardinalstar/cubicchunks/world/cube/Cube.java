@@ -79,6 +79,7 @@ import com.cardinalstar.cubicchunks.world.ICubicWorld;
 import com.cardinalstar.cubicchunks.world.core.IColumnInternal;
 import com.cardinalstar.cubicchunks.world.core.ICubicTicketInternal;
 import com.cardinalstar.cubicchunks.world.cube.blockview.IBlockView;
+import com.cardinalstar.cubicchunks.world.heightmap.PrecipitationHeightMap;
 import com.gtnewhorizon.gtnhlib.blockpos.BlockPos;
 
 import it.unimi.dsi.fastutil.objects.Reference2ReferenceArrayMap;
@@ -625,9 +626,9 @@ public class Cube implements ICube {
         EVENT_BUS.post(new CubeEvent.Load(world, this));
     }
 
-    /// Update the chunk's height map with the data stored in this cube.
-    /// We never remove the data from the height map - we only upsert it to match this cube's contents.
-    /// This is so that skylight calculations are correct even when high-up cubes have been unloaded.
+    /// Update the chunk's height maps with the data stored in this cube.
+    /// We never remove the data from the height maps - we only upsert it to match this cube's contents.
+    /// This is so that skylight calculations and precipitation are correct even when high-up cubes have been unloaded.
     public void updateHeightMap() {
         IHeightMap heightMap = ((IColumn) column).getOpacityIndex();
         int miny = getCoords().getMinBlockY();
@@ -642,7 +643,24 @@ public class Cube implements ICube {
             }
         }
 
+        updatePrecipitationHeightMap();
+
         column.setChunkModified();
+    }
+
+    /// Update the column's precipitation height map with the data stored in this cube. Clients also call this when the
+    /// server resends a loaded cube, because those block changes never pass through the column's setBlock.
+    public void updatePrecipitationHeightMap() {
+        PrecipitationHeightMap heightMap = ((IColumnInternal) column).getPrecipitationIndex();
+        int miny = getCoords().getMinBlockY();
+
+        for (int x = 0; x < Cube.SIZE; x++) {
+            for (int z = 0; z < Cube.SIZE; z++) {
+                for (int y = Cube.SIZE - 1; y >= 0; y--) {
+                    heightMap.onBlockChange(x, miny + y, z, this.getBlock(x, y, z));
+                }
+            }
+        }
     }
 
     /**

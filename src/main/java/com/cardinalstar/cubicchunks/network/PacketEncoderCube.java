@@ -103,6 +103,8 @@ public class PacketEncoderCube extends CCPacketEncoder<PacketCube> {
 
         if (!cube.isCubeLoaded()) {
             cube.onCubeLoad();
+        } else {
+            cube.updatePrecipitationHeightMap();
         }
         cube.markForRenderUpdate();
     }

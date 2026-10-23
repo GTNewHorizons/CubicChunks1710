@@ -21,7 +21,7 @@
 
 package com.cardinalstar.cubicchunks.world.heightmap;
 
-import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
 import javax.annotation.ParametersAreNonnullByDefault;
 
 import com.cardinalstar.cubicchunks.CubicChunks;
@@ -32,18 +32,29 @@ import com.cardinalstar.cubicchunks.util.Coords;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.PooledByteBufAllocator;
+import io.netty.buffer.Unpooled;
 
 @ParametersAreNonnullByDefault
 public class HeightMap3D implements IHeightMap {
 
     private final Array2D_16x16<YIntervalTree> heightmap = new Array2D_16x16<>(YIntervalTree[]::new);
 
-    @Nonnull
+    /** Null for height maps that are not mirrored into {@code Chunk.heightMap}. */
+    @Nullable
     private VanillaHeightMap vanilla;
     private final int worldActualHeight;
 
     public HeightMap3D(int[] vanilla, int worldActualHeight) {
+        this(worldActualHeight);
         setVanillaHeightMap(vanilla);
+    }
+
+    /** Creates a height map that is not mirrored into a vanilla height map. */
+    protected HeightMap3D() {
+        this(0);
+    }
+
+    private HeightMap3D(int worldActualHeight) {
         this.worldActualHeight = worldActualHeight;
 
         for (int i = 0; i < 256; i++) {
@@ -70,6 +81,10 @@ public class HeightMap3D implements IHeightMap {
     }
 
     private void updateVanilla(int localX, int localZ, YIntervalTree tree) {
+        if (vanilla == null) {
+            return;
+        }
+
         // We don't want to insert >256 heights into the vanilla map because it breaks a ton of mod code.
         // So we scan from the logical top of the world (256 in OW, 128 in nether) to find the first air->block
         // transition in that column, defaulting to 0 if there are no blocks in that column (which happens in the end).
@@ -119,6 +134,11 @@ public class HeightMap3D implements IHeightMap {
                 readData(lX, lZ, buffer);
             }
         }
+    }
+
+    /** Replaces the contents of this height map with a copy of {@code source}. */
+    public void copyFrom(HeightMap3D source) {
+        readData(new CCPacketBuffer(Unpooled.wrappedBuffer(source.getData())));
     }
 
     public void writeData(int localX, int localZ, CCPacketBuffer buffer) {

@@ -54,6 +54,7 @@ import com.cardinalstar.cubicchunks.util.Mods;
 import com.cardinalstar.cubicchunks.world.core.IColumnInternal;
 import com.cardinalstar.cubicchunks.world.cube.Cube;
 import com.cardinalstar.cubicchunks.world.heightmap.HeightMap3D;
+import com.cardinalstar.cubicchunks.world.heightmap.PrecipitationHeightMap;
 import com.falsepattern.chunk.internal.DataRegistryImpl;
 
 import io.netty.buffer.ByteBuf;
@@ -77,6 +78,7 @@ public class IONbtReader {
         }
 
         readOpacityIndex(level, column);
+        readPrecipitationIndex(level, column);
 
         column.isModified = false; // its exactly the same as on disk so its not modified
         ((IColumnInternal) column).setColumn(true);
@@ -120,6 +122,19 @@ public class IONbtReader {
 
         if (nbt.hasKey("HeightMap3D", NBT.TAG_BYTE_ARRAY)) {
             heightMap3D.readData(new CCPacketBuffer(Unpooled.wrappedBuffer(nbt.getByteArray("HeightMap3D"))));
+        }
+    }
+
+    private static void readPrecipitationIndex(NBTTagCompound nbt, Chunk chunk) {
+        PrecipitationHeightMap precipitation = ((IColumnInternal) chunk).getPrecipitationIndex();
+
+        if (nbt.hasKey("PrecipitationHeightMap3D", NBT.TAG_BYTE_ARRAY)) {
+            precipitation
+                .readData(new CCPacketBuffer(Unpooled.wrappedBuffer(nbt.getByteArray("PrecipitationHeightMap3D"))));
+        } else {
+            // Saved before this index existed. Opaque blocks are a close approximation, and each cube corrects its own
+            // range when it loads.
+            precipitation.copyFrom((HeightMap3D) ((IColumn) chunk).getOpacityIndex());
         }
     }
 
