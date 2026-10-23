@@ -23,6 +23,7 @@ package com.cardinalstar.cubicchunks.world.core;
 
 import com.cardinalstar.cubicchunks.api.IColumn;
 import com.cardinalstar.cubicchunks.network.CCPacketBuffer;
+import com.cardinalstar.cubicchunks.world.heightmap.PrecipitationHeightMap;
 
 public interface IColumnInternal extends IColumn {
 
@@ -40,4 +41,9 @@ public interface IColumnInternal extends IColumn {
     void writeHeightmapDataForClient(CCPacketBuffer out);
 
     void loadClientHeightmapData(CCPacketBuffer in);
+
+    /**
+     * Returns the blocks that stop rain and snow in this column, including the last known contents of unloaded cubes.
+     */
+    PrecipitationHeightMap getPrecipitationIndex();
 }

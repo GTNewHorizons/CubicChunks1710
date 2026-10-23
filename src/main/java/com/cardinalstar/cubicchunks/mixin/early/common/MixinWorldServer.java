@@ -20,6 +20,7 @@
  */
 package com.cardinalstar.cubicchunks.mixin.early.common;
 
+import static com.cardinalstar.cubicchunks.util.Coords.blockToCube;
 import static com.cardinalstar.cubicchunks.util.ReflectionUtil.cast;
 
 import java.io.File;
@@ -31,8 +32,10 @@ import java.util.TreeSet;
 
 import javax.annotation.ParametersAreNonnullByDefault;
 
+import net.minecraft.block.Block;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityTracker;
+import net.minecraft.init.Blocks;
 import net.minecraft.server.management.PlayerManager;
 import net.minecraft.world.ChunkCoordIntPair;
 import net.minecraft.world.NextTickListEntry;
@@ -74,6 +77,7 @@ import com.cardinalstar.cubicchunks.world.CubeSpawnerAnimals;
 import com.cardinalstar.cubicchunks.world.ICubicWorldProvider;
 import com.cardinalstar.cubicchunks.world.ISpawnerAnimals;
 import com.cardinalstar.cubicchunks.world.chunkloader.CubicChunkManager;
+import com.cardinalstar.cubicchunks.world.cube.ICubeProvider;
 import com.cardinalstar.cubicchunks.world.savedata.WorldFormatSavedData;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
@@ -295,6 +299,61 @@ public abstract class MixinWorldServer extends MixinWorld implements ICubicWorld
             target = "Lnet/minecraft/world/chunk/Chunk;getBlockStorageArray()[Lnet/minecraft/world/chunk/storage/ExtendedBlockStorage;"))
     private ExtendedBlockStorage[] getTickableStorages(Chunk column, Operation<ExtendedBlockStorage[]> original) {
         return ((IColumn) column).getTickableStorages();
+    }
+
+    // The precipitation height can point at a roof in an unloaded cube. The weather effects below would read or change
+    // blocks there and load the cube, so skip them unless their target cube is loaded.
+
+    @Unique
+    private boolean cc$isCubeUnloaded(int blockX, int blockY, int blockZ) {
+        return this.chunkProvider instanceof ICubeProvider cubes
+            && cubes.getLoadedCube(blockToCube(blockX), blockToCube(blockY), blockToCube(blockZ)) == null;
+    }
+
+    @WrapOperation(
+        method = "func_147456_g",
+        at = @At(value = "INVOKE", target = "Lnet/minecraft/world/WorldServer;canLightningStrikeAt(III)Z"),
+        require = 1)
+    private boolean skipLightningInUnloadedCubes(WorldServer world, int x, int y, int z, Operation<Boolean> original) {
+        // The bolt sets fire at its position and needs a block below it
+        if (cc$isCubeUnloaded(x, y, z) || cc$isCubeUnloaded(x, y - 1, z)) {
+            return false;
+        }
+
+        return original.call(world, x, y, z);
+    }
+
+    @WrapOperation(
+        method = "func_147456_g",
+        at = @At(value = "INVOKE", target = "Lnet/minecraft/world/WorldServer;isBlockFreezableNaturally(III)Z"),
+        require = 1)
+    private boolean skipFreezingInUnloadedCubes(WorldServer world, int x, int y, int z, Operation<Boolean> original) {
+        return !cc$isCubeUnloaded(x, y, z) && original.call(world, x, y, z);
+    }
+
+    @WrapOperation(
+        method = "func_147456_g",
+        at = @At(value = "INVOKE", target = "Lnet/minecraft/world/WorldServer;func_147478_e(IIIZ)Z"),
+        require = 1)
+    private boolean skipSnowInUnloadedCubes(WorldServer world, int x, int y, int z, boolean checkLight,
+        Operation<Boolean> original) {
+        // Snow layers also check the block they would rest on
+        if (cc$isCubeUnloaded(x, y, z) || cc$isCubeUnloaded(x, y - 1, z)) {
+            return false;
+        }
+
+        return original.call(world, x, y, z, checkLight);
+    }
+
+    @WrapOperation(
+        method = "func_147456_g",
+        at = @At(
+            value = "INVOKE",
+            target = "Lnet/minecraft/world/WorldServer;getBlock(III)Lnet/minecraft/block/Block;"),
+        require = 1)
+    private Block skipRainFillInUnloadedCubes(WorldServer world, int x, int y, int z, Operation<Block> original) {
+        // Only used to let cauldrons fill with rain; air does nothing
+        return cc$isCubeUnloaded(x, y, z) ? Blocks.air : original.call(world, x, y, z);
     }
 
     /// Immediate block updates rarely work well in CC. Vanilla expects there to be a hard limit to the number of steps
