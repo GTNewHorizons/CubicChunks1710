@@ -287,6 +287,19 @@ public abstract class MixinChunk implements IColumn, IColumnInternal {
         return false;
     }
 
+    /**
+     * Vanilla reads the old height from {@code heightMap}, which is capped at the world's actual height for mods. Use
+     * the real top instead, so placing or removing the top block above that height still relights the column below.
+     */
+    @ModifyVariable(method = "func_150807_a", at = @At(value = "STORE"), name = "j1")
+    private int setBlockState_CubicChunks_realOldHeight(int oldHeightValue, int localX, int y, int localZ, Block block,
+        int meta) {
+        if (!isColumn) {
+            return oldHeightValue;
+        }
+        return getTopYWithStaging(localX, localZ) + 1;
+    }
+
     @Inject(
         method = "func_150807_a",
         at = @At(value = "INVOKE", target = "Lnet/minecraft/world/chunk/Chunk;relightBlock(III)V"))
@@ -300,7 +313,7 @@ public abstract class MixinChunk implements IColumn, IColumnInternal {
                     .doOnBlockSetLightUpdates(
                         (Chunk) (Object) this,
                         localX,
-                        getHeightValue(localX, localZ),
+                        getTopYWithStaging(localX, localZ) + 1,
                         localY,
                         localZ);
             } else {
@@ -869,6 +882,19 @@ public abstract class MixinChunk implements IColumn, IColumnInternal {
     // public boolean needsSaving(boolean p_76601_1_) - TODO: needsSaving
 
     // ==============================================
+    // canBlockSeeTheSky
+    // ==============================================
+
+    @Inject(method = "canBlockSeeTheSky", at = @At(value = "HEAD"), cancellable = true)
+    private void canBlockSeeTheSky_CubicChunks_Replace(int localX, int y, int localZ,
+        CallbackInfoReturnable<Boolean> cbi) {
+        if (isColumn) {
+            // heightMap is capped at the world's actual height, so it cannot see a roof above it
+            cbi.setReturnValue(y > getTopYWithStaging(localX, localZ));
+        }
+    }
+
+    // ==============================================
     // getPrecipitationHeight
     // ==============================================
 
@@ -1039,7 +1065,11 @@ public abstract class MixinChunk implements IColumn, IColumnInternal {
 
     @Override
     public int getTopYWithStaging(int localX, int localZ) {
-        return heightMap[localZ << 4 | localX] - 1;
+        if (!isColumn) {
+            return heightMap[localZ << 4 | localX] - 1;
+        }
+        // The real top, which can be above the world's actual height. heightMap holds a capped copy for mods.
+        return opacityIndex.getTopBlockY(localX, localZ);
     }
 
     @Override
@@ -1139,6 +1169,7 @@ public abstract class MixinChunk implements IColumn, IColumnInternal {
     @Override
     @Overwrite
     public int getHeightValue(int localX, int localZ) {
-        return getTopYWithStaging(localX, localZ) + 1;
+        // Mod-facing vanilla height: capped at the world's actual height, see HeightMap3D
+        return heightMap[localZ << 4 | localX];
     }
 }
