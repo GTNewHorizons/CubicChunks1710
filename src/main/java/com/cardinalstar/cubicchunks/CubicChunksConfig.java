@@ -160,9 +160,12 @@ public class CubicChunksConfig {
     public static final class Optimizations {
 
         @Config.LangKey("cubicchunks.config.optimizations.background_threads")
-        @Config.Comment("Maximum number of threads to use for background tasks (world I/O, noise generation, etc).")
-        public int backgroundThreads = ManagementFactory.getOperatingSystemMXBean()
-            .getAvailableProcessors() / 2;
+        @Config.Comment("Maximum number of threads to use for background tasks (world I/O, noise generation, etc)."
+            + " At least one is always used.")
+        public int backgroundThreads = Math.max(
+            1,
+            ManagementFactory.getOperatingSystemMXBean()
+                .getAvailableProcessors() / 2);
 
     }
 
