@@ -36,7 +36,8 @@ public class TaskPool {
     public static void init() {
         THREADS.clear();
 
-        int count = CubicChunksConfig.optimizations.backgroundThreads;
+        // Saves only run on these workers, so a 1-CPU default (or 0 in the config) must still start one.
+        int count = Math.max(1, CubicChunksConfig.optimizations.backgroundThreads);
 
         for (int i = 0; i < count; i++) {
             Thread worker = new WorkerThread();
@@ -198,8 +199,12 @@ public class TaskPool {
 
                 // noinspection unchecked
                 executor.execute((List<ITaskFuture<TTask, TResult>>) (List<?>) tasks);
-            } catch (Exception e) {
-                CubicChunks.LOGGER.error("Could not run background task", e);
+            } catch (Throwable t) {
+                // Keep the worker alive and wake anyone waiting on a future the executor did not complete.
+                CubicChunks.LOGGER.error("Could not run background task", t);
+                for (TaskFuture<TTask, TResult> task : tasks) {
+                    if (!task.isDone()) task.fail(t);
+                }
             }
         }
     }
