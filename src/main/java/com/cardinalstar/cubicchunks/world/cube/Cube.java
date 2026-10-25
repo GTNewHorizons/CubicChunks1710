@@ -79,6 +79,7 @@ import com.cardinalstar.cubicchunks.world.ICubicWorld;
 import com.cardinalstar.cubicchunks.world.core.IColumnInternal;
 import com.cardinalstar.cubicchunks.world.core.ICubicTicketInternal;
 import com.cardinalstar.cubicchunks.world.cube.blockview.IBlockView;
+import com.cardinalstar.cubicchunks.world.heightmap.HeightMap3D;
 import com.cardinalstar.cubicchunks.world.heightmap.PrecipitationHeightMap;
 import com.gtnewhorizon.gtnhlib.blockpos.BlockPos;
 
@@ -630,34 +631,75 @@ public class Cube implements ICube {
     /// We never remove the data from the height maps - we only upsert it to match this cube's contents.
     /// This is so that skylight calculations and precipitation are correct even when high-up cubes have been unloaded.
     public void updateHeightMap() {
-        IHeightMap heightMap = ((IColumn) column).getOpacityIndex();
+        IHeightMap opacityIndex = ((IColumn) column).getOpacityIndex();
+        PrecipitationHeightMap precipitationIndex = ((IColumnInternal) column).getPrecipitationIndex();
         int miny = getCoords().getMinBlockY();
 
-        for (int x = 0; x < Cube.SIZE; x++) {
-            for (int z = 0; z < Cube.SIZE; z++) {
-                for (int y = Cube.SIZE - 1; y >= 0; y--) {
-                    Block newBlock = this.getBlock(x, y, z);
+        int[] opaque = new int[Cube.SIZE * Cube.SIZE];
+        int[] stopsPrecipitation = new int[Cube.SIZE * Cube.SIZE];
+        collectHeightMapBits(opaque, stopsPrecipitation);
 
-                    heightMap.onOpacityChange(x, miny + y, z, newBlock.getLightOpacity() > 0);
+        boolean changed = false;
+        for (int z = 0; z < Cube.SIZE; z++) {
+            for (int x = 0; x < Cube.SIZE; x++) {
+                int i = z << 4 | x;
+
+                if (opacityIndex instanceof HeightMap3D heightMap) {
+                    changed |= heightMap.setBits(x, z, miny, Cube.SIZE, opaque[i]);
+                } else {
+                    for (int y = 0; y < Cube.SIZE; y++) {
+                        opacityIndex.onOpacityChange(x, miny + y, z, (opaque[i] >>> y & 1) != 0);
+                    }
+                    changed = true;
                 }
+
+                changed |= precipitationIndex.setBits(x, z, miny, Cube.SIZE, stopsPrecipitation[i]);
             }
         }
 
-        updatePrecipitationHeightMap();
-
-        column.setChunkModified();
+        // This marks every loaded cube of the column dirty, so only do it when a height map has to be saved
+        if (changed) {
+            column.setChunkModified();
+        }
     }
 
     /// Update the column's precipitation height map with the data stored in this cube. Clients also call this when the
     /// server resends a loaded cube, because those block changes never pass through the column's setBlock.
     public void updatePrecipitationHeightMap() {
-        PrecipitationHeightMap heightMap = ((IColumnInternal) column).getPrecipitationIndex();
+        PrecipitationHeightMap precipitationIndex = ((IColumnInternal) column).getPrecipitationIndex();
         int miny = getCoords().getMinBlockY();
 
-        for (int x = 0; x < Cube.SIZE; x++) {
+        int[] stopsPrecipitation = new int[Cube.SIZE * Cube.SIZE];
+        collectHeightMapBits(null, stopsPrecipitation);
+
+        for (int z = 0; z < Cube.SIZE; z++) {
+            for (int x = 0; x < Cube.SIZE; x++) {
+                precipitationIndex.setBits(x, z, miny, Cube.SIZE, stopsPrecipitation[z << 4 | x]);
+            }
+        }
+    }
+
+    /// For each block column ({@code z << 4 | x}), sets bit y in {@code opaque} when the block at local y blocks light,
+    /// and in {@code stopsPrecipitation} when it stops rain. Either array may be null.
+    private void collectHeightMapBits(@Nullable int[] opaque, @Nullable int[] stopsPrecipitation) {
+        if (storage == null) {
+            return; // all air
+        }
+
+        for (int y = 0; y < Cube.SIZE; y++) {
+            int bit = 1 << y;
+
             for (int z = 0; z < Cube.SIZE; z++) {
-                for (int y = Cube.SIZE - 1; y >= 0; y--) {
-                    heightMap.onBlockChange(x, miny + y, z, this.getBlock(x, y, z));
+                for (int x = 0; x < Cube.SIZE; x++) {
+                    Block block = this.getBlock(x, y, z);
+                    int i = z << 4 | x;
+
+                    if (opaque != null && block.getLightOpacity() > 0) {
+                        opaque[i] |= bit;
+                    }
+                    if (stopsPrecipitation != null && PrecipitationHeightMap.blocksPrecipitation(block)) {
+                        stopsPrecipitation[i] |= bit;
+                    }
                 }
             }
         }
