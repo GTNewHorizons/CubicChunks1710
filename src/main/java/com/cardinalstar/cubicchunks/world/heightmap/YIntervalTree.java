@@ -4,58 +4,26 @@ import java.util.Arrays;
 
 import com.cardinalstar.cubicchunks.network.CCPacketBuffer;
 import com.cardinalstar.cubicchunks.util.Coords;
-import com.cardinalstar.cubicchunks.util.XSTR;
 
 /**
  * An interval set that tracks which integer Y coordinates are occupied (have a solid block).
  * <p>
- * Internally, contiguous runs of occupied Y values are merged into disjoint intervals [lo, hi].
- * The structure is a treap (BST ordered by {@code lo}, heap-ordered by random {@code prio}),
- * backed entirely by parallel {@code int[]} arrays so that no per-node Java objects are allocated
- * after construction.
+ * Contiguous runs of occupied Y values are merged into disjoint, non-adjacent intervals [lo, hi], stored in ascending
+ * order as {@code lo, hi} pairs in a single exact-length {@code int[]}. A height map holds one of these per block
+ * column, and a block column rarely has more than a handful of runs, so a flat array is both the smallest
+ * representation and faster than a tree: lookups are a binary search and changes that keep the run count only
+ * rewrite a bound in place. Adding or removing a run copies the array.
  * <p>
- * All operations are O(log n) where n is the number of disjoint intervals.
+ * Not thread-safe. Readers on other threads (JourneyMap reads precipitation heights on its own thread) may see a stale
+ * or briefly inconsistent state, but never an exception: every reader reads {@link #runs} once, an array is only edited
+ * in place without changing its length, and a replaced array is never written again.
  */
 public final class YIntervalTree {
 
-    private static final int NULL = -1;
-    private static final int INITIAL_CAPACITY = 8;
+    private static final int[] EMPTY = new int[0];
 
-    // Node pool: 5 parallel int[] arrays indexed by slot number.
-    // When a node is freed, left[node] is repurposed as the free-list next pointer.
-    private int[] lo; // interval lower bound (inclusive)
-    private int[] hi; // interval upper bound (inclusive)
-    private int[] left; // left child index, or free-list next when node is freed
-    private int[] right; // right child index
-    private int[] prio; // treap priority (random, maintains heap invariant)
-
-    private int root = NULL;
-    private int freeHead = NULL; // head of free-node singly-linked list (through left[])
-    private int nodeCount = 0; // live node count
-    private int capacity;
-
-    /** Cached hi value of the rightmost node; {@link Coords#NO_HEIGHT} when tree is empty. */
-    private int topY = Coords.NO_HEIGHT;
-    /** Cached lo value of the leftmost node; {@link Coords#NO_HEIGHT} when tree is empty. */
-    private int bottomY = Coords.NO_HEIGHT;
-
-    // Temporary outputs of split() — avoids per-call array allocation.
-    // Only valid immediately after a split() call; consumed before any subsequent split().
-    private int splitL;
-    private int splitR;
-
-    private final XSTR rng = new XSTR();
-
-    public YIntervalTree() {
-        capacity = INITIAL_CAPACITY;
-        lo = new int[capacity];
-        hi = new int[capacity];
-        left = new int[capacity];
-        right = new int[capacity];
-        prio = new int[capacity];
-        Arrays.fill(left, NULL);
-        Arrays.fill(right, NULL);
-    }
+    /** {@code lo0, hi0, lo1, hi1, ...}, ascending, with at least one free Y between neighbouring runs. */
+    private int[] runs = EMPTY;
 
     // ---- Public API -------------------------------------------------------
 
@@ -64,53 +32,7 @@ public final class YIntervalTree {
      * Adjacent or bridging intervals are merged automatically.
      */
     public void add(int y) {
-        // Single BST pass finds both predecessor (max lo <= y) and successor (min lo > y).
-        int node = root;
-        int pred = NULL, succ = NULL;
-        while (node != NULL) {
-            if (lo[node] <= y) {
-                pred = node;
-                node = right[node];
-            } else {
-                succ = node;
-                node = left[node];
-            }
-        }
-
-        if (pred != NULL && hi[pred] >= y) {
-            return; // y is already inside [lo[pred], hi[pred]]
-        }
-
-        boolean leftAdj = pred != NULL && hi[pred] == y - 1;
-        boolean rightAdj = succ != NULL && lo[succ] == y + 1;
-
-        if (leftAdj) {
-            if (rightAdj) {
-                // Bridge: absorb succ into pred in-place, then delete succ node.
-                // hi[pred] = hi[succ] — no BST re-keying needed (lo[pred] unchanged).
-                // lo[succ] = y+1 is provably not any other interval's lo, so BST still valid after succ removal.
-                hi[pred] = hi[succ];
-                deleteInterval(lo[succ]);
-                // topY: hi[succ] <= topY always (was never > max), so unchanged.
-                // bottomY: lo[pred] unchanged, so unchanged.
-            } else {
-                // Extend pred's right end in-place — hi is not the BST key, zero structural changes.
-                hi[pred] = y;
-                if (y > topY) topY = y;
-                // bottomY unchanged: lo[pred] stays the same.
-            }
-        } else if (rightAdj) {
-            // Extend succ's left end in-place.
-            // Safe: y is unoccupied, so no other interval has lo==y; BST property holds.
-            lo[succ] = y;
-            if (y < bottomY || bottomY == Coords.NO_HEIGHT) bottomY = y;
-            // topY unchanged: hi[succ] stays the same.
-        } else {
-            // Isolated point: insert a brand-new singleton interval.
-            insertInterval(y, y);
-            if (y > topY) topY = y;
-            if (bottomY == Coords.NO_HEIGHT || y < bottomY) bottomY = y;
-        }
+        set(y, true);
     }
 
     /**
@@ -118,105 +40,49 @@ public final class YIntervalTree {
      * Splits the containing interval if Y is in its interior.
      */
     public void remove(int y) {
-        int pred = findPred(y);
-
-        if (pred == NULL || hi[pred] < y) {
-            return; // y is not in any interval
-        }
-
-        int predLo = lo[pred];
-        int predHi = hi[pred];
-
-        if (predLo == y && predHi == y) {
-            // Singleton: delete the node, then recompute both extremes via tree walk
-            deleteInterval(predLo);
-            if (y == topY) updateTopY();
-            if (y == bottomY) updateBottomY();
-        } else if (predHi == y) {
-            // Trim right end in-place (hi is not the BST key)
-            hi[pred] = y - 1;
-            // No other interval has hi >= y (y was global max), so new topY = y-1
-            if (y == topY) topY = y - 1;
-            // bottomY unchanged: lo[pred] is still predLo, still the minimum if it was before
-        } else if (predLo == y) {
-            // Trim left end in-place (safe: no interval has lo in (y, predHi])
-            lo[pred] = y + 1;
-            // lo[pred] was the global min, now it's y+1
-            if (y == bottomY) bottomY = y + 1;
-            // topY unchanged: predHi > y so the interval still contributes hi = predHi
-        } else {
-            // Interior split: shrink left half in-place, insert right half.
-            // y cannot equal topY (predHi > y would exceed topY) or bottomY (predLo < y).
-            hi[pred] = y - 1;
-            // Fast path (expected ~50%): if pred has higher priority than the new node,
-            // [y+1, predHi] belongs in pred's right subtree. All nodes there have
-            // lo > predHi > y, so the walk always goes left and split gives splitL=NULL.
-            int n = allocNode(y + 1, predHi);
-            if (prio[pred] >= prio[n]) {
-                int parent = NULL, cur = right[pred];
-                while (cur != NULL && prio[cur] >= prio[n]) {
-                    parent = cur;
-                    cur = left[cur];
-                }
-                right[n] = cur;
-                left[n] = NULL;
-                if (parent == NULL) right[pred] = n;
-                else left[parent] = n;
-            } else {
-                insertAllocated(n, y + 1);
-            }
-        }
+        set(y, false);
     }
 
     /**
      * Returns the maximum occupied Y coordinate, or {@link Coords#NO_HEIGHT} if the tree is empty.
-     * O(1).
      */
     public int getTopY() {
-        return topY;
+        int[] r = runs;
+        return r.length == 0 ? Coords.NO_HEIGHT : r[r.length - 1];
     }
 
     /**
      * Returns the minimum occupied Y coordinate, or {@link Coords#NO_HEIGHT} if the tree is empty.
-     * O(1).
      */
     public int getBottomY() {
-        return bottomY;
+        int[] r = runs;
+        return r.length == 0 ? Coords.NO_HEIGHT : r[0];
     }
 
     /**
      * Returns the first air Y just above the solid interval at or below {@code startY},
-     * i.e. {@code hi[pred] + 1} where {@code pred} is the highest interval with lo &lt;= startY.
+     * i.e. {@code hi + 1} of the highest interval with lo &lt;= startY.
      * Returns {@link Coords#NO_HEIGHT} if no solid exists at or below {@code startY}.
-     * O(log n).
      */
     public int getTopAirY(int startY) {
-        int pred = findPred(startY);
-        if (pred == NULL) return Coords.NO_HEIGHT;
-        return hi[pred] + 1;
+        int[] r = runs;
+        int pred = findPred(r, startY);
+        if (pred < 0) return Coords.NO_HEIGHT;
+        return r[pred + 1] + 1;
     }
 
     /**
      * Returns the first air Y just below the solid interval at or above {@code startY},
-     * i.e. {@code lo[succ] - 1} where {@code succ} is the lowest interval with lo &gt; startY
-     * (or the interval containing {@code startY} if it is solid).
+     * i.e. {@code lo - 1} of the lowest interval with lo &gt; startY
+     * (or of the interval containing {@code startY} if it is solid).
      * Returns {@link Coords#NO_HEIGHT} if no solid exists at or above {@code startY}.
-     * O(log n).
      */
     public int getBottomAirY(int startY) {
-        int node = root;
-        int pred = NULL, succ = NULL;
-        while (node != NULL) {
-            if (lo[node] <= startY) {
-                pred = node;
-                node = right[node];
-            } else {
-                succ = node;
-                node = left[node];
-            }
-        }
-        if (pred != NULL && hi[pred] >= startY) return lo[pred] - 1; // startY is solid
-        if (succ != NULL) return lo[succ] - 1; // startY is air; anchor on solid above
+        int[] r = runs;
+        int pred = findPred(r, startY);
+        if (pred >= 0 && r[pred + 1] >= startY) return r[pred] - 1; // startY is solid
+        int succ = pred + 2;
+        if (succ < r.length) return r[succ] - 1; // startY is air; anchor on solid above
         return Coords.NO_HEIGHT;
     }
 
@@ -224,22 +90,13 @@ public final class YIntervalTree {
      * Returns the first Y' &gt;= {@code startY} that IS occupied (first solid at or above startY).
      * If {@code startY} is already occupied, returns {@code startY}.
      * Returns {@link Coords#NO_HEIGHT} if no solid exists at or above {@code startY}.
-     * O(log n).
      */
     public int getTopSolidY(int startY) {
-        int node = root;
-        int pred = NULL, succ = NULL;
-        while (node != NULL) {
-            if (lo[node] <= startY) {
-                pred = node;
-                node = right[node];
-            } else {
-                succ = node;
-                node = left[node];
-            }
-        }
-        if (pred != NULL && hi[pred] >= startY) return startY;
-        if (succ != NULL) return lo[succ];
+        int[] r = runs;
+        int pred = findPred(r, startY);
+        if (pred >= 0 && r[pred + 1] >= startY) return startY;
+        int succ = pred + 2;
+        if (succ < r.length) return r[succ];
         return Coords.NO_HEIGHT;
     }
 
@@ -247,96 +104,64 @@ public final class YIntervalTree {
      * Returns the first Y' &lt;= {@code startY} that IS occupied (first solid at or below startY).
      * If {@code startY} is already occupied, returns {@code startY}.
      * Returns {@link Coords#NO_HEIGHT} if no solid exists at or below {@code startY}.
-     * O(log n).
      */
     public int getBottomSolidY(int startY) {
-        int pred = findPred(startY);
-        if (pred == NULL) return Coords.NO_HEIGHT;
-        if (hi[pred] >= startY) return startY;
-        return hi[pred];
+        int[] r = runs;
+        int pred = findPred(r, startY);
+        if (pred < 0) return Coords.NO_HEIGHT;
+        if (r[pred + 1] >= startY) return startY;
+        return r[pred + 1];
     }
 
     /**
      * Returns true if Y is occupied.
      */
     public boolean get(int y) {
-        int pred = findPred(y);
-        return pred != NULL && hi[pred] >= y;
+        int[] r = runs;
+        int pred = findPred(r, y);
+        return pred >= 0 && r[pred + 1] >= y;
     }
 
     /**
      * Sets Y as occupied ({@code present=true}) or unoccupied ({@code present=false}).
      * Returns true when the tree was updated.
-     * Uses a single BST traversal to find predecessor and successor, avoiding the double
-     * traversal that would occur if get() + add()/remove() were called separately.
      */
     public boolean set(int y, boolean present) {
-        // Single combined pred+succ traversal
-        int node = root;
-        int pred = NULL, succ = NULL;
-        while (node != NULL) {
-            if (lo[node] <= y) {
-                pred = node;
-                node = right[node];
-            } else {
-                succ = node;
-                node = left[node];
-            }
-        }
-
-        boolean was = pred != NULL && hi[pred] >= y;
+        int pred = findPred(runs, y);
+        boolean was = pred >= 0 && runs[pred + 1] >= y;
         if (present == was) return false;
 
         if (present) {
-            // Add path — same in-place adjacency logic as add()
-            boolean leftAdj = pred != NULL && hi[pred] == y - 1;
-            boolean rightAdj = succ != NULL && lo[succ] == y + 1;
-            if (leftAdj) {
-                if (rightAdj) {
-                    hi[pred] = hi[succ];
-                    deleteInterval(lo[succ]);
-                } else {
-                    hi[pred] = y;
-                    if (y > topY) topY = y;
-                }
+            int succ = pred + 2;
+            boolean leftAdj = pred >= 0 && runs[pred + 1] == y - 1;
+            boolean rightAdj = succ < runs.length && runs[succ] == y + 1;
+            if (leftAdj && rightAdj) {
+                // y bridges pred and succ: pred takes succ's hi, succ goes away
+                int[] merged = new int[runs.length - 2];
+                System.arraycopy(runs, 0, merged, 0, pred + 1);
+                merged[pred + 1] = runs[succ + 1];
+                System.arraycopy(runs, succ + 2, merged, pred + 2, runs.length - succ - 2);
+                runs = merged;
+            } else if (leftAdj) {
+                runs[pred + 1] = y;
             } else if (rightAdj) {
-                lo[succ] = y;
-                if (y < bottomY || bottomY == Coords.NO_HEIGHT) bottomY = y;
+                runs[succ] = y;
             } else {
-                insertInterval(y, y);
-                if (y > topY) topY = y;
-                if (bottomY == Coords.NO_HEIGHT || y < bottomY) bottomY = y;
+                runs = insert(runs, succ, y, y);
             }
         } else {
-            // Remove path: pred already found (it contains y since was==true), no second traversal
-            int predLo = lo[pred];
-            int predHi = hi[pred];
-            if (predLo == y && predHi == y) {
-                deleteInterval(predLo);
-                if (y == topY) updateTopY();
-                if (y == bottomY) updateBottomY();
-            } else if (predHi == y) {
-                hi[pred] = y - 1;
-                if (y == topY) topY = y - 1;
-            } else if (predLo == y) {
-                lo[pred] = y + 1;
-                if (y == bottomY) bottomY = y + 1;
+            int lo = runs[pred];
+            int hi = runs[pred + 1];
+            if (lo == y && hi == y) {
+                runs = delete(runs, pred);
+            } else if (hi == y) {
+                runs[pred + 1] = y - 1;
+            } else if (lo == y) {
+                runs[pred] = y + 1;
             } else {
-                hi[pred] = y - 1;
-                int n = allocNode(y + 1, predHi);
-                if (prio[pred] >= prio[n]) {
-                    int parent = NULL, cur = right[pred];
-                    while (cur != NULL && prio[cur] >= prio[n]) {
-                        parent = cur;
-                        cur = left[cur];
-                    }
-                    right[n] = cur;
-                    left[n] = NULL;
-                    if (parent == NULL) right[pred] = n;
-                    else left[parent] = n;
-                } else {
-                    insertAllocated(n, y + 1);
-                }
+                // interior: [lo, y - 1] stays at pred, [y + 1, hi] follows it
+                runs[pred + 1] = y - 1;
+                runs = insert(runs, pred + 2, y + 1, hi);
             }
         }
         return true;
@@ -349,22 +174,10 @@ public final class YIntervalTree {
      * All values are written as VarInts.
      */
     public void writeData(CCPacketBuffer buf) {
-        buf.writeVarIntToBuffer(nodeCount);
-        if (nodeCount == 0) return;
-
-        // In-order traversal via an explicit int[] stack to avoid recursion overhead
-        int[] stack = new int[nodeCount + 1];
-        int top = -1;
-        int cur = root;
-        while (cur != NULL || top >= 0) {
-            while (cur != NULL) {
-                stack[++top] = cur;
-                cur = left[cur];
-            }
-            cur = stack[top--];
-            buf.writeVarIntToBuffer(lo[cur]);
-            buf.writeVarIntToBuffer(hi[cur]);
-            cur = right[cur];
+        int[] r = runs;
+        buf.writeVarIntToBuffer(r.length >> 1);
+        for (int value : r) {
+            buf.writeVarIntToBuffer(value);
         }
     }
 
@@ -372,237 +185,91 @@ public final class YIntervalTree {
      * Reads tree contents written by {@link #writeData}. Resets all existing state first.
      */
     public void readData(CCPacketBuffer buf) {
-        Arrays.fill(left, 0, capacity, NULL);
-        Arrays.fill(right, 0, capacity, NULL);
-        root = NULL;
-        freeHead = NULL;
-        nodeCount = 0;
-        topY = Coords.NO_HEIGHT;
-        bottomY = Coords.NO_HEIGHT;
-
         int count = buf.readVarIntFromBuffer();
-        // Pairs arrive sorted, non-overlapping, non-adjacent: no merging occurs on insert
-        for (int i = 0; i < count; i++) {
-            int pairLo = buf.readVarIntFromBuffer();
-            int pairHi = buf.readVarIntFromBuffer();
-            insertInterval(pairLo, pairHi);
-        }
-        updateTopY();
-        updateBottomY();
-    }
-
-    // ---- Node pool --------------------------------------------------------
-
-    private int allocNode(int newLo, int newHi) {
-        int n;
-        if (freeHead != NULL) {
-            n = freeHead;
-            freeHead = left[n]; // advance free list
-            left[n] = NULL;
-            right[n] = NULL;
-        } else {
-            if (nodeCount == capacity) grow();
-            n = nodeCount;
-            // left[n] and right[n] are already NULL: constructor/grow() fill new slots with NULL
-        }
-        nodeCount++;
-        lo[n] = newLo;
-        hi[n] = newHi;
-        prio[n] = rng.nextInt();
-        return n;
-    }
-
-    private void freeNode(int n) {
-        nodeCount--;
-        left[n] = freeHead;
-        freeHead = n;
-    }
-
-    private void grow() {
-        int newCap = capacity * 2;
-        lo = Arrays.copyOf(lo, newCap);
-        hi = Arrays.copyOf(hi, newCap);
-        left = Arrays.copyOf(left, newCap);
-        right = Arrays.copyOf(right, newCap);
-        prio = Arrays.copyOf(prio, newCap);
-        Arrays.fill(left, capacity, newCap, NULL);
-        Arrays.fill(right, capacity, newCap, NULL);
-        capacity = newCap;
-    }
-
-    // ---- Treap core -------------------------------------------------------
-
-    /**
-     * Splits the subtree rooted at {@code node} into two treaps by key:
-     * {@link #splitL} receives all nodes with {@code lo < key},
-     * {@link #splitR} receives all nodes with {@code lo >= key}.
-     * Child pointers are modified in-place.
-     * Iterative to avoid method-call overhead and stack-frame allocation.
-     */
-    private void split(int node, int key) {
-        splitL = NULL;
-        splitR = NULL;
-        int lTail = NULL; // rightmost node in the L chain; right[lTail] is the next slot to fill
-        int rTail = NULL; // leftmost node in the R chain; left[rTail] is the next slot to fill
-        while (node != NULL) {
-            if (lo[node] < key) {
-                if (lTail == NULL) splitL = node;
-                else right[lTail] = node;
-                lTail = node;
-                node = right[node]; // descend; right[lTail] will be updated on next iter or at end
-            } else {
-                if (rTail == NULL) splitR = node;
-                else left[rTail] = node;
-                rTail = node;
-                node = left[node];
-            }
-        }
-        if (lTail != NULL) right[lTail] = NULL;
-        if (rTail != NULL) left[rTail] = NULL;
-    }
-
-    /**
-     * Merges two treaps where all lo-values in {@code L} are less than all lo-values in {@code R}.
-     * Returns the root of the merged treap.
-     * Iterative to avoid method-call overhead and stack-frame allocation.
-     */
-    private int merge(int L, int R) {
-        if (L == NULL) return R;
-        if (R == NULL) return L;
-        // Unroll first iteration so the hot loop never needs a tail==NULL check.
-        int root;
-        int tail;
-        boolean tailGoRight;
-        if (prio[L] > prio[R]) {
-            root = L;
-            tail = L;
-            tailGoRight = true;
-            L = right[L];
-        } else {
-            root = R;
-            tail = R;
-            tailGoRight = false;
-            R = left[R];
-        }
-        while (L != NULL && R != NULL) {
-            int parent;
-            boolean goRight;
-            if (prio[L] > prio[R]) {
-                parent = L;
-                goRight = true;
-                L = right[L];
-            } else {
-                parent = R;
-                goRight = false;
-                R = left[R];
-            }
-            if (tailGoRight) right[tail] = parent;
-            else left[tail] = parent;
-            tail = parent;
-            tailGoRight = goRight;
-        }
-        int remaining = L != NULL ? L : R;
-        if (tailGoRight) right[tail] = remaining;
-        else left[tail] = remaining;
-        return root;
-    }
-
-    /** Returns the node index with the maximum {@code lo <= y}, or NULL if none exists. */
-    private int findPred(int y) {
-        int node = root;
-        int result = NULL;
-        while (node != NULL) {
-            if (lo[node] <= y) {
-                result = node;
-                node = right[node];
-            } else {
-                node = left[node];
-            }
-        }
-        return result;
-    }
-
-    private void insertInterval(int newLo, int newHi) {
-        insertAllocated(allocNode(newLo, newHi), newLo);
-    }
-
-    /**
-     * Inserts pre-allocated node {@code n} (with {@code lo[n]} already set to {@code newLo})
-     * into the tree using a walk-down + split, exactly as insertInterval does — but skips
-     * the allocNode call so callers can pre-check priority before deciding the insertion path.
-     */
-    private void insertAllocated(int n, int newLo) {
-        int nPrio = prio[n];
-        int parent = NULL;
-        boolean isRight = false;
-        int cur = root;
-        while (cur != NULL && prio[cur] >= nPrio) {
-            if (lo[cur] < newLo) {
-                parent = cur;
-                isRight = true;
-                cur = right[cur];
-            } else {
-                parent = cur;
-                isRight = false;
-                cur = left[cur];
-            }
-        }
-        split(cur, newLo);
-        left[n] = splitL;
-        right[n] = splitR;
-        if (parent == NULL) root = n;
-        else if (isRight) right[parent] = n;
-        else left[parent] = n;
-    }
-
-    private void deleteInterval(int loKey) {
-        // Walk to the unique node whose lo == loKey, then splice it out by merging its children.
-        // Saves one split vs the split/split/merge approach.
-        int parent = NULL;
-        boolean isRight = false;
-        int cur = root;
-        while (cur != NULL) {
-            int curLo = lo[cur];
-            if (curLo == loKey) {
-                int merged = merge(left[cur], right[cur]);
-                freeNode(cur);
-                if (parent == NULL) root = merged;
-                else if (isRight) right[parent] = merged;
-                else left[parent] = merged;
-                return;
-            } else if (curLo < loKey) {
-                parent = cur;
-                isRight = true;
-                cur = right[cur];
-            } else {
-                parent = cur;
-                isRight = false;
-                cur = left[cur];
-            }
-        }
-    }
-
-    private void updateTopY() {
-        if (root == NULL) {
-            topY = Coords.NO_HEIGHT;
+        if (count <= 0) {
+            runs = EMPTY;
             return;
         }
-        int node = root;
-        while (right[node] != NULL) {
-            node = right[node];
+        // each value takes at least one byte: reject a corrupt count before allocating for it
+        if (count > buf.readableBytes() / 2) {
+            throw new IndexOutOfBoundsException("height map run count " + count + " exceeds the remaining data");
         }
-        topY = hi[node];
+        int[] read = new int[count * 2];
+        for (int i = 0; i < read.length; i++) {
+            read[i] = buf.readVarIntFromBuffer();
+        }
+        runs = isNormalized(read) ? read : normalize(read);
     }
 
-    private void updateBottomY() {
-        if (root == NULL) {
-            bottomY = Coords.NO_HEIGHT;
-            return;
+    // ---- Internals --------------------------------------------------------
+
+    /** Returns the array index of the lo of the highest run in {@code r} with {@code lo <= y}, or -2 if none. */
+    private static int findPred(int[] r, int y) {
+        int low = 0;
+        int high = (r.length >> 1) - 1;
+        int result = -1;
+        while (low <= high) {
+            int mid = (low + high) >>> 1;
+            if (r[mid << 1] <= y) {
+                result = mid;
+                low = mid + 1;
+            } else {
+                high = mid - 1;
+            }
         }
-        int node = root;
-        while (left[node] != NULL) {
-            node = left[node];
+        return result << 1;
+    }
+
+    /** Appends [lo, hi] to {@code out}, merging it into the last run when they touch. Returns the new size. */
+    private static int append(int[] out, int size, int lo, int hi) {
+        if (size > 0 && (long) out[size - 1] + 1 >= lo) {
+            out[size - 1] = Math.max(out[size - 1], hi);
+            return size;
         }
-        bottomY = lo[node];
+        out[size] = lo;
+        out[size + 1] = hi;
+        return size + 2;
+    }
+
+    private static int[] insert(int[] runs, int at, int lo, int hi) {
+        int[] grown = new int[runs.length + 2];
+        System.arraycopy(runs, 0, grown, 0, at);
+        grown[at] = lo;
+        grown[at + 1] = hi;
+        System.arraycopy(runs, at, grown, at + 2, runs.length - at);
+        return grown;
+    }
+
+    private static int[] delete(int[] runs, int at) {
+        if (runs.length == 2) return EMPTY;
+        int[] shrunk = new int[runs.length - 2];
+        System.arraycopy(runs, 0, shrunk, 0, at);
+        System.arraycopy(runs, at + 2, shrunk, at, runs.length - at - 2);
+        return shrunk;
+    }
+
+    private static boolean isNormalized(int[] runs) {
+        for (int i = 0; i < runs.length; i += 2) {
+            if (runs[i] > runs[i + 1]) return false;
+            if (i > 0 && (long) runs[i - 1] + 1 >= runs[i]) return false;
+        }
+        return true;
+    }
+
+    /** Sorts and merges runs that arrived out of order, overlapping or touching. */
+    private static int[] normalize(int[] read) {
+        long[] pairs = new long[read.length >> 1];
+        for (int i = 0; i < pairs.length; i++) {
+            int lo = Math.min(read[2 * i], read[2 * i + 1]);
+            int hi = Math.max(read[2 * i], read[2 * i + 1]);
+            pairs[i] = (long) lo << 32 | (hi & 0xFFFFFFFFL);
+        }
+        Arrays.sort(pairs);
+        int[] out = new int[read.length];
+        int size = 0;
+        for (long pair : pairs) {
+            size = append(out, size, (int) (pair >> 32), (int) pair);
+        }
+        return size == out.length ? out : Arrays.copyOf(out, size);
     }
 }
