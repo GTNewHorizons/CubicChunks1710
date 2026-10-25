@@ -80,6 +80,36 @@ public class HeightMap3D implements IHeightMap {
         }
     }
 
+    /**
+     * Sets {@code length} Y values of one block column at once: Y {@code minY + i} is marked exactly when bit {@code i}
+     * of {@code bits} is set. Same result as calling {@link #onOpacityChange} for each of them, as one update.
+     * Returns true when the height map changed.
+     *
+     * @param length 1 to 32
+     */
+    public boolean setBits(int localX, int localZ, int minY, int length, int bits) {
+        YIntervalTree tree = this.heightmap.get(localX, localZ);
+        boolean changed;
+
+        if (minY >= CubicChunks.MIN_SUPPORTED_BLOCK_Y
+            && (long) minY + length - 1 <= CubicChunks.MAX_SUPPORTED_BLOCK_Y) {
+            changed = tree.setBits(minY, length, bits);
+        } else {
+            changed = false;
+            for (int i = 0; i < length; i++) {
+                int y = minY + i;
+                if (y <= CubicChunks.MAX_SUPPORTED_BLOCK_Y && y >= CubicChunks.MIN_SUPPORTED_BLOCK_Y) {
+                    changed |= tree.set(y, (bits >>> i & 1) != 0);
+                }
+            }
+        }
+
+        if (changed) {
+            updateVanilla(localX, localZ, tree);
+        }
+        return changed;
+    }
+
     private void updateVanilla(int localX, int localZ, YIntervalTree tree) {
         if (vanilla == null) {
             return;

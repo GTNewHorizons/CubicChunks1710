@@ -167,6 +167,71 @@ public final class YIntervalTree {
         return true;
     }
 
+    /**
+     * Sets the {@code length} Y values from {@code minY} at once: Y {@code minY + i} becomes occupied exactly when bit
+     * {@code i} of {@code bits} is set. Equivalent to calling {@link #set} for each of them, but reads and rewrites the
+     * range once. Returns true when the tree was updated.
+     *
+     * @param length 1 to 32
+     */
+    public boolean setBits(int minY, int length, int bits) {
+        if (length < 1 || length > 32) {
+            throw new IllegalArgumentException("length must be 1 to 32: " + length);
+        }
+        int maxY = minY + length - 1;
+        bits &= (int) ((1L << length) - 1);
+
+        // first run that ends at or above minY; runs before it end below the range
+        int first = findFirstEndingAtOrAbove(minY);
+        int current = 0;
+        int i = first;
+        for (; i < runs.length && runs[i] <= maxY; i += 2) {
+            current |= bitRange(Math.max(runs[i], minY) - minY, Math.min(runs[i + 1], maxY) - minY);
+        }
+        if (current == bits) return false;
+
+        // Runs [first, end) overlap the range; the first may start below it and the last may end above it. Build
+        // their replacement together with the runs just outside the range, which it joins when they touch, then copy
+        // the untouched runs around it into an exact-length array.
+        int end = i;
+        int[] window = new int[Integer.bitCount(bits) * 2 + 8];
+        int size = 0;
+        int keepBefore = first;
+        int keepAfter = end;
+        if (first > 0) {
+            size = append(window, size, runs[first - 2], runs[first - 1]);
+            keepBefore = first - 2;
+        }
+        if (first < end && runs[first] < minY) {
+            size = append(window, size, runs[first], minY - 1);
+        }
+        for (int rest = bits; rest != 0;) {
+            int from = Integer.numberOfTrailingZeros(rest);
+            int to = from + Integer.numberOfTrailingZeros(~(rest >>> from)) - 1;
+            size = append(window, size, minY + from, minY + to);
+            rest &= ~bitRange(from, to);
+        }
+        if (first < end && runs[end - 1] > maxY) {
+            size = append(window, size, maxY + 1, runs[end - 1]);
+        }
+        if (end < runs.length) {
+            size = append(window, size, runs[end], runs[end + 1]);
+            keepAfter = end + 2;
+        }
+
+        int total = keepBefore + size + runs.length - keepAfter;
+        if (total == 0) {
+            runs = EMPTY;
+            return true;
+        }
+        int[] updated = new int[total];
+        System.arraycopy(runs, 0, updated, 0, keepBefore);
+        System.arraycopy(window, 0, updated, keepBefore, size);
+        System.arraycopy(runs, keepAfter, updated, keepBefore + size, runs.length - keepAfter);
+        runs = updated;
+        return true;
+    }
+
     // ---- Serialization ----------------------------------------------------
 
     /**
@@ -218,6 +283,26 @@ public final class YIntervalTree {
             }
         }
         return result << 1;
+    }
+
+    /** Returns the array index of the lo of the lowest run with {@code hi >= y}, or {@code runs.length} if none. */
+    private int findFirstEndingAtOrAbove(int y) {
+        int low = 0;
+        int high = (runs.length >> 1) - 1;
+        while (low <= high) {
+            int mid = (low + high) >>> 1;
+            if (runs[(mid << 1) + 1] < y) {
+                low = mid + 1;
+            } else {
+                high = mid - 1;
+            }
+        }
+        return low << 1;
+    }
+
+    /** Bits {@code from} to {@code to} (inclusive, 0 to 31) set. */
+    private static int bitRange(int from, int to) {
+        return (int) (((1L << (to + 1)) - 1) & -(1L << from));
     }
 
     /** Appends [lo, hi] to {@code out}, merging it into the last run when they touch. Returns the new size. */
