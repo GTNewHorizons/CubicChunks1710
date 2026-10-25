@@ -119,8 +119,7 @@ public class LightingManager implements ILightingManager {
 
     @Override
     public void writeToNbt(ICube cube, NBTTagCompound lightingInfo) {
-        int[] lastHeightmap = cube.getColumn().heightMap;
-        lightingInfo.setIntArray("LastHeightMap", lastHeightmap);
+        lightingInfo.setIntArray("LastHeightMap", currentHeights(cube.getColumn()));
         LightingHooks.writeNeighborLightChecksToNBT(cube, lightingInfo);
     }
 
@@ -203,6 +202,18 @@ public class LightingManager implements ILightingManager {
     }
 
     /**
+     * The real top block Y + 1 for each block column, as compared on load. Not {@code Chunk.heightMap}: that is capped
+     * at the world's actual height for mods.
+     */
+    private static int[] currentHeights(IColumnInternal column) {
+        int[] heights = new int[Cube.SIZE * Cube.SIZE];
+        for (int i = 0; i < heights.length; i++) {
+            heights[i] = column.getTopYWithStaging(i & 0xF, i >> 4) + 1;
+        }
+        return heights;
+    }
+
+    /**
      * If lastHeightMap is not null, update current height map from saved data
      */
     private void tryScheduleOnLoadHeightChangeRelight(ICube cube) {
@@ -271,7 +282,7 @@ public class LightingManager implements ILightingManager {
 
         @Override
         public boolean needsSaving(ICube cube) {
-            int[] heightmap = cube.getColumn().heightMap;
+            int[] heightmap = currentHeights(cube.getColumn());
             for (int i = 0; i < heightmap.length; i++) {
                 int cy = Coords.blockToCube(heightmap[i] - 1);
                 int idx = i >> 5;
@@ -297,7 +308,7 @@ public class LightingManager implements ILightingManager {
         @Override
         public void markSaved(ICube cube) {
             Arrays.fill(lastSaveHeightMapInfo, 0L);
-            int[] heightmap = cube.getColumn().heightMap;
+            int[] heightmap = currentHeights(cube.getColumn());
             for (int i = 0; i < heightmap.length; i++) {
                 int cy = Coords.blockToCube(heightmap[i] - 1);
                 int flags = 0;
