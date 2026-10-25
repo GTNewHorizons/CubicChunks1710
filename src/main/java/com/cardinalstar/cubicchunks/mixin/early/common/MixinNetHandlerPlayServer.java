@@ -48,7 +48,8 @@ public class MixinNetHandlerPlayServer {
             return false;
         }
 
-        return !manager.activateBlockOrUseItem(player, world, stack, x, y, z, side, hitX, hitY, hitZ);
+        // Forge marks the placement failed when this returns false and then resyncs the client's held stack
+        return manager.activateBlockOrUseItem(player, world, stack, x, y, z, side, hitX, hitY, hitZ);
     }
 
     @Redirect(
