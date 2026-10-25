@@ -333,6 +333,10 @@ public enum Mixins implements IMixins {
         .addCommonMixins("common.forge.MixinForgeChunkManager")
         .setPhase(Phase.EARLY)
         .setApplyIf(() -> true)),
+    MIXIN_DIMENSION_MANAGER(new MixinBuilder("Unload empty cubic dimensions like Forge does for chunks")
+        .addCommonMixins("common.forge.MixinDimensionManager")
+        .setPhase(Phase.EARLY)
+        .setApplyIf(() -> true)),
 
     MIXIN_COORD_PACKER_HODGE(new MixinBuilder("Overwrite GTNHLib CoordinatePacker algorithm with a CC-compatible one")
         .addCommonMixins("mod.MixinCoordinatePacker")

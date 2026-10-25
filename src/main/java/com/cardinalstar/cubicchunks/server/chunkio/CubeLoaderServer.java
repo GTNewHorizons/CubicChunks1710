@@ -4,7 +4,9 @@ import static net.minecraftforge.common.MinecraftForge.EVENT_BUS;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 import javax.annotation.Nonnull;
 
@@ -12,6 +14,7 @@ import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.world.ChunkCoordIntPair;
 import net.minecraft.world.WorldServer;
 import net.minecraft.world.chunk.Chunk;
+import net.minecraftforge.common.DimensionManager;
 import net.minecraftforge.common.ForgeChunkManager;
 import net.minecraftforge.event.world.ChunkDataEvent;
 
@@ -63,6 +66,10 @@ public class CubeLoaderServer implements ICubeLoader {
     private Array3D<Cube> cache;
     @Setter
     private long now;
+    // Set once a GC sees loaded cubes or columns, so the dimension is unloaded when it becomes empty
+    private boolean hadContent;
+    // Server thread only
+    private static final Set<Integer> DIMENSIONS_TO_UNLOAD = new LinkedHashSet<>();
 
     private final int maxCube;
     private final int minCube;
@@ -379,6 +386,8 @@ public class CubeLoaderServer implements ICubeLoader {
         int startCubes = cubes.getSize();
         int startCols = columns.getSize();
 
+        if (startCubes > 0 || startCols > 0) hadContent = true;
+
         final long expiry = now - CUBE_GC_EXPIRY;
 
         for (CubeInfo cubeInfo : cubes) {
@@ -427,6 +436,13 @@ public class CubeLoaderServer implements ICubeLoader {
             unloadColumn(column);
         }
 
+        // Like Forge's ChunkProviderServer: once a dimension that had cubes or columns is empty, does not keep its
+        // spawn loaded and has no forced chunks, it is unloaded. MixinDimensionManager checks it again and queues it
+        // after every world ticked. The flag also covers emptying during save-off.
+        if (readyToUnloadDimension()) {
+            DIMENSIONS_TO_UNLOAD.add(world.provider.dimensionId);
+        }
+
         CubicChunks.LOGGER.trace(
             "Garbage collected {} columns ({} -> {}) and {} cubes ({} -> {}). Removed {} columns automatically because they were empty.",
             pendingColumnUnloads.size(),
@@ -441,6 +457,29 @@ public class CubeLoaderServer implements ICubeLoader {
     @Override
     public void trimCaches() {
         cubeIO.trimCaches();
+    }
+
+    /**
+     * Whether this dimension had cubes or columns, is empty now and meets Forge's conditions for unloading it. Checked
+     * by {@link #doGC()} and again by MixinDimensionManager before the dimension is queued.
+     */
+    public boolean readyToUnloadDimension() {
+        int dimension = world.provider.dimensionId;
+        return hadContent && cubes.getSize() == 0
+            && columns.getSize() == 0
+            && !world.levelSaving
+            && world.playerEntities.isEmpty()
+            && ForgeChunkManager.getPersistentChunksFor(world)
+                .isEmpty()
+            && DimensionManager.isDimensionRegistered(dimension)
+            && !DimensionManager.shouldLoadSpawn(dimension);
+    }
+
+    /** The dimensions that became ready to unload since the last call, for MixinDimensionManager. */
+    public static List<Integer> takeDimensionsToUnload() {
+        List<Integer> dimensions = new ArrayList<>(DIMENSIONS_TO_UNLOAD);
+        DIMENSIONS_TO_UNLOAD.clear();
+        return dimensions;
     }
 
     @Override
