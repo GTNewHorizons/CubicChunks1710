@@ -148,6 +148,12 @@ public class CubeIO implements ICubeIO {
             }
 
             @Override
+            public boolean requiresSerialExecution() {
+                // a later save of a position must reach storage after an earlier one
+                return true;
+            }
+
+            @Override
             public boolean canMerge(List<ITaskFuture<Savable, Void>> tasks, Savable savable) {
                 return true;
             }
