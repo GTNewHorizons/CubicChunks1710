@@ -29,6 +29,7 @@ cubicchunks.config.enable_chunk_debugging=Enable Chunk Status Debugging
 
 cubicchunks.config.optimizations=Optimizations
 cubicchunks.config.optimizations.background_threads=Background Threads
+cubicchunks.config.optimizations.save_cache_megabytes=Save Cache Size (MiB)
 
 generator.VanillaCubic=Vanilla + Cubic
 
