@@ -71,9 +71,10 @@ public class NetworkChannel extends MessageToMessageCodec<FMLProxyPacket, CCPack
         CCPacketEncoder<CCPacket> encoder = this.encoders[packet.getPacketID()];
         encoder.writePacket(new CCPacketBuffer(buffer), packet);
 
+        // FMLProxyPacket sends the whole backing array of its buffer, so give it one holding only the written bytes
         output.add(
             new FMLProxyPacket(
-                buffer,
+                buffer.copy(),
                 context.channel()
                     .attr(NetworkRegistry.FML_CHANNEL)
                     .get()));

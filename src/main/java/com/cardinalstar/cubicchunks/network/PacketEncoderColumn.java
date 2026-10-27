@@ -52,7 +52,11 @@ public class PacketEncoderColumn extends CCPacketEncoder<PacketEncoderColumn.Pac
 
         WorldEncoder.encodeColumn(out, column);
 
-        return new PacketColumn(column.xPosition, column.zPosition, buffer.array());
+        // only the written bytes: the backing array also holds the buffer's unused capacity
+        byte[] data = new byte[buffer.readableBytes()];
+        buffer.readBytes(data);
+
+        return new PacketColumn(column.xPosition, column.zPosition, data);
     }
 
     @Override
