@@ -217,6 +217,10 @@ public enum Mixins implements IMixins {
         new MixinBuilder("Fix Entity.getBrightness").addCommonMixins("common.MixinEntity_Brightness")
             .setPhase(Phase.EARLY)
             .setApplyIf(() -> true)),
+    MIXIN_ENTITY_BAT(
+        new MixinBuilder("Allowing bats to fly and hang below y = 0.").addCommonMixins("common.MixinEntityBat")
+            .setPhase(Phase.EARLY)
+            .setApplyIf(() -> true)),
 
     // SERVER
     MIXIN_INTEGRATED_SERVER_ACCESSOR(
@@ -331,6 +335,10 @@ public enum Mixins implements IMixins {
         .setApplyIf(() -> true)),
     MIXIN_FORGE_CHUNK_MANAGER(new MixinBuilder("Add cubic chunk hooks to ForgeChunkManager loadWorld/saveWorld")
         .addCommonMixins("common.forge.MixinForgeChunkManager")
+        .setPhase(Phase.EARLY)
+        .setApplyIf(() -> true)),
+    MIXIN_DIMENSION_MANAGER(new MixinBuilder("Unload empty cubic dimensions like Forge does for chunks")
+        .addCommonMixins("common.forge.MixinDimensionManager")
         .setPhase(Phase.EARLY)
         .setApplyIf(() -> true)),
 

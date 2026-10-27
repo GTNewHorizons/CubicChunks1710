@@ -220,8 +220,18 @@ class IONbtWriter {
         for (TileEntity blockEntity : cube.getTileEntityMap()
             .values()) {
             NBTTagCompound nbtTileEntity = new NBTTagCompound();
-            blockEntity.writeToNBT(nbtTileEntity);
-            nbtTileEntities.appendTag(nbtTileEntity);
+            // Like Forge's AnvilChunkLoader: skip a broken tile instead of failing the whole cube save
+            try {
+                blockEntity.writeToNBT(nbtTileEntity);
+                nbtTileEntities.appendTag(nbtTileEntity);
+            } catch (Exception e) {
+                FMLLog.log(
+                    Level.ERROR,
+                    e,
+                    "A TileEntity type %s has thrown an exception trying to write state. It will not persist. Report this to the mod author",
+                    blockEntity.getClass()
+                        .getName());
+            }
         }
     }
 

@@ -16,9 +16,19 @@ public interface ICubeIO extends Flushable, Closeable {
 
     boolean cubeExists(CubePos pos);
 
-    void saveColumn(ChunkCoordIntPair pos, Chunk column);
+    /// Saves a column. With {@code unloading}, its data stays cached after the write, for a quick reload.
+    void saveColumn(ChunkCoordIntPair pos, Chunk column, boolean unloading);
 
-    void saveCube(CubePos pos, Cube cube);
+    default void saveColumn(ChunkCoordIntPair pos, Chunk column) {
+        saveColumn(pos, column, false);
+    }
+
+    /// Saves a cube. With {@code unloading}, its data stays cached after the write, for a quick reload.
+    void saveCube(CubePos pos, Cube cube, boolean unloading);
+
+    default void saveCube(CubePos pos, Cube cube) {
+        saveCube(pos, cube, false);
+    }
 
     NBTTagCompound loadColumn(ChunkCoordIntPair pos) throws LoadFailureException;
 

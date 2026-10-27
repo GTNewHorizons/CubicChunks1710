@@ -832,16 +832,18 @@ public abstract class MixinChunk implements IColumn, IColumnInternal {
                 if (!entity.boundingBox.intersectsWith(aabb) || entity == entityIn) {
                     continue;
                 }
-                if (filter == null || filter.isEntityApplicable(entity)) {
-                    listToFill.add(entity);
+                if (filter != null && !filter.isEntityApplicable(entity)) {
+                    continue;
                 }
+                listToFill.add(entity);
 
+                // Like vanilla 1.7.10: parts of a matching entity are tested with the filter themselves
                 Entity[] parts = entity.getParts();
 
                 if (parts != null) {
                     for (Entity part : parts) {
                         if (part != entityIn && part.boundingBox.intersectsWith(aabb)
-                            && (filter == null || filter.isEntityApplicable(entity))) {
+                            && (filter == null || filter.isEntityApplicable(part))) {
                             listToFill.add(part);
                         }
                     }

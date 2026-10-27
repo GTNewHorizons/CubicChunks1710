@@ -2,7 +2,10 @@ package com.cardinalstar.cubicchunks.async;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.IdentityHashMap;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.Future;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -32,11 +35,14 @@ public class TaskPool {
     private static final ArrayDeque<TaskContainer<?, ?>> TASK_QUEUE = new ArrayDeque<>(1024);
 
     private static final List<Thread> THREADS = new ArrayList<>();
+    private static int runningTasks;
+    private static final Set<ITaskExecutor<?, ?>> SERIAL_EXECUTORS = Collections.newSetFromMap(new IdentityHashMap<>());
 
     public static void init() {
         THREADS.clear();
 
-        int count = CubicChunksConfig.optimizations.backgroundThreads;
+        // Saves only run on these workers, so a 1-CPU default (or 0 in the config) must still start one.
+        int count = Math.max(1, CubicChunksConfig.optimizations.backgroundThreads);
 
         for (int i = 0; i < count; i++) {
             Thread worker = new WorkerThread();
@@ -61,20 +67,38 @@ public class TaskPool {
                 TaskContainer<?, ?> task;
 
                 synchronized (QUEUE_LOCK) {
-                    if (TASK_QUEUE.isEmpty()) {
+                    task = null;
+                    var iterator = TASK_QUEUE.iterator();
+                    while (iterator.hasNext()) {
+                        TaskContainer<?, ?> candidate = iterator.next();
+                        if (candidate.executor.requiresSerialExecution() && !SERIAL_EXECUTORS.add(candidate.executor)) {
+                            continue;
+                        }
+                        task = candidate;
+                        iterator.remove();
+                        runningTasks++;
+                        break;
+                    }
+                    if (task == null) {
                         try {
                             QUEUE_LOCK.wait();
                         } catch (InterruptedException e) {
                             continue;
                         }
                     }
-
-                    task = TASK_QUEUE.poll();
                 }
 
                 if (task == null) continue;
 
-                task.run();
+                try {
+                    task.run();
+                } finally {
+                    synchronized (QUEUE_LOCK) {
+                        runningTasks--;
+                        SERIAL_EXECUTORS.remove(task.executor);
+                        QUEUE_LOCK.notifyAll();
+                    }
+                }
             }
         }
     }
@@ -110,7 +134,7 @@ public class TaskPool {
                     // noinspection unchecked
                     if (end2.executor.canMerge((List<ITaskFuture<TTask, TResult>>) (List<?>) end2.tasks, task)) {
                         end2.tasks.add(future);
-                        QUEUE_LOCK.notify();
+                        QUEUE_LOCK.notifyAll();
                         return future;
                     }
                 }
@@ -120,24 +144,35 @@ public class TaskPool {
             container.tasks.add(future);
 
             TASK_QUEUE.addLast(container);
-            QUEUE_LOCK.notify();
+            QUEUE_LOCK.notifyAll();
             return future;
         }
     }
 
     public static void flush() {
-        while (true) {
-            synchronized (QUEUE_LOCK) {
-                if (TASK_QUEUE.isEmpty()) return;
+        boolean interrupted = false;
+        synchronized (QUEUE_LOCK) {
+            // A worker removes its batch before doing IO. An empty queue alone is not a flush barrier.
+            while (!TASK_QUEUE.isEmpty() || runningTasks != 0) {
+                try {
+                    QUEUE_LOCK.wait();
+                } catch (InterruptedException e) {
+                    interrupted = true;
+                }
             }
-
-            Thread.yield();
         }
+        if (interrupted) Thread.currentThread()
+            .interrupt();
     }
 
     public interface ITaskExecutor<TTask, TResult> {
 
         void execute(List<ITaskFuture<TTask, TResult>> tasks);
+
+        /** Run batches in submission order, without occupying workers waiting for an earlier batch. */
+        default boolean requiresSerialExecution() {
+            return false;
+        }
 
         default boolean canMerge(List<ITaskFuture<TTask, TResult>> tasks, TTask task) {
             return tasks.size() < 128;
@@ -198,8 +233,12 @@ public class TaskPool {
 
                 // noinspection unchecked
                 executor.execute((List<ITaskFuture<TTask, TResult>>) (List<?>) tasks);
-            } catch (Exception e) {
-                CubicChunks.LOGGER.error("Could not run background task", e);
+            } catch (Throwable t) {
+                // Keep the worker alive and wake anyone waiting on a future the executor did not complete.
+                CubicChunks.LOGGER.error("Could not run background task", t);
+                for (TaskFuture<TTask, TResult> task : tasks) {
+                    if (!task.isDone()) task.fail(t);
+                }
             }
         }
     }
