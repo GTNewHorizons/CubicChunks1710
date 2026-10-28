@@ -415,8 +415,20 @@ public class RegionCubeStorage implements ICubicStorage, RecordingCubeStorage {
     public void writeBatch(NBTBatch batch, @org.jetbrains.annotations.Nullable Map<CubePos, ByteBuffer> written)
         throws IOException {
         if (bundled) {
-            writeColumnGroups(batch.columns);
-            writeBundles(batch.cubes, Collections.emptyList(), written);
+            // a column group that fails does not stop the cubes of the batch from being written
+            IOException failure = null;
+            try {
+                writeColumnGroups(batch.columns);
+            } catch (IOException e) {
+                failure = e;
+            }
+            try {
+                writeBundles(batch.cubes, Collections.emptyList(), written);
+            } catch (IOException e) {
+                if (failure == null) failure = e;
+                else failure.addSuppressed(e);
+            }
+            if (failure != null) throw failure;
             return;
         }
         // compress NBT data
@@ -530,8 +542,18 @@ public class RegionCubeStorage implements ICubicStorage, RecordingCubeStorage {
             List<EntryLocation3D> keys = new ArrayList<>();
             for (int s = 0; s < 8; s++)
                 if ((untouched & 1 << s) != 0) keys.add(location(CubeBundleCodec.member(origin, s)));
-            var read = this.save.load3D(keys, false);
-            for (int s = 0; s < 8; s++) {
+            cubicchunks.regionlib.api.region.BatchReadResult<EntryLocation3D> read;
+            try {
+                read = this.save.load3D(keys, false);
+            } catch (RuntimeException e) {
+                // a damaged record can fail the whole read without naming its key; keep every member as it is
+                CubicChunks.LOGGER
+                    .error("Could not read the stored cubes of bundle {}; keeping them as they are", origin, e);
+                keep |= untouched;
+                untouched = 0;
+                read = null;
+            }
+            for (int s = 0; read != null && s < 8; s++) {
                 if ((untouched & 1 << s) == 0) continue;
                 EntryLocation3D key = location(CubeBundleCodec.member(origin, s));
                 IOException error = read.errored.get(key);
@@ -693,8 +715,18 @@ public class RegionCubeStorage implements ICubicStorage, RecordingCubeStorage {
             List<EntryLocation2D> keys = new ArrayList<>();
             for (int s = 0; s < 4; s++)
                 if ((untouched & 1 << s) != 0) keys.add(location(ColumnGroupCodec.member(origin, s)));
-            var read = this.save.load2D(keys, false);
-            for (int s = 0; s < 4; s++) {
+            cubicchunks.regionlib.api.region.BatchReadResult<EntryLocation2D> read;
+            try {
+                read = this.save.load2D(keys, false);
+            } catch (RuntimeException e) {
+                // a damaged record can fail the whole read without naming its key; keep every member as it is
+                CubicChunks.LOGGER
+                    .error("Could not read the stored columns of column group {}; keeping them as they are", origin, e);
+                keep |= untouched;
+                untouched = 0;
+                read = null;
+            }
+            for (int s = 0; read != null && s < 4; s++) {
                 if ((untouched & 1 << s) == 0) continue;
                 EntryLocation2D key = location(ColumnGroupCodec.member(origin, s));
                 IOException error = read.errored.get(key);

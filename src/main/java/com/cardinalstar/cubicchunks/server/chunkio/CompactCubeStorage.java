@@ -371,12 +371,34 @@ public final class CompactCubeStorage implements ICubicStorage, RecordingCubeSto
         }
         // Both ordinary writers finish data/header writes before returning; shadow paging also forces them.
         // Do not globally flush RegionLib's shared cache for each compact-to-full transition.
-        regular.writeBatch(new NBTBatch(batch.columns, normal), written);
-        for (Map.Entry<CubePos, Table> entry : changed.entrySet()) store(entry.getKey(), entry.getValue());
-        // compact cubes are stored once their tables are
-        if (written != null) for (CubePos pos : compact) written.put(pos, null);
-        // Compact tables now win reads, so retiring stale full records cannot lose the new state.
-        regular.removeCubes(compact);
+        // A failed column, bundle or record does not stop the compact cubes of the batch from being stored.
+        IOException failure = null;
+        Map<CubePos, ByteBuffer> stored = new HashMap<>();
+        try {
+            regular.writeBatch(new NBTBatch(batch.columns, normal), stored);
+        } catch (IOException e) {
+            failure = e;
+        }
+        if (written != null) written.putAll(stored);
+        if (failure != null) {
+            // a cube becoming full keeps its compact entry until its full record has reached storage
+            for (CubePos pos : normal.keySet()) {
+                Table next = changed.get(region(pos));
+                byte[] previous = batchTable(region(pos), tables).values.get(slot(pos));
+                if (!stored.containsKey(pos) && next != null && previous != null) next.values.put(slot(pos), previous);
+            }
+        }
+        try {
+            for (Map.Entry<CubePos, Table> entry : changed.entrySet()) store(entry.getKey(), entry.getValue());
+            // compact cubes are stored once their tables are
+            if (written != null) for (CubePos pos : compact) written.put(pos, null);
+            // Compact tables now win reads, so retiring stale full records cannot lose the new state.
+            regular.removeCubes(compact);
+        } catch (IOException | RuntimeException e) {
+            if (failure == null) throw e;
+            failure.addSuppressed(e);
+        }
+        if (failure != null) throw failure;
     }
 
     @Override
