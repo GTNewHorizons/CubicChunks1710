@@ -39,7 +39,7 @@ import com.cardinalstar.cubicchunks.api.world.storage.ICubicStorage;
 import com.cardinalstar.cubicchunks.util.CubePos;
 
 /** Default Anvil3D storage with lossless, per-region templates for sectionless cubes. */
-public final class CompactCubeStorage implements ICubicStorage {
+public final class CompactCubeStorage implements ICubicStorage, RecordingCubeStorage {
 
     public static final String DIRECTORY = "region3d-empty";
     private static final long MAGIC = 0x4343454D50545901L; // CCEMPTY, version 1
@@ -339,6 +339,17 @@ public final class CompactCubeStorage implements ICubicStorage {
 
     @Override
     public synchronized void writeBatch(NBTBatch batch) throws IOException {
+        writeBatch(batch, null);
+    }
+
+    @Override
+    public boolean writesBundles() {
+        return regular.writesBundles();
+    }
+
+    @Override
+    public synchronized void writeBatch(NBTBatch batch,
+        @org.jetbrains.annotations.Nullable Map<CubePos, ByteBuffer> written) throws IOException {
         checkOpen();
         Map<CubePos, NBTTagCompound> normal = new HashMap<>();
         Map<CubePos, Table> changed = new LinkedHashMap<>();
@@ -360,8 +371,10 @@ public final class CompactCubeStorage implements ICubicStorage {
         }
         // Both ordinary writers finish data/header writes before returning; shadow paging also forces them.
         // Do not globally flush RegionLib's shared cache for each compact-to-full transition.
-        regular.writeBatch(new NBTBatch(batch.columns, normal));
+        regular.writeBatch(new NBTBatch(batch.columns, normal), written);
         for (Map.Entry<CubePos, Table> entry : changed.entrySet()) store(entry.getKey(), entry.getValue());
+        // compact cubes are stored once their tables are
+        if (written != null) for (CubePos pos : compact) written.put(pos, null);
         // Compact tables now win reads, so retiring stale full records cannot lose the new state.
         regular.removeCubes(compact);
     }

@@ -5,7 +5,9 @@ import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.Arrays;
+import java.util.Map;
 import java.util.Optional;
 
 import net.jpountz.lz4.LZ4Compressor;
@@ -34,7 +36,7 @@ final class IOCache<K> {
         PENDING,
         /** Read ahead of a load; handed over once and dropped after {@link #preloadExpiryMillis} if not taken. */
         PRELOADED,
-        /** Written to storage; kept compressed for reloads until evicted. */
+        /** Written to storage; kept compressed, or as the storage record itself, for reloads until evicted. */
         CLEAN,
         /** Known not to exist in storage. */
         ABSENT
@@ -49,19 +51,54 @@ final class IOCache<K> {
         final NBTTagCompound tag;
         @Nullable
         final byte[] packed;
+        /** Clean only, instead of {@link #packed}: the record storage wrote, possibly shared with other entries. */
+        @Nullable
+        final Record record;
         final long time;
 
-        Entry(State state, boolean keep, @Nullable NBTTagCompound tag, @Nullable byte[] packed, long time) {
+        Entry(State state, boolean keep, @Nullable NBTTagCompound tag, @Nullable byte[] packed, @Nullable Record record,
+            long time) {
             this.state = state;
             this.keep = keep;
             this.tag = tag;
             this.packed = packed;
+            this.record = record;
             this.time = time;
         }
 
+        /** Bytes counted for this entry; a record's own bytes are counted once for all entries pointing at it. */
         long size() {
-            return state == State.CLEAN ? packed.length + ENTRY_OVERHEAD : state == State.ABSENT ? ENTRY_OVERHEAD : 0;
+            if (state == State.CLEAN) return (packed != null ? packed.length : 0) + ENTRY_OVERHEAD;
+            return state == State.ABSENT ? ENTRY_OVERHEAD : 0;
         }
+    }
+
+    /**
+     * A record as storage wrote it, which several entries can point at (e.g. a bundle of cubes). Its bytes count
+     * against the budget once, while any entry points at it.
+     */
+    static final class Record {
+
+        final ByteBuffer bytes;
+        private int references;
+
+        Record(ByteBuffer bytes) {
+            // keep only the record itself: storage may return a view into a larger buffer, which the budget would
+            // not see
+            if (bytes.capacity() != bytes.remaining()) {
+                ByteBuffer copy = ByteBuffer.allocate(bytes.remaining());
+                copy.put(bytes.duplicate());
+                copy.flip();
+                bytes = copy.asReadOnlyBuffer();
+            }
+            this.bytes = bytes;
+        }
+    }
+
+    /** Decodes every position stored in a record, keyed like the cache. The caller owns the results. */
+    interface Decoder<K> {
+
+        Map<K, NBTTagCompound> decode(K pos, ByteBuffer record) throws IOException;
     }
 
     private final Object2ObjectLinkedOpenHashMap<K, Entry> entries = new Object2ObjectLinkedOpenHashMap<>();
@@ -77,11 +114,19 @@ final class IOCache<K> {
     private long keptBytes;
     private long saveSequence;
     private int pending;
+    @Nullable
+    private final Decoder<K> decoder;
 
     IOCache(long budgetBytes, long preloadExpiryMillis, long saveFenceMillis) {
+        this(budgetBytes, preloadExpiryMillis, saveFenceMillis, null);
+    }
+
+    /** {@code decoder} reads records kept by {@link #writtenAs}. */
+    IOCache(long budgetBytes, long preloadExpiryMillis, long saveFenceMillis, @Nullable Decoder<K> decoder) {
         this.budgetBytes = budgetBytes;
         this.preloadExpiryMillis = preloadExpiryMillis;
         this.saveFenceMillis = saveFenceMillis;
+        this.decoder = decoder;
     }
 
     private void put(K pos, Entry entry) {
@@ -89,11 +134,13 @@ final class IOCache<K> {
         if (old != null) remove(old);
         if (entry.state == State.PENDING) pending++;
         keptBytes += entry.size();
+        if (entry.record != null && entry.record.references++ == 0) keptBytes += entry.record.bytes.remaining();
     }
 
     private void remove(Entry old) {
         if (old.state == State.PENDING) pending--;
         keptBytes -= old.size();
+        if (old.record != null && --old.record.references == 0) keptBytes -= old.record.bytes.remaining();
     }
 
     /**
@@ -103,7 +150,7 @@ final class IOCache<K> {
      * and the entry is dropped then.
      */
     synchronized void putPending(K pos, NBTTagCompound tag, boolean keep, long now) {
-        put(pos, new Entry(State.PENDING, keep, tag, null, now));
+        put(pos, new Entry(State.PENDING, keep, tag, null, null, now));
         saves.putAndMoveToLast(pos, new long[] { ++saveSequence, now });
     }
 
@@ -150,10 +197,39 @@ final class IOCache<K> {
             if (packed == null || current != written) {
                 remove(entries.remove(pos));
             } else {
-                put(pos, new Entry(State.CLEAN, false, null, packed, now));
+                put(pos, new Entry(State.CLEAN, false, null, packed, null, now));
             }
             trim(now, 100);
         }
+    }
+
+    /** Whether {@link #writtenAs} would keep a record for this save now, so that callers only prepare one then. */
+    synchronized boolean keepsRecord(K pos, NBTTagCompound tag) {
+        Entry current = entries.get(pos);
+        return current != null && current.state == State.PENDING
+            && current.tag == tag
+            && current.keep
+            && budgetBytes > 0
+            && decoder != null;
+    }
+
+    /**
+     * The write of {@code tag} finished, and storage keeps it in {@code record} ({@code null}: somewhere reloading is
+     * cheap, such as a compact table, or not kept). Unless a newer save replaced it, a kept save then points at the
+     * record without being serialized again; other saves are dropped.
+     */
+    synchronized void writtenAs(K pos, NBTTagCompound tag, long now, @Nullable Record record) {
+        long[] save = saves.getAndMoveToLast(pos);
+        if (save != null) save[1] = now;
+        else saves.put(pos, new long[] { saveSequence, now });
+        Entry current = entries.get(pos);
+        if (current == null || current.state != State.PENDING || current.tag != tag) return;
+        if (record != null && keepsRecord(pos, tag)) {
+            put(pos, new Entry(State.CLEAN, false, null, null, record, now));
+        } else {
+            remove(entries.remove(pos));
+        }
+        trim(now, 100);
     }
 
     /**
@@ -164,8 +240,8 @@ final class IOCache<K> {
         if (entries.containsKey(pos) || savedSince(pos, fence)) return false;
         put(
             pos,
-            tag == null ? new Entry(State.ABSENT, false, null, null, now)
-                : new Entry(State.PRELOADED, false, tag, null, now));
+            tag == null ? new Entry(State.ABSENT, false, null, null, null, now)
+                : new Entry(State.PRELOADED, false, tag, null, null, now));
         trim(now, 100);
         return true;
     }
@@ -173,7 +249,7 @@ final class IOCache<K> {
     /** Records that storage has no data for {@code pos}, unless something is cached for it by now. */
     synchronized void putAbsent(K pos, long now) {
         if (entries.containsKey(pos)) return;
-        put(pos, new Entry(State.ABSENT, false, null, null, now));
+        put(pos, new Entry(State.ABSENT, false, null, null, null, now));
     }
 
     synchronized boolean contains(K pos) {
@@ -194,14 +270,25 @@ final class IOCache<K> {
      */
     @Nullable
     Optional<NBTTagCompound> take(K pos) {
+        return take(pos, System.currentTimeMillis());
+    }
+
+    /**
+     * As {@link #take(Object)}. Data kept as a shared record is decoded once: the other positions of the record that
+     * are still kept from it become read-ahead data (handed over once, dropped after the read-ahead expiry).
+     */
+    @Nullable
+    Optional<NBTTagCompound> take(K pos, long now) {
         byte[] packed;
+        Record record = null;
         synchronized (this) {
             Entry entry = entries.get(pos);
             if (entry == null) return null;
             switch (entry.state) {
                 case PENDING:
                     // loaded again before the write: the loaded object is newer, so do not keep the data afterwards
-                    if (entry.keep) entries.put(pos, new Entry(State.PENDING, false, entry.tag, null, entry.time));
+                    if (entry.keep)
+                        entries.put(pos, new Entry(State.PENDING, false, entry.tag, null, null, entry.time));
                     return Optional.of((NBTTagCompound) entry.tag.copy());
                 case ABSENT:
                     return Optional.empty();
@@ -211,14 +298,33 @@ final class IOCache<K> {
                 default:
                     remove(entries.remove(pos));
                     packed = entry.packed;
+                    record = entry.record;
             }
         }
+        if (record == null) {
+            try {
+                return Optional.of(unpack(packed));
+            } catch (IOException | RuntimeException e) {
+                CubicChunks.LOGGER.error("Could not unpack cached data for {}, reading it from storage", pos, e);
+                return null;
+            }
+        }
+        Map<K, NBTTagCompound> decoded;
         try {
-            return Optional.of(unpack(packed));
+            decoded = decoder.decode(pos, record.bytes.duplicate());
         } catch (IOException | RuntimeException e) {
-            CubicChunks.LOGGER.error("Could not unpack cached data for {}, reading it from storage", pos, e);
+            CubicChunks.LOGGER.error("Could not decode cached data for {}, reading it from storage", pos, e);
             return null;
         }
+        NBTTagCompound result = decoded.remove(pos);
+        synchronized (this) {
+            for (Map.Entry<K, NBTTagCompound> other : decoded.entrySet()) {
+                Entry entry = entries.get(other.getKey());
+                if (entry == null || entry.state != State.CLEAN || entry.record != record) continue;
+                put(other.getKey(), new Entry(State.PRELOADED, false, other.getValue(), null, null, now));
+            }
+        }
+        return result == null ? null : Optional.of(result);
     }
 
     synchronized int pendingCount() {

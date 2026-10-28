@@ -187,6 +187,13 @@ public class CubicChunksConfig {
         @Config.RangeInt(min = 0, max = 4096)
         public int saveCacheMegabytes = 32;
 
+        @Config.LangKey("cubicchunks.config.optimizations.bundle_write_wait_seconds")
+        @Config.Comment("With bundle storage, how long the saved data of an unloaded cube may wait for the other cubes of"
+            + " its 2x2x2 bundle to unload, so that the bundle is written once. The data stays in memory meanwhile."
+            + " 0 writes immediately.")
+        @Config.RangeInt(min = 0, max = 60)
+        public int bundleWriteWaitSeconds = 10;
+
     }
 
     static {

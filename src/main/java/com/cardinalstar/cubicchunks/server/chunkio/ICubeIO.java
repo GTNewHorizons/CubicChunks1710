@@ -30,6 +30,9 @@ public interface ICubeIO extends Flushable, Closeable {
         saveCube(pos, cube, false);
     }
 
+    /** Called every server tick: writes saves that waited for the rest of their cube bundle. */
+    default void tick() {}
+
     NBTTagCompound loadColumn(ChunkCoordIntPair pos) throws LoadFailureException;
 
     NBTTagCompound loadCube(CubePos pos) throws LoadFailureException;

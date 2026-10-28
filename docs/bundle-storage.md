@@ -43,6 +43,24 @@ stay where they are. Bundle storage always uses shadow paging, whatever
 `useShadowPagingIO` is set to. A member whose stored data cannot be decoded is
 logged and left unchanged while the rest of its bundle is written.
 
+## Saving and the save cache
+
+When a cube unloads, its saved data may wait for the other loaded cubes of its
+bundle to unload as well, so that the bundle is written once instead of once per
+cube. A bundle is written on the next tick after its last loaded cube unloads,
+or at the latest `bundleWriteWaitSeconds` (default 10) after its first cube's
+save; while more than 4096 cubes wait, the oldest bundles are written early.
+Saves of cubes that are still loaded, such as autosaves, and columns are written
+right away. `/save-all flush`, unloading a dimension and stopping the server write
+everything that waits; a crash can lose the waiting saves of the last few
+seconds. Set `bundleWriteWaitSeconds` to 0 to write every save right away.
+
+The save cache (`saveCacheMegabytes`) keeps the written records themselves for
+recently unloaded cubes: the cubes of a bundle share their record, so it is held
+once, compressed, and nothing is serialized a second time. Reloading one of these
+cubes decodes the whole record once and keeps its other members briefly, as for
+read-ahead. Compact empty cubes are not kept, since their tables are cheap to read.
+
 ## Existing worlds
 
 Worlds using `cubicchunks:anvil3d` or `cubicchunks:anvil3d-compact-empty` are

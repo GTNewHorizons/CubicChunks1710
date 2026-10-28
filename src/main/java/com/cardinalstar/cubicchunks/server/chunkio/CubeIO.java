@@ -1,15 +1,21 @@
 package com.cardinalstar.cubicchunks.server.chunkio;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
+import java.util.function.Predicate;
 
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.world.ChunkCoordIntPair;
 import net.minecraft.world.chunk.Chunk;
 import net.minecraftforge.common.MinecraftForge;
+
+import org.jetbrains.annotations.Nullable;
 
 import com.cardinalstar.cubicchunks.CubicChunks;
 import com.cardinalstar.cubicchunks.CubicChunksConfig;
@@ -35,6 +41,9 @@ public class CubeIO implements ICubeIO {
     private static final long SAVE_FENCE_MILLIS = 120_000;
     // how many entries a single save may check when trimming, to keep saves fast
     private static final int SAVE_TRIM_CHECKS = 100;
+    // unloaded cubes whose saved data may wait for the rest of their bundle at once; beyond it the oldest are written
+    // on the next tick
+    private static final int MAX_WAITING_CUBES = 4096;
 
     private final ICubicStorage storage;
     private final IPreloadFailureDelegate preloadFailures;
@@ -45,6 +54,30 @@ public class CubeIO implements ICubeIO {
     private final IOCache<ChunkCoordIntPair> columnCache;
     private final IOCache<CubePos> cubeCache;
 
+    /** Storage that reports the records it wrote, which the cube cache then keeps instead of packing the data again. */
+    @Nullable
+    private final RecordingCubeStorage recording;
+    /** Whether a cube is loaded; saves of unloaded cubes wait for the other loaded cubes of their bundle. */
+    @Nullable
+    private final Predicate<CubePos> loaded;
+    private final long writeWaitMillis;
+    /** Saves of unloaded cubes waiting for the rest of their bundle, by bundle origin, oldest first. Server thread. */
+    private final Map<CubePos, Waiting> waiting = new java.util.LinkedHashMap<>();
+    /** Waiting bundles with no other cube loaded when their last save arrived, written on the next tick. */
+    private final Set<CubePos> complete = new HashSet<>();
+    private int waitingCubes;
+
+    private static final class Waiting {
+
+        /** {@link #waitClock()} at the bundle's first waiting save. */
+        final long since;
+        final Map<CubePos, NBTTagCompound> saves = new java.util.LinkedHashMap<>();
+
+        Waiting(long since) {
+            this.since = since;
+        }
+    }
+
     interface Savable {
     }
 
@@ -54,11 +87,29 @@ public class CubeIO implements ICubeIO {
     @Desugar
     private record SaveCube(CubePos pos, NBTTagCompound tag) implements Savable {}
 
+    /** Saves that waited for their bundles, queued as one task so that each bundle reaches storage in one batch. */
+    @Desugar
+    private record SaveCubes(Map<CubePos, NBTTagCompound> saves) implements Savable {}
+
     public CubeIO(ICubicStorage storage, IPreloadFailureDelegate preloadFailures) {
+        this(storage, preloadFailures, null);
+    }
+
+    /** {@code loaded} enables waiting for the rest of a cube bundle before writing (see {@link #tick()}). */
+    public CubeIO(ICubicStorage storage, IPreloadFailureDelegate preloadFailures, @Nullable Predicate<CubePos> loaded) {
         this.storage = storage;
         this.preloadFailures = preloadFailures;
+        this.recording = storage instanceof RecordingCubeStorage r ? r : null;
+        this.loaded = loaded;
+        this.writeWaitMillis = recording != null && recording.writesBundles() && loaded != null
+            ? Math.max(0, CubicChunksConfig.optimizations.bundleWriteWaitSeconds) * 1000L
+            : 0;
         long cubeBudget = (long) Math.max(0, CubicChunksConfig.optimizations.saveCacheMegabytes) << 20;
-        this.cubeCache = new IOCache<>(cubeBudget, PRELOAD_EXPIRY_MILLIS, SAVE_FENCE_MILLIS);
+        this.cubeCache = new IOCache<>(
+            cubeBudget,
+            PRELOAD_EXPIRY_MILLIS,
+            SAVE_FENCE_MILLIS,
+            recording != null ? CubeIO::decodeCubes : null);
         this.columnCache = new IOCache<>(cubeBudget / 8, PRELOAD_EXPIRY_MILLIS, SAVE_FENCE_MILLIS);
 
         columnLoadExecutor = tasks -> {
@@ -100,6 +151,8 @@ public class CubeIO implements ICubeIO {
             @Override
             public void execute(List<ITaskFuture<Savable, Void>> tasks) {
                 IOException ex = null;
+                // records of the cubes that reached storage (null for compact ones), filled by recording storage
+                Map<CubePos, ByteBuffer> written = recording != null ? new java.util.HashMap<>() : null;
 
                 try {
                     Map<ChunkCoordIntPair, NBTTagCompound> columns = new Object2ObjectOpenHashMap<>();
@@ -115,9 +168,15 @@ public class CubeIO implements ICubeIO {
                         if (savable instanceof SaveCube cube) {
                             cubes.put(cube.pos, cube.tag);
                         }
+
+                        if (savable instanceof SaveCubes waited) {
+                            cubes.putAll(waited.saves);
+                        }
                     }
 
-                    storage.writeBatch(new ICubicStorage.NBTBatch(columns, cubes));
+                    ICubicStorage.NBTBatch batch = new ICubicStorage.NBTBatch(columns, cubes);
+                    if (recording != null) recording.writeBatch(batch, written);
+                    else storage.writeBatch(batch);
                 } catch (IOException e) {
                     CubicChunks.LOGGER.error("Could not save columns or cubes", e);
                     ex = e;
@@ -125,10 +184,17 @@ public class CubeIO implements ICubeIO {
                     // also after a failure: the data stays readable from the cache until it is evicted. Settles every
                     // queued save; one replaced by a newer save in this batch is ignored by the cache.
                     long now = System.currentTimeMillis();
+                    // one cache record per written record: the cubes of a bundle share theirs
+                    Map<ByteBuffer, IOCache.Record> records = new java.util.IdentityHashMap<>();
                     for (ITaskFuture<Savable, Void> task : tasks) {
                         Savable savable = task.getTask();
                         if (savable instanceof SaveColumn column) settle(columnCache, column.pos, column.tag, now);
-                        if (savable instanceof SaveCube cube) settle(cubeCache, cube.pos, cube.tag, now);
+                        if (savable instanceof SaveCube cube) settleCube(cube.pos, cube.tag, now, written, records);
+                        if (savable instanceof SaveCubes waited) {
+                            for (Map.Entry<CubePos, NBTTagCompound> save : waited.saves.entrySet()) {
+                                settleCube(save.getKey(), save.getValue(), now, written, records);
+                            }
+                        }
                     }
                 }
 
@@ -152,6 +218,43 @@ public class CubeIO implements ICubeIO {
                 return true;
             }
         };
+    }
+
+    /// Ends a pending cube save, keeping the record storage reported for it, or a packed copy if there is none. Must
+    /// not throw, like settle.
+    private void settleCube(CubePos pos, NBTTagCompound tag, long now, @Nullable Map<CubePos, ByteBuffer> written,
+        Map<ByteBuffer, IOCache.Record> records) {
+        if (written == null || !written.containsKey(pos)) {
+            settle(cubeCache, pos, tag, now);
+            return;
+        }
+        try {
+            ByteBuffer stored = written.get(pos);
+            // only a save that stays cached needs the record, which may have to be copied
+            IOCache.Record record = stored != null && cubeCache.keepsRecord(pos, tag)
+                ? records.computeIfAbsent(stored, IOCache.Record::new)
+                : null;
+            cubeCache.writtenAs(pos, tag, now, record);
+        } catch (Throwable t) {
+            CubicChunks.LOGGER.error("Could not cache saved data for {}", pos, t);
+            cubeCache.discardPending(pos, tag);
+        }
+    }
+
+    /// Every cube stored in a record: the present members of a bundle record, or the one cube of a per-cube record.
+    private static Map<CubePos, NBTTagCompound> decodeCubes(CubePos pos, ByteBuffer record) throws IOException {
+        Map<CubePos, NBTTagCompound> out = new java.util.HashMap<>();
+        if (CubeBundleCodec.isBundle(record)) {
+            CubeBundleCodec.Stored stored = CubeBundleCodec.read(record);
+            CubePos origin = CubeBundleCodec.origin(pos);
+            for (int s = 0; s < 8; s++) {
+                NBTTagCompound member = stored.member(s);
+                if (member != null) out.put(CubeBundleCodec.member(origin, s), member);
+            }
+        } else {
+            out.put(pos, CCNBTUtils.loadTag(record));
+        }
+        return out;
     }
 
     /// Ends a pending save. Must not throw: a save left pending would make flush() and close() wait forever.
@@ -218,7 +321,7 @@ public class CubeIO implements ICubeIO {
 
     @Override
     public NBTTagCompound loadCube(CubePos pos) throws LoadFailureException {
-        Optional<NBTTagCompound> cached = cubeCache.take(pos);
+        Optional<NBTTagCompound> cached = cubeCache.take(pos, System.currentTimeMillis());
         if (cached != null) return cached.orElse(null);
 
         try {
@@ -286,11 +389,79 @@ public class CubeIO implements ICubeIO {
         cubeCache.putPending(pos, tag, unloading, now);
         cubeCache.trim(now, SAVE_TRIM_CHECKS);
 
+        CubePos origin = CubeBundleCodec.origin(pos);
+        Waiting w = waiting.get(origin);
+        if (unloading && writeWaitMillis > 0) {
+            // Saves of loaded cubes are written now: their NBT shares block arrays with the live cube. An unloaded
+            // cube's data can wait for the other cubes of its bundle, which are then written in one record. It
+            // replaces an earlier waiting save of the cube, and the bundle keeps the time its wait began.
+            if (w == null) waiting.put(origin, w = new Waiting(waitClock()));
+            if (w.saves.put(pos, tag) == null) waitingCubes++;
+            // unloading saves a cube, so the last loaded cube of a bundle finds the others unloaded here; one unloaded
+            // without a save leaves its bundle waiting for the time limit
+            if (!otherCubesLoaded(origin, w)) complete.add(origin);
+            return;
+        }
+        // an earlier save of this cube that is still waiting is replaced by this one, written now
+        if (w != null && w.saves.remove(pos) != null) {
+            waitingCubes--;
+            if (w.saves.isEmpty()) {
+                waiting.remove(origin);
+                complete.remove(origin);
+            }
+        }
+
         TaskPool.submit(saveExecutor, new SaveCube(pos, tag));
+    }
+
+    /**
+     * Queues as one task the waiting saves of complete bundles, of bundles that waited {@link #writeWaitMillis} and,
+     * beyond {@link #MAX_WAITING_CUBES}, of the oldest others. With {@code all}, every waiting save.
+     */
+    private void writeWaiting(boolean all) {
+        Map<CubePos, NBTTagCompound> ready = new java.util.LinkedHashMap<>();
+        for (CubePos origin : complete) {
+            Waiting w = waiting.remove(origin);
+            if (w == null) continue;
+            waitingCubes -= w.saves.size();
+            ready.putAll(w.saves);
+        }
+        complete.clear();
+        long now = waitClock();
+        // oldest first: a bundle's entry is added with its first waiting save and never moved
+        var bundles = waiting.values()
+            .iterator();
+        while (bundles.hasNext()) {
+            Waiting w = bundles.next();
+            if (!all && waitingCubes <= MAX_WAITING_CUBES && now - w.since < writeWaitMillis) break;
+            bundles.remove();
+            waitingCubes -= w.saves.size();
+            ready.putAll(w.saves);
+        }
+        if (!ready.isEmpty()) TaskPool.submit(saveExecutor, new SaveCubes(ready));
+    }
+
+    /** Milliseconds for the write wait, unaffected by wall clock changes. */
+    private static long waitClock() {
+        return System.nanoTime() / 1_000_000;
+    }
+
+    private boolean otherCubesLoaded(CubePos origin, Waiting w) {
+        for (int s = 0; s < 8; s++) {
+            CubePos member = CubeBundleCodec.member(origin, s);
+            if (!w.saves.containsKey(member) && loaded.test(member)) return true;
+        }
+        return false;
+    }
+
+    @Override
+    public void tick() {
+        if (!waiting.isEmpty()) writeWaiting(false);
     }
 
     /// Waits until every queued save has been handed to storage and its write has finished.
     private void awaitWrites() {
+        writeWaiting(true);
         TaskPool.flush();
 
         while (columnCache.pendingCount() > 0 || cubeCache.pendingCount() > 0) {
