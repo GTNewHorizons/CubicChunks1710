@@ -25,7 +25,8 @@ transfers and reloads never trigger compaction. There is no pass on individual c
 Quitting and reopening a singleplayer world starts a new server and therefore a new startup pass.
 
 Only `region2d/*.2dr` and `region3d/*.3dr` in the selected dimensions are processed, one file at a time.
-A [bundle](bundle-storage.md) record shared by the cubes of a bundle is copied once and stays shared.
+A [bundle](bundle-storage.md) record shared by the cubes of a bundle, or by the columns of a
+column group, is copied once and stays shared.
 Oversized `.ext` entries and compact-empty `.cce` tables are not changed. Already packed files are checked but
 not replaced. Normal play can create new holes, which the next server/world startup can reclaim. Large fragmented
 saves can take longer to start; this synchronous work delays startup, not a player's later dimension transfer.

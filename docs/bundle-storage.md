@@ -5,7 +5,7 @@ keeps [compact empty cubes](compact-empty-storage.md) and stores every other cub
 in records of aligned 2x2x2 cube groups ("bundles"). A bundle holds the block data
 of up to eight cubes with one block palette shared by all of them, which together
 with fewer, larger records needs considerably less disk space than one record per
-cube. Columns stay in ordinary Anvil3D `region2d` files.
+cube. Columns are stored in aligned 2x2 groups in the `region2d` files.
 
 ## Layout
 
@@ -34,6 +34,11 @@ with full 24-bit block IDs (`BlocksB3`), several sections or unusual arrays keep
 their sections unchanged. The server part holds the member mask and each member's
 remaining NBT. Decoding restores each cube's NBT exactly. Both parts use the
 configured compression codec.
+
+Columns are grouped the same way: the columns of an aligned 2x2 group, the footprint
+of a stack of bundles, share one record in the `region2d` files. A column group
+record starts with `CCG`, a version byte, a codec byte, the mask of member columns
+and the uncompressed length, followed by the compressed NBT of each member.
 
 Writing one cube of a bundle rewrites the bundle record. While the palette only
 grows within its index width, the other members keep their encoded bytes; otherwise
@@ -66,10 +71,11 @@ read-ahead. Compact empty cubes are not kept, since their tables are cheap to re
 Worlds using `cubicchunks:anvil3d` or `cubicchunks:anvil3d-compact-empty` are
 switched to bundle storage when they are opened, unless `storageFormat` in
 `config/cubicchunks.cfg` is set to a format other than `cubicchunks:anvil3d-bundles`. Conversion is gradual: per-cube
-records keep being read, and a bundle is written in the new format the first time
-one of its cubes is saved, after which its old records are released. Region
+and per-column records keep being read, and a bundle or column group is written in
+the new format the first time one of its cubes or columns is saved, after which its
+old records are released. Region
 compaction reclaims the freed space on a later start.
 
-Older CubicChunks versions cannot read bundle records. After a world has been
+Older CubicChunks versions cannot read bundle or column group records. After a world has been
 opened with this version, keep backups if you may need to go back. Do not edit the
 format marker in `data/cubicchunks.world_format.dat`.

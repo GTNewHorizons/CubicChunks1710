@@ -240,7 +240,7 @@ public final class RegionCompactor {
                     java.util.Map<Entry, Integer> moved = new java.util.IdentityHashMap<>();
                     for (Entry entry : layout.entries) {
                         if (entry.shared != null) {
-                            // a record shared by several slots (cube bundles) is copied once
+                            // a record shared by several slots (cube bundles, column groups) is copied once
                             header.putInt(entry.slot * 4, moved.get(entry.shared));
                             continue;
                         }
@@ -327,11 +327,11 @@ public final class RegionCompactor {
             long offset = (long) sector * SECTOR_BYTES;
             Entry first = bySector.get(sector);
             if (first != null) {
-                // the cubes of one 2x2x2 bundle share their bundle record; anything else pointing at the same range is
-                // damage
-                if (first.sectors != sectors || count != 4096
-                    || (first.slot & ~BUNDLE_SLOT_BITS) != (slot & ~BUNDLE_SLOT_BITS)
-                    || !isBundleRecord(input, offset)) {
+                // the cubes of one 2x2x2 bundle and the columns of one 2x2 group share their record; anything else
+                // pointing at the same range is damage
+                int groupBits = count == 4096 ? BUNDLE_SLOT_BITS : COLUMN_GROUP_SLOT_BITS;
+                if (first.sectors != sectors || (first.slot & ~groupBits) != (slot & ~groupBits)
+                    || !isSharedRecord(input, offset, count == 4096 ? 'B' : 'G')) {
                     throw new IOException("Invalid/overlapping sector allocation at slot " + slot + ": " + file);
                 }
                 entries.add(new Entry(slot, offset, first.length, sectors, first));
@@ -358,10 +358,13 @@ public final class RegionCompactor {
 
     /** Slot bits (x << 8 | y << 4 | z) that differ between the cubes of one 2x2x2 bundle. */
     private static final int BUNDLE_SLOT_BITS = 1 << 8 | 1 << 4 | 1;
+    /** Slot bits (x << 5 | z) that differ between the columns of one 2x2 column group. */
+    private static final int COLUMN_GROUP_SLOT_BITS = 1 << 5 | 1;
 
-    private static boolean isBundleRecord(FileChannel input, long offset) throws IOException {
+    /** Whether the record at {@code offset} starts with the bundle ('B') or column group ('G') magic. */
+    private static boolean isSharedRecord(FileChannel input, long offset, char kind) throws IOException {
         ByteBuffer start = read(input, offset + 4, 3);
-        return start.get(0) == 'C' && start.get(1) == 'C' && start.get(2) == 'B';
+        return start.get(0) == 'C' && start.get(1) == 'C' && start.get(2) == kind;
     }
 
     private static void verifyCopy(FileChannel source, Layout before, FileChannel destination, Layout after)

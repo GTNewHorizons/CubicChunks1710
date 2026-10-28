@@ -69,7 +69,10 @@ public class RegionCubeStorage implements ICubicStorage, RecordingCubeStorage {
         return openForWorld(worldRoot, path, compactEmpty, false);
     }
 
-    /** As above; {@code bundled} stores non-compact cubes in 2x2x2 bundle records (requires compact empty cubes). */
+    /**
+     * As above; {@code bundled} stores non-compact cubes in 2x2x2 bundle records and columns in 2x2 group records
+     * (requires compact empty cubes).
+     */
     public static ICubicStorage openForWorld(Path worldRoot, Path path, boolean compactEmpty, boolean bundled)
         throws IOException {
         StartupRegionCompaction.beforeOpen(worldRoot, path);
@@ -137,7 +140,10 @@ public class RegionCubeStorage implements ICubicStorage, RecordingCubeStorage {
     private SaveCubeColumns save;
     private final Path cubeDirectory;
     private final StorageMaintenanceLock storageLock;
-    /** Cubes are written as 2x2x2 bundle records ({@link CubeBundleCodec}); per-cube records are still read. */
+    /**
+     * Cubes are written as 2x2x2 bundle records ({@link CubeBundleCodec}) and columns as 2x2 group records
+     * ({@link ColumnGroupCodec}); per-cube and per-column records are still read.
+     */
     private final boolean bundled;
     /** Bundled writes since opening: cubes saved and records (bundle or per-cube) written for them, for the log. */
     private final java.util.concurrent.atomic.AtomicLong cubesWritten = new java.util.concurrent.atomic.AtomicLong(),
@@ -210,7 +216,23 @@ public class RegionCubeStorage implements ICubicStorage, RecordingCubeStorage {
         Optional<ByteBuffer> data = this.save.load(new EntryLocation2D(pos.chunkXPos, pos.chunkZPos), true);
         if (!data.isPresent()) return null;
 
-        return CCNBTUtils.loadTag(data.get());
+        return decodeColumn(pos, data.get(), null);
+    }
+
+    /** As {@link #decodeCube}, for a per-column record or a column group record. */
+    private NBTTagCompound decodeColumn(ChunkCoordIntPair pos, ByteBuffer record,
+        @org.jetbrains.annotations.Nullable Map<ByteBuffer, ColumnGroupCodec.Stored> decoded) throws IOException {
+        if (!bundled || !ColumnGroupCodec.isGroup(record)) return CCNBTUtils.loadTag(record);
+        int slot = ColumnGroupCodec.slot(pos);
+        if ((ColumnGroupCodec.memberMask(record) & 1 << slot) == 0) {
+            throw new IOException("Column " + pos + " points at a column group record without it");
+        }
+        ColumnGroupCodec.Stored stored = decoded == null ? null : decoded.get(record);
+        if (stored == null) {
+            stored = ColumnGroupCodec.read(record);
+            if (decoded != null) decoded.put(record, stored);
+        }
+        return stored.member(slot);
     }
 
     @Override
@@ -249,22 +271,56 @@ public class RegionCubeStorage implements ICubicStorage, RecordingCubeStorage {
             DataUtils.mapToList(positions.cubes, c -> new EntryLocation3D(c.getX(), c.getY(), c.getZ())),
             false);
 
-        var columnTags = columns.read.entrySet()
-            .parallelStream()
-            .map(e -> {
-                try {
-                    return Pair.of(
-                        new ChunkCoordIntPair(
-                            e.getKey()
-                                .getEntryX(),
-                            e.getKey()
-                                .getEntryZ()),
-                        CCNBTUtils.loadTag(e.getValue()));
-                } catch (IOException ex) {
-                    throw new UncheckedIOException(ex);
-                }
-            })
-            .collect(Collectors.toMap(Pair::left, Pair::right));
+        Map<ChunkCoordIntPair, NBTTagCompound> columnTags;
+        if (!bundled) {
+            columnTags = columns.read.entrySet()
+                .parallelStream()
+                .map(e -> {
+                    try {
+                        return Pair.of(
+                            new ChunkCoordIntPair(
+                                e.getKey()
+                                    .getEntryX(),
+                                e.getKey()
+                                    .getEntryZ()),
+                            CCNBTUtils.loadTag(e.getValue()));
+                    } catch (IOException ex) {
+                        throw new UncheckedIOException(ex);
+                    }
+                })
+                .collect(Collectors.toMap(Pair::left, Pair::right));
+        } else {
+            // decode each column group record once for all its requested members
+            Map<ChunkCoordIntPair, List<Map.Entry<EntryLocation2D, ByteBuffer>>> byGroup = new HashMap<>();
+            for (Map.Entry<EntryLocation2D, ByteBuffer> e : columns.read.entrySet()) {
+                EntryLocation2D l = e.getKey();
+                byGroup
+                    .computeIfAbsent(
+                        ColumnGroupCodec.origin(new ChunkCoordIntPair(l.getEntryX(), l.getEntryZ())),
+                        k -> new ArrayList<>(4))
+                    .add(e);
+            }
+            columnTags = new java.util.concurrent.ConcurrentHashMap<>();
+            Map<ChunkCoordIntPair, NBTTagCompound> groupTags = columnTags;
+            try {
+                byGroup.values()
+                    .parallelStream()
+                    .forEach(members -> {
+                        Map<ByteBuffer, ColumnGroupCodec.Stored> decoded = new HashMap<>();
+                        for (Map.Entry<EntryLocation2D, ByteBuffer> e : members) {
+                            EntryLocation2D l = e.getKey();
+                            ChunkCoordIntPair pos = new ChunkCoordIntPair(l.getEntryX(), l.getEntryZ());
+                            try {
+                                groupTags.put(pos, decodeColumn(pos, e.getValue(), decoded));
+                            } catch (IOException ex) {
+                                throw new UncheckedIOException(ex);
+                            }
+                        }
+                    });
+            } catch (UncheckedIOException e) {
+                throw e.getCause();
+            }
+        }
 
         Map<CubePos, NBTTagCompound> cubeTags;
         if (!bundled) {
@@ -323,6 +379,10 @@ public class RegionCubeStorage implements ICubicStorage, RecordingCubeStorage {
 
     @Override
     public void writeColumn(ChunkCoordIntPair pos, NBTTagCompound nbt) throws IOException {
+        if (bundled) {
+            writeColumnGroups(Collections.singletonMap(pos, nbt));
+            return;
+        }
         ByteBuffer compressed = CCNBTUtils.saveTag(nbt, CubicChunksConfig.chunkCompression);
 
         // write compressed data to disk
@@ -354,16 +414,17 @@ public class RegionCubeStorage implements ICubicStorage, RecordingCubeStorage {
     @Override
     public void writeBatch(NBTBatch batch, @org.jetbrains.annotations.Nullable Map<CubePos, ByteBuffer> written)
         throws IOException {
+        if (bundled) {
+            writeColumnGroups(batch.columns);
+            writeBundles(batch.cubes, Collections.emptyList(), written);
+            return;
+        }
         // compress NBT data
         var compressedColumns = this
             .compressNBTForBatchWrite(batch.columns, pos -> new EntryLocation2D(pos.chunkXPos, pos.chunkZPos));
         // write compressed data to disk
         if (!compressedColumns.isEmpty()) {
             this.save.save2d(compressedColumns);
-        }
-        if (bundled) {
-            writeBundles(batch.cubes, Collections.emptyList(), written);
-            return;
         }
         var compressedCubes = this
             .compressNBTForBatchWrite(batch.cubes, pos -> new EntryLocation3D(pos.getX(), pos.getY(), pos.getZ()));
@@ -575,6 +636,156 @@ public class RegionCubeStorage implements ICubicStorage, RecordingCubeStorage {
             // the same buffer instance makes the region store one shared record
             if ((written & 1 << s) != 0) entries.put(key, result);
             else if ((present & 1 << s) != 0) deleted.add(key);
+        }
+    }
+
+    private static EntryLocation2D location(ChunkCoordIntPair pos) {
+        return new EntryLocation2D(pos.chunkXPos, pos.chunkZPos);
+    }
+
+    /**
+     * Writes columns as 2x2 group records, like {@link #writeBundles} for cubes: each affected group is read, changed
+     * and written again, and the header entries of its members then point at the one new record.
+     */
+    private void writeColumnGroups(Map<ChunkCoordIntPair, NBTTagCompound> columns) throws IOException {
+        if (columns.isEmpty()) return;
+        Map<ChunkCoordIntPair, NBTTagCompound[]> groups = new HashMap<>();
+        for (Map.Entry<ChunkCoordIntPair, NBTTagCompound> e : columns.entrySet()) {
+            groups.computeIfAbsent(ColumnGroupCodec.origin(e.getKey()), k -> new NBTTagCompound[4])[ColumnGroupCodec
+                .slot(e.getKey())] = e.getValue();
+        }
+        // Each group is prepared on its own: a group that fails does not stop the others from being written.
+        Map<EntryLocation2D, ByteBuffer> entries = new java.util.concurrent.ConcurrentHashMap<>();
+        List<IOException> failures = java.util.Collections.synchronizedList(new ArrayList<>());
+        groups.entrySet()
+            .parallelStream()
+            .forEach(group -> {
+                Map<EntryLocation2D, ByteBuffer> groupEntries = new HashMap<>();
+                try {
+                    rewriteColumnGroup(group.getKey(), group.getValue(), groupEntries);
+                    entries.putAll(groupEntries);
+                } catch (IOException | RuntimeException e) {
+                    failures.add(new IOException("Could not write column group " + group.getKey(), e));
+                }
+            });
+        if (!entries.isEmpty()) this.save.save2d(new HashMap<>(entries));
+        if (!failures.isEmpty()) {
+            IOException failure = failures.get(0);
+            for (int i = 1; i < failures.size(); i++) failure.addSuppressed(failures.get(i));
+            throw failure;
+        }
+    }
+
+    private void rewriteColumnGroup(ChunkCoordIntPair origin, NBTTagCompound[] replace,
+        Map<EntryLocation2D, ByteBuffer> entries) throws IOException {
+        int present = 0, untouched = 0;
+        for (int s = 0; s < 4; s++) {
+            if (columnExists(ColumnGroupCodec.member(origin, s))) present |= 1 << s;
+            if (replace[s] == null) untouched |= 1 << s;
+        }
+        untouched &= present;
+
+        // members whose stored data cannot be read or decoded keep their record and header as they are
+        int keep = 0;
+        // stored data of the members that stay as they are, by record (several members usually share one)
+        Map<ByteBuffer, Integer> records = new HashMap<>();
+        if (untouched != 0) {
+            List<EntryLocation2D> keys = new ArrayList<>();
+            for (int s = 0; s < 4; s++)
+                if ((untouched & 1 << s) != 0) keys.add(location(ColumnGroupCodec.member(origin, s)));
+            var read = this.save.load2D(keys, false);
+            for (int s = 0; s < 4; s++) {
+                if ((untouched & 1 << s) == 0) continue;
+                EntryLocation2D key = location(ColumnGroupCodec.member(origin, s));
+                IOException error = read.errored.get(key);
+                if (error != null) {
+                    CubicChunks.LOGGER.error(
+                        "Could not read stored column {} of column group {}; keeping it as it is",
+                        ColumnGroupCodec.member(origin, s),
+                        origin,
+                        error);
+                    keep |= 1 << s;
+                    untouched &= ~(1 << s);
+                    continue;
+                }
+                ByteBuffer record = read.read.get(key);
+                if (record == null) {
+                    untouched &= ~(1 << s); // gone meanwhile
+                    continue;
+                }
+                records.merge(record, 1 << s, (a, b) -> a | b);
+            }
+        }
+
+        ByteBuffer result = null;
+        Map.Entry<ByteBuffer, Integer> only = records.size() == 1 ? records.entrySet()
+            .iterator()
+            .next() : null;
+        boolean rewritten = false, oversized = false;
+        if (only != null && ColumnGroupCodec.isGroup(only.getKey())
+            && (ColumnGroupCodec.memberMask(only.getKey()) & only.getValue()) == only.getValue()) {
+            // usual case: keep the untouched members' encoded bytes, drop everything else of the old record
+            try {
+                result = ColumnGroupCodec.rewrite(ColumnGroupCodec.read(only.getKey()), replace, untouched);
+                rewritten = true;
+            } catch (CubeBundleCodec.OversizedBundleException e) {
+                rewritten = oversized = true;
+            } catch (IOException | RuntimeException e) {
+                CubicChunks.LOGGER.error(
+                    "Could not read the stored column group at {}; keeping its other columns as they are",
+                    origin,
+                    e);
+                keep |= only.getValue();
+            }
+        }
+        if (!rewritten) {
+            // per-column records (conversion) or members split over several records: encode the group again
+            NBTTagCompound[] all = replace.clone();
+            for (Map.Entry<ByteBuffer, Integer> record : records.entrySet()) {
+                if ((record.getValue() & keep) != 0) continue;
+                try {
+                    ColumnGroupCodec.Stored stored = ColumnGroupCodec.isGroup(record.getKey())
+                        ? ColumnGroupCodec.read(record.getKey())
+                        : null;
+                    NBTTagCompound[] decoded = new NBTTagCompound[4];
+                    for (int s = 0; s < 4; s++) {
+                        if ((record.getValue() & 1 << s) == 0) continue;
+                        decoded[s] = stored != null ? stored.member(s) : CCNBTUtils.loadTag(record.getKey());
+                        if (decoded[s] == null) throw new IOException("Column group record lacks member " + s);
+                    }
+                    for (int s = 0; s < 4; s++) if (decoded[s] != null) all[s] = decoded[s];
+                } catch (IOException | RuntimeException e) {
+                    CubicChunks.LOGGER.error(
+                        "Could not read stored columns {} of column group {}; keeping them as they are",
+                        record.getValue(),
+                        origin,
+                        e);
+                    keep |= record.getValue();
+                }
+            }
+            try {
+                result = ColumnGroupCodec.encode(all);
+            } catch (CubeBundleCodec.OversizedBundleException e) {
+                oversized = true;
+            }
+        }
+
+        if (oversized || result.remaining() > MAX_SHARED_RECORD) {
+            // as for bundles: write only the saved columns, one record each, and leave the others where they are
+            for (int s = 0; s < 4; s++) {
+                if (replace[s] == null) continue;
+                entries.put(
+                    location(ColumnGroupCodec.member(origin, s)),
+                    CCNBTUtils.saveTag(replace[s], CubicChunksConfig.chunkCompression));
+            }
+            return;
+        }
+
+        int written = ColumnGroupCodec.memberMask(result);
+        for (int s = 0; s < 4; s++) {
+            // the same buffer instance makes the region store one shared record
+            if ((keep & 1 << s) == 0 && (written & 1 << s) != 0)
+                entries.put(location(ColumnGroupCodec.member(origin, s)), result);
         }
     }
 

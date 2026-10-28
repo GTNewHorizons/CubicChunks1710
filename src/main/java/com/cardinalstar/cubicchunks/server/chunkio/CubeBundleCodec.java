@@ -251,7 +251,7 @@ final class CubeBundleCodec {
         return stored;
     }
 
-    private static DataInputStream stream(byte[] raw) {
+    static DataInputStream stream(byte[] raw) {
         return new DataInputStream(new ByteArrayInputStream(raw));
     }
 
@@ -267,7 +267,7 @@ final class CubeBundleCodec {
         if (in.available() != 0) throw new IOException("Trailing data in cube bundle");
     }
 
-    private static NBTTagCompound parse(byte[] member) throws IOException {
+    static NBTTagCompound parse(byte[] member) throws IOException {
         try (DataInputStream in = stream(member)) {
             return CompressedStreamTools.func_152456_a(in, NBTSizeTracker.field_152451_a);
         }
@@ -420,7 +420,7 @@ final class CubeBundleCodec {
         return serialize(out);
     }
 
-    private static byte[] serialize(NBTTagCompound root) throws IOException {
+    static byte[] serialize(NBTTagCompound root) throws IOException {
         ByteArrayOutputStream raw = new ByteArrayOutputStream(8192);
         try (DataOutputStream data = new DataOutputStream(raw)) {
             CompressedStreamTools.write(root, data);
@@ -515,7 +515,7 @@ final class CubeBundleCodec {
         }
     }
 
-    private static int codec(CCNBTUtils.TagCompression compression) {
+    static int codec(CCNBTUtils.TagCompression compression) {
         switch (compression) {
             case GZIP:
                 return CODEC_GZIP;
@@ -528,7 +528,7 @@ final class CubeBundleCodec {
         }
     }
 
-    private static byte[] compress(int codec, byte[] raw) throws IOException {
+    static byte[] compress(int codec, byte[] raw) throws IOException {
         switch (codec) {
             case CODEC_ZSTD: {
                 ByteBuffer out = ZstdCodec.compress(ByteBuffer.wrap(raw));
@@ -555,7 +555,7 @@ final class CubeBundleCodec {
         }
     }
 
-    private static byte[] decompress(int codec, ByteBuffer payload, int rawLength) throws IOException {
+    static byte[] decompress(int codec, ByteBuffer payload, int rawLength) throws IOException {
         byte[] out;
         switch (codec) {
             case CODEC_ZSTD:
