@@ -70,6 +70,7 @@ import cpw.mods.fml.common.event.FMLServerStoppedEvent;
 import cpw.mods.fml.common.network.NetworkCheckHandler;
 import cpw.mods.fml.common.network.NetworkRegistry;
 import cpw.mods.fml.common.network.internal.NetworkModHolder;
+import cpw.mods.fml.common.registry.GameRegistry.UniqueIdentifier;
 import cpw.mods.fml.common.versioning.ArtifactVersion;
 import cpw.mods.fml.common.versioning.DefaultArtifactVersion;
 import cpw.mods.fml.common.versioning.InvalidVersionSpecificationException;
@@ -216,9 +217,13 @@ public class CubicChunks {
     }
 
     public static void registerAnvil3dStorageFormatProvider() {
-        StorageFormatFactory.REGISTRY.register(StorageFormatFactory.ANVIL3D, new DefaultStorageFormatFactory(false));
         StorageFormatFactory.REGISTRY
-            .register(StorageFormatFactory.COMPACT_EMPTY, new DefaultStorageFormatFactory(true));
+            .register(StorageFormatFactory.ANVIL3D, new DefaultStorageFormatFactory(StorageFormatFactory.ANVIL3D));
+        StorageFormatFactory.REGISTRY.register(
+            StorageFormatFactory.COMPACT_EMPTY,
+            new DefaultStorageFormatFactory(StorageFormatFactory.COMPACT_EMPTY));
+        StorageFormatFactory.REGISTRY
+            .register(StorageFormatFactory.BUNDLES, new DefaultStorageFormatFactory(StorageFormatFactory.BUNDLES));
     }
 
     @NetworkCheckHandler
@@ -297,14 +302,16 @@ public class CubicChunks {
 
     private static class DefaultStorageFormatFactory extends StorageFormatFactory {
 
-        private final boolean compactEmpty;
+        private final boolean compactEmpty, bundled;
 
-        public DefaultStorageFormatFactory(boolean compactEmpty) {
-            this.compactEmpty = compactEmpty;
-            setRegistryName(compactEmpty ? StorageFormatFactory.COMPACT_EMPTY : StorageFormatFactory.ANVIL3D);
+        public DefaultStorageFormatFactory(UniqueIdentifier format) {
+            this.bundled = format.equals(StorageFormatFactory.BUNDLES);
+            this.compactEmpty = bundled || format.equals(StorageFormatFactory.COMPACT_EMPTY);
+            setRegistryName(format);
             setUnlocalizedName(
-                compactEmpty ? "cubicchunks.gui.storagefmt.anvil3d_compact_empty"
-                    : "cubicchunks.gui.storagefmt.anvil3d");
+                bundled ? "cubicchunks.gui.storagefmt.anvil3d_bundles"
+                    : compactEmpty ? "cubicchunks.gui.storagefmt.anvil3d_compact_empty"
+                        : "cubicchunks.gui.storagefmt.anvil3d");
         }
 
         @Override
@@ -327,7 +334,8 @@ public class CubicChunks {
                     .getWorldDirectory()
                     .toPath(),
                 path,
-                compactEmpty);
+                compactEmpty,
+                bundled);
         }
     }
 }

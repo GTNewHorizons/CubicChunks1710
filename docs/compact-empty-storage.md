@@ -1,22 +1,20 @@
 # Compact empty-cube storage
 
-Compact-empty Anvil3D is the default storage format for new CubicChunks worlds.
-It stores repeated metadata for sectionless cubes once per region, while keeping
-columns and other cubes in ordinary Anvil3D region files. It uses
+Compact-empty Anvil3D stores repeated metadata for sectionless cubes once per region,
+while keeping columns and other cubes in ordinary Anvil3D region files. The default
+[bundle storage](bundle-storage.md) uses the same compact tables for sectionless cubes. It uses
 [Zstandard compression](zstd-storage.md) by default and supports all four codecs.
 [Region compaction](region-compaction.md) automatically reclaims unused space in
 ordinary region files during server/world startup, never on gameplay dimension loads.
 
 ## Format selection and compatibility
 
-Leave `storageFormat` empty in `config/cubicchunks.cfg` to use the default, or set
-it explicitly to `cubicchunks:anvil3d-compact-empty`. The alternative
-`cubicchunks:anvil3d` format stores all cubes in ordinary region files.
-
-Existing CC worlds with `data/cubicchunks.world_format.dat` retain their recorded
-format. Changing the config does not migrate them. A world without that marker
-uses the configured format, or the default if the setting is empty. There is no
-in-place migration command between the two formats.
+Leave `storageFormat` empty in `config/cubicchunks.cfg` to use the default bundle
+storage. Worlds recorded as `cubicchunks:anvil3d-compact-empty` or
+`cubicchunks:anvil3d` in `data/cubicchunks.world_format.dat` are converted to bundle
+storage when opened; see [bundle storage](bundle-storage.md#existing-worlds). Set
+`storageFormat` to one of those formats to create new worlds in it; then no existing
+world is converted.
 
 Keep backups before changing mod versions or save formats. CC versions and tools
 that only support ordinary Anvil3D cannot read the compact tables. The ordinary

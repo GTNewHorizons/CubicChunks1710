@@ -53,8 +53,13 @@ public final class CompactCubeStorage implements ICubicStorage {
     private boolean closed;
 
     public CompactCubeStorage(Path path) throws IOException {
+        this(path, false);
+    }
+
+    /** With {@code bundled}, cubes that are not compact are stored in 2x2x2 bundle records. */
+    public CompactCubeStorage(Path path, boolean bundled) throws IOException {
         this.directory = path.resolve(DIRECTORY);
-        this.regular = new RegionCubeStorage(path, true);
+        this.regular = new RegionCubeStorage(path, true, bundled);
         try {
             Files.createDirectories(directory);
         } catch (IOException | RuntimeException | Error e) {

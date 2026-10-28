@@ -11,6 +11,7 @@ cubicchunks.gui.worldmenu.cc_default=CubicChunks: Default
 
 cubicchunks.gui.vertical_cube_load_distance=Vertical Distance: %d cubes
 cubicchunks.gui.storagefmt.anvil3d_compact_empty=Anvil3D with compact empty cubes
+cubicchunks.gui.storagefmt.anvil3d_bundles=Anvil3D with 2x2x2 cube bundles
 cubicchunks.config.chunk_compression=Chunk and cube compression
 cubicchunks.config.compact_regions_on_world_load=Compact region files at server startup
 

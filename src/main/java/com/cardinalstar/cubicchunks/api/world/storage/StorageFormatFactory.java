@@ -36,7 +36,9 @@ public abstract class StorageFormatFactory extends AbstractRegistryEntry<Storage
 
     public static final UniqueIdentifier ANVIL3D = new UniqueIdentifier("cubicchunks:anvil3d");
     public static final UniqueIdentifier COMPACT_EMPTY = new UniqueIdentifier("cubicchunks:anvil3d-compact-empty");
-    public static final UniqueIdentifier DEFAULT = COMPACT_EMPTY;
+    /** Compact empty cubes plus 2x2x2 bundle records for the other cubes. Existing worlds are converted to it. */
+    public static final UniqueIdentifier BUNDLES = new UniqueIdentifier("cubicchunks:anvil3d-bundles");
+    public static final UniqueIdentifier DEFAULT = BUNDLES;
     public static final Registry<StorageFormatFactory> REGISTRY = new Registry<>();
 
     public abstract Path getWorldSaveDirectory(ISaveHandler saveHandler, WorldServer worldServer);

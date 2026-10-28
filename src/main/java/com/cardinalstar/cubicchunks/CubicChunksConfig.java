@@ -98,8 +98,10 @@ public class CubicChunksConfig {
     public static boolean doClientLightFixes = false;
 
     @Config.LangKey("cubicchunks.config.storage_format")
-    @Config.Comment("The storage format. Note: this will be used for all newly created worlds. Existing worlds will continue to use the format they were created with.\n"
-        + "If empty, new worlds use compact-empty Anvil3D storage.")
+    @Config.Comment("The storage format for newly created worlds. If empty, new worlds use bundle storage"
+        + " (cubicchunks:anvil3d-bundles), and existing cubicchunks:anvil3d and cubicchunks:anvil3d-compact-empty worlds"
+        + " are converted to it when opened. Setting any other format creates new worlds in it and converts no"
+        + " existing world.")
     public static String storageFormat = "";
 
     @Config.LangKey("cubicchunks.config.spawn_generate_distance_horizontal")

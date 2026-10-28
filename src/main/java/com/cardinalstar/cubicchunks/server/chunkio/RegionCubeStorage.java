@@ -25,9 +25,11 @@ import java.io.UncheckedIOException;
 import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.Consumer;
@@ -39,6 +41,7 @@ import net.minecraft.world.ChunkCoordIntPair;
 
 import org.jetbrains.annotations.NotNull;
 
+import com.cardinalstar.cubicchunks.CubicChunks;
 import com.cardinalstar.cubicchunks.CubicChunksConfig;
 import com.cardinalstar.cubicchunks.api.world.storage.ICubicStorage;
 import com.cardinalstar.cubicchunks.server.chunkio.region.ShadowPagingRegion;
@@ -63,12 +66,19 @@ public class RegionCubeStorage implements ICubicStorage {
 
     /** Runs startup-only maintenance before opening storage; gameplay dimension loads never compact. */
     public static ICubicStorage openForWorld(Path worldRoot, Path path, boolean compactEmpty) throws IOException {
-        StartupRegionCompaction.beforeOpen(worldRoot, path);
-        return compactEmpty ? new CompactCubeStorage(path) : new RegionCubeStorage(path);
+        return openForWorld(worldRoot, path, compactEmpty, false);
     }
 
-    private static SaveCubeColumns saveForPath(Path path) throws IOException {
-        if (CubicChunksConfig.useShadowPagingIO) {
+    /** As above; {@code bundled} stores non-compact cubes in 2x2x2 bundle records (requires compact empty cubes). */
+    public static ICubicStorage openForWorld(Path worldRoot, Path path, boolean compactEmpty, boolean bundled)
+        throws IOException {
+        StartupRegionCompaction.beforeOpen(worldRoot, path);
+        return compactEmpty ? new CompactCubeStorage(path, bundled) : new RegionCubeStorage(path);
+    }
+
+    private static SaveCubeColumns saveForPath(Path path, boolean bundled) throws IOException {
+        // Bundle records are shared by several header entries, which only ShadowPagingRegion supports.
+        if (CubicChunksConfig.useShadowPagingIO || bundled) {
             Utils.createDirectories(path);
 
             Path part2d = path.resolve("region2d");
@@ -127,18 +137,25 @@ public class RegionCubeStorage implements ICubicStorage {
     private SaveCubeColumns save;
     private final Path cubeDirectory;
     private final StorageMaintenanceLock storageLock;
+    /** Cubes are written as 2x2x2 bundle records ({@link CubeBundleCodec}); per-cube records are still read. */
+    private final boolean bundled;
 
     public RegionCubeStorage(Path path) throws IOException {
-        this(path, false);
+        this(path, false, false);
     }
 
     RegionCubeStorage(Path path, boolean compactDelegate) throws IOException {
+        this(path, compactDelegate, false);
+    }
+
+    RegionCubeStorage(Path path, boolean compactDelegate, boolean bundled) throws IOException {
+        this.bundled = bundled;
         if (!compactDelegate && Files.exists(path.resolve(CompactCubeStorage.DIRECTORY))) {
             throw new IOException("This save uses compact empty cubes; open it with CompactCubeStorage");
         }
         this.storageLock = StorageMaintenanceLock.openStorage(path);
         try {
-            this.save = saveForPath(path);
+            this.save = saveForPath(path, bundled);
         } catch (IOException | RuntimeException | Error e) {
             try {
                 storageLock.close();
@@ -151,6 +168,10 @@ public class RegionCubeStorage implements ICubicStorage {
     }
 
     void removeCubes(Collection<CubePos> positions) throws IOException {
+        if (bundled) {
+            writeBundles(Collections.emptyMap(), positions);
+            return;
+        }
         Map<EntryLocation3D, ByteBuffer> removed = new HashMap<>();
         Map<String, Boolean> regions = new HashMap<>();
         for (CubePos pos : positions) {
@@ -195,7 +216,26 @@ public class RegionCubeStorage implements ICubicStorage {
         Optional<ByteBuffer> data = this.save.load(new EntryLocation3D(pos.getX(), pos.getY(), pos.getZ()), true);
         if (!data.isPresent()) return null;
 
-        return CCNBTUtils.loadTag(data.get());
+        return decodeCube(pos, data.get(), null);
+    }
+
+    /**
+     * Decodes a cube from its record: a per-cube NBT record, or a bundle record shared with the other cubes of its
+     * bundle. {@code decoded} (if given) reuses bundles already decoded for this batch, keyed by record content.
+     */
+    private NBTTagCompound decodeCube(CubePos pos, ByteBuffer record,
+        @org.jetbrains.annotations.Nullable Map<ByteBuffer, CubeBundleCodec.Stored> decoded) throws IOException {
+        if (!bundled || !CubeBundleCodec.isBundle(record)) return CCNBTUtils.loadTag(record);
+        int slot = CubeBundleCodec.slot(pos);
+        if ((CubeBundleCodec.memberMask(record) & 1 << slot) == 0) {
+            throw new IOException("Cube " + pos + " points at a bundle record without it");
+        }
+        CubeBundleCodec.Stored stored = decoded == null ? null : decoded.get(record);
+        if (stored == null) {
+            stored = CubeBundleCodec.read(record);
+            if (decoded != null) decoded.put(record, stored);
+        }
+        return stored.member(slot);
     }
 
     @Override
@@ -223,24 +263,57 @@ public class RegionCubeStorage implements ICubicStorage {
             })
             .collect(Collectors.toMap(Pair::left, Pair::right));
 
-        var cubeTags = cubes.read.entrySet()
-            .parallelStream()
-            .map(e -> {
-                try {
-                    return Pair.of(
-                        new CubePos(
-                            e.getKey()
-                                .getEntryX(),
-                            e.getKey()
-                                .getEntryY(),
-                            e.getKey()
-                                .getEntryZ()),
-                        CCNBTUtils.loadTag(e.getValue()));
-                } catch (IOException ex) {
-                    throw new UncheckedIOException(ex);
-                }
-            })
-            .collect(Collectors.toMap(Pair::left, Pair::right));
+        Map<CubePos, NBTTagCompound> cubeTags;
+        if (!bundled) {
+            cubeTags = cubes.read.entrySet()
+                .parallelStream()
+                .map(e -> {
+                    try {
+                        return Pair.of(
+                            new CubePos(
+                                e.getKey()
+                                    .getEntryX(),
+                                e.getKey()
+                                    .getEntryY(),
+                                e.getKey()
+                                    .getEntryZ()),
+                            CCNBTUtils.loadTag(e.getValue()));
+                    } catch (IOException ex) {
+                        throw new UncheckedIOException(ex);
+                    }
+                })
+                .collect(Collectors.toMap(Pair::left, Pair::right));
+        } else {
+            // decode each bundle record once for all its requested members
+            Map<CubePos, List<Map.Entry<EntryLocation3D, ByteBuffer>>> byBundle = new HashMap<>();
+            for (Map.Entry<EntryLocation3D, ByteBuffer> e : cubes.read.entrySet()) {
+                EntryLocation3D l = e.getKey();
+                byBundle
+                    .computeIfAbsent(
+                        CubeBundleCodec.origin(new CubePos(l.getEntryX(), l.getEntryY(), l.getEntryZ())),
+                        k -> new ArrayList<>(8))
+                    .add(e);
+            }
+            cubeTags = new java.util.concurrent.ConcurrentHashMap<>();
+            try {
+                byBundle.values()
+                    .parallelStream()
+                    .forEach(members -> {
+                        Map<ByteBuffer, CubeBundleCodec.Stored> decoded = new HashMap<>();
+                        for (Map.Entry<EntryLocation3D, ByteBuffer> e : members) {
+                            EntryLocation3D l = e.getKey();
+                            CubePos pos = new CubePos(l.getEntryX(), l.getEntryY(), l.getEntryZ());
+                            try {
+                                cubeTags.put(pos, decodeCube(pos, e.getValue(), decoded));
+                            } catch (IOException ex) {
+                                throw new UncheckedIOException(ex);
+                            }
+                        }
+                    });
+            } catch (UncheckedIOException e) {
+                throw e.getCause();
+            }
+        }
 
         return new NBTBatch(columnTags, cubeTags);
     }
@@ -255,6 +328,10 @@ public class RegionCubeStorage implements ICubicStorage {
 
     @Override
     public void writeCube(CubePos pos, NBTTagCompound nbt) throws IOException {
+        if (bundled) {
+            writeBundles(Collections.singletonMap(pos, nbt), Collections.emptyList());
+            return;
+        }
         ByteBuffer compressed = CCNBTUtils.saveTag(nbt, CubicChunksConfig.chunkCompression);
 
         // write compressed data to disk
@@ -266,15 +343,195 @@ public class RegionCubeStorage implements ICubicStorage {
         // compress NBT data
         var compressedColumns = this
             .compressNBTForBatchWrite(batch.columns, pos -> new EntryLocation2D(pos.chunkXPos, pos.chunkZPos));
-        var compressedCubes = this
-            .compressNBTForBatchWrite(batch.cubes, pos -> new EntryLocation3D(pos.getX(), pos.getY(), pos.getZ()));
-
         // write compressed data to disk
         if (!compressedColumns.isEmpty()) {
             this.save.save2d(compressedColumns);
         }
+        if (bundled) {
+            writeBundles(batch.cubes, Collections.emptyList());
+            return;
+        }
+        var compressedCubes = this
+            .compressNBTForBatchWrite(batch.cubes, pos -> new EntryLocation3D(pos.getX(), pos.getY(), pos.getZ()));
         if (!compressedCubes.isEmpty()) {
             this.save.save3d(compressedCubes);
+        }
+    }
+
+    /** Largest record a sector region stores itself; larger ones go to RegionLib's per-key external files. */
+    private static final int MAX_SHARED_RECORD = 255 * 512 - Integer.BYTES;
+
+    private static EntryLocation3D location(CubePos pos) {
+        return new EntryLocation3D(pos.getX(), pos.getY(), pos.getZ());
+    }
+
+    /**
+     * Writes and removes cubes as bundle records. Each affected bundle is read, changed and written again: members
+     * not written here keep their stored data (from a bundle record or a per-cube record, which is converted), and
+     * the header entries of all members then point at the one new record.
+     */
+    private void writeBundles(Map<CubePos, NBTTagCompound> cubes, Collection<CubePos> removed) throws IOException {
+        Map<CubePos, NBTTagCompound[]> replacements = new HashMap<>();
+        Map<CubePos, int[]> removals = new HashMap<>();
+        for (Map.Entry<CubePos, NBTTagCompound> e : cubes.entrySet()) {
+            replacements.computeIfAbsent(CubeBundleCodec.origin(e.getKey()), k -> new NBTTagCompound[8])[CubeBundleCodec
+                .slot(e.getKey())] = e.getValue();
+        }
+        for (CubePos pos : removed) {
+            removals.computeIfAbsent(CubeBundleCodec.origin(pos), k -> new int[1])[0] |= 1 << CubeBundleCodec.slot(pos);
+        }
+        java.util.Set<CubePos> origins = new java.util.HashSet<>(replacements.keySet());
+        origins.addAll(removals.keySet());
+
+        // Each bundle is prepared on its own: a bundle that fails does not stop the others from being written.
+        Map<EntryLocation3D, ByteBuffer> entries = new java.util.concurrent.ConcurrentHashMap<>();
+        List<EntryLocation3D> deleted = java.util.Collections.synchronizedList(new ArrayList<>());
+        List<IOException> failures = java.util.Collections.synchronizedList(new ArrayList<>());
+        origins.parallelStream()
+            .forEach(origin -> {
+                Map<EntryLocation3D, ByteBuffer> bundleEntries = new HashMap<>();
+                List<EntryLocation3D> bundleDeleted = new ArrayList<>();
+                try {
+                    NBTTagCompound[] replace = replacements.getOrDefault(origin, new NBTTagCompound[8]);
+                    int[] remove = removals.get(origin);
+                    rewriteBundle(origin, replace, remove == null ? 0 : remove[0], bundleEntries, bundleDeleted);
+                    entries.putAll(bundleEntries);
+                    deleted.addAll(bundleDeleted);
+                } catch (IOException | RuntimeException e) {
+                    failures.add(new IOException("Could not write cube bundle " + origin, e));
+                }
+            });
+        if (!entries.isEmpty() || !deleted.isEmpty()) {
+            Map<EntryLocation3D, ByteBuffer> writes = new HashMap<>(entries);
+            for (EntryLocation3D l : deleted) writes.put(l, null);
+            this.save.save3d(writes);
+        }
+        if (!failures.isEmpty()) {
+            IOException failure = failures.get(0);
+            for (int i = 1; i < failures.size(); i++) failure.addSuppressed(failures.get(i));
+            throw failure;
+        }
+    }
+
+    private void rewriteBundle(CubePos origin, NBTTagCompound[] replace, int removeMask,
+        Map<EntryLocation3D, ByteBuffer> entries, List<EntryLocation3D> deleted) throws IOException {
+        int replaceMask = 0, present = 0;
+        for (int s = 0; s < 8; s++) {
+            if (replace[s] != null) replaceMask |= 1 << s;
+            if (cubeExists(CubeBundleCodec.member(origin, s))) present |= 1 << s;
+        }
+        removeMask &= ~replaceMask & present;
+        // nothing stored changes, e.g. a cube that is compact already is saved again
+        if (replaceMask == 0 && removeMask == 0) return;
+        int untouched = present & ~replaceMask & ~removeMask;
+
+        // members whose stored data cannot be read or decoded keep their record and header as they are
+        int keep = 0;
+        // stored data of the members that stay as they are, by record (several members usually share one)
+        Map<ByteBuffer, Integer> records = new HashMap<>();
+        if (untouched != 0) {
+            List<EntryLocation3D> keys = new ArrayList<>();
+            for (int s = 0; s < 8; s++)
+                if ((untouched & 1 << s) != 0) keys.add(location(CubeBundleCodec.member(origin, s)));
+            var read = this.save.load3D(keys, false);
+            for (int s = 0; s < 8; s++) {
+                if ((untouched & 1 << s) == 0) continue;
+                EntryLocation3D key = location(CubeBundleCodec.member(origin, s));
+                IOException error = read.errored.get(key);
+                if (error != null) {
+                    CubicChunks.LOGGER.error(
+                        "Could not read stored cube {} of bundle {}; keeping it as it is",
+                        CubeBundleCodec.member(origin, s),
+                        origin,
+                        error);
+                    keep |= 1 << s;
+                    untouched &= ~(1 << s);
+                    continue;
+                }
+                ByteBuffer record = read.read.get(key);
+                if (record == null) {
+                    untouched &= ~(1 << s); // gone meanwhile
+                    continue;
+                }
+                records.merge(record, 1 << s, (a, b) -> a | b);
+            }
+        }
+
+        ByteBuffer result = null;
+        Map.Entry<ByteBuffer, Integer> only = records.size() == 1 ? records.entrySet()
+            .iterator()
+            .next() : null;
+        boolean appended = false, oversized = false;
+        if (only != null && CubeBundleCodec.isBundle(only.getKey())
+            && (CubeBundleCodec.memberMask(only.getKey()) & only.getValue()) == only.getValue()) {
+            // usual case: keep the untouched members' encoded bytes, drop everything else of the old record
+            try {
+                CubeBundleCodec.Stored stored = CubeBundleCodec.read(only.getKey());
+                result = CubeBundleCodec.rewrite(stored, replace, stored.mask() & ~untouched);
+                appended = true;
+            } catch (CubeBundleCodec.OversizedBundleException e) {
+                appended = oversized = true;
+            } catch (IOException | RuntimeException e) {
+                // also NBT parse failures of a member, which Minecraft reports as runtime exceptions
+                CubicChunks.LOGGER
+                    .error("Could not read the stored bundle at {}; keeping its other cubes as they are", origin, e);
+                keep |= only.getValue();
+            }
+        }
+        if (!appended) {
+            // per-cube records (conversion) or members split over several records: encode the bundle again
+            NBTTagCompound[] all = replace.clone();
+            for (Map.Entry<ByteBuffer, Integer> record : records.entrySet()) {
+                if ((record.getValue() & keep) != 0) continue;
+                try {
+                    CubeBundleCodec.Stored stored = CubeBundleCodec.isBundle(record.getKey())
+                        ? CubeBundleCodec.read(record.getKey())
+                        : null;
+                    NBTTagCompound[] decoded = new NBTTagCompound[8];
+                    for (int s = 0; s < 8; s++) {
+                        if ((record.getValue() & 1 << s) == 0) continue;
+                        decoded[s] = stored != null ? stored.member(s) : CCNBTUtils.loadTag(record.getKey());
+                        if (decoded[s] == null) throw new IOException("Bundle record lacks member " + s);
+                    }
+                    for (int s = 0; s < 8; s++) if (decoded[s] != null) all[s] = decoded[s];
+                } catch (IOException | RuntimeException e) {
+                    CubicChunks.LOGGER.error(
+                        "Could not read stored cubes {} of bundle {}; keeping them as they are",
+                        record.getValue(),
+                        origin,
+                        e);
+                    keep |= record.getValue();
+                }
+            }
+            boolean any = false;
+            for (NBTTagCompound member : all) any |= member != null;
+            try {
+                result = any ? CubeBundleCodec.encode(all) : null;
+            } catch (CubeBundleCodec.OversizedBundleException e) {
+                oversized = true;
+            }
+        }
+
+        if (oversized || result != null && result.remaining() > MAX_SHARED_RECORD) {
+            // Too large for one region record. Shared external files would be written after the members' headers are
+            // removed, so a crash in between could lose untouched members. Write only the saved cubes, one record each,
+            // and leave the others where they are.
+            for (int s = 0; s < 8; s++) {
+                EntryLocation3D key = location(CubeBundleCodec.member(origin, s));
+                if (replace[s] != null)
+                    entries.put(key, CCNBTUtils.saveTag(replace[s], CubicChunksConfig.chunkCompression));
+                else if ((removeMask & 1 << s) != 0) deleted.add(key);
+            }
+            return;
+        }
+
+        int written = result == null ? 0 : CubeBundleCodec.memberMask(result);
+        for (int s = 0; s < 8; s++) {
+            EntryLocation3D key = location(CubeBundleCodec.member(origin, s));
+            if ((keep & 1 << s) != 0) continue;
+            // the same buffer instance makes the region store one shared record
+            if ((written & 1 << s) != 0) entries.put(key, result);
+            else if ((present & 1 << s) != 0) deleted.add(key);
         }
     }
 
