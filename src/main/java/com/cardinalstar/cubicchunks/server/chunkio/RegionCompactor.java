@@ -237,8 +237,16 @@ public final class RegionCompactor {
                     .open(temporary, StandardOpenOption.READ, StandardOpenOption.WRITE)) {
                     ByteBuffer header = ByteBuffer.allocate(layout.header.length);
                     int nextSector = layout.header.length / SECTOR_BYTES;
+                    java.util.Map<Entry, Integer> moved = new java.util.IdentityHashMap<>();
                     for (Entry entry : layout.entries) {
-                        header.putInt(entry.slot * 4, (nextSector << 8) | entry.packedSectors());
+                        if (entry.shared != null) {
+                            // a record shared by several slots (cube bundles) is copied once
+                            header.putInt(entry.slot * 4, moved.get(entry.shared));
+                            continue;
+                        }
+                        int packed = (nextSector << 8) | entry.packedSectors();
+                        moved.put(entry, packed);
+                        header.putInt(entry.slot * 4, packed);
                         ByteBuffer bytes = read(input, entry.offset, entry.length + 4);
                         write(output, bytes, (long) nextSector * SECTOR_BYTES);
                         nextSector += entry.packedSectors();
@@ -310,12 +318,25 @@ public final class RegionCompactor {
         BitSet occupied = new BitSet();
         occupied.set(0, count * 4 / SECTOR_BYTES);
         List<Entry> entries = new ArrayList<>();
+        java.util.Map<Integer, Entry> bySector = new java.util.HashMap<>();
         long packedSize = count * 4;
         for (int slot = 0; slot < count; slot++) {
             int packed = header.getInt(slot * 4);
             if (packed == 0) continue;
             int sector = packed >>> 8, sectors = packed & 255;
             long offset = (long) sector * SECTOR_BYTES;
+            Entry first = bySector.get(sector);
+            if (first != null) {
+                // the cubes of one 2x2x2 bundle share their bundle record; anything else pointing at the same range is
+                // damage
+                if (first.sectors != sectors || count != 4096
+                    || (first.slot & ~BUNDLE_SLOT_BITS) != (slot & ~BUNDLE_SLOT_BITS)
+                    || !isBundleRecord(input, offset)) {
+                    throw new IOException("Invalid/overlapping sector allocation at slot " + slot + ": " + file);
+                }
+                entries.add(new Entry(slot, offset, first.length, sectors, first));
+                continue;
+            }
             int overlap = occupied.nextSetBit(sector);
             if (sectors == 0 || sector < count * 4 / SECTOR_BYTES
                 || offset + (long) sectors * SECTOR_BYTES > ((size + SECTOR_BYTES - 1) / SECTOR_BYTES) * SECTOR_BYTES
@@ -327,11 +348,20 @@ public final class RegionCompactor {
                 throw new IOException("Invalid record length at slot " + slot + ": " + file);
             }
             occupied.set(sector, sector + sectors);
-            Entry entry = new Entry(slot, offset, length);
+            Entry entry = new Entry(slot, offset, length, sectors, null);
             entries.add(entry);
+            bySector.put(sector, entry);
             packedSize += (long) entry.packedSectors() * SECTOR_BYTES;
         }
         return new Layout(header.array(), entries, size, packedSize);
+    }
+
+    /** Slot bits (x << 8 | y << 4 | z) that differ between the cubes of one 2x2x2 bundle. */
+    private static final int BUNDLE_SLOT_BITS = 1 << 8 | 1 << 4 | 1;
+
+    private static boolean isBundleRecord(FileChannel input, long offset) throws IOException {
+        ByteBuffer start = read(input, offset + 4, 3);
+        return start.get(0) == 'C' && start.get(1) == 'C' && start.get(2) == 'B';
     }
 
     private static void verifyCopy(FileChannel source, Layout before, FileChannel destination, Layout after)
@@ -343,6 +373,8 @@ public final class RegionCompactor {
         for (int i = 0; i < before.entries.size(); i++) {
             Entry a = before.entries.get(i), b = after.entries.get(i);
             if (a.slot != b.slot || a.length != b.length
+                || (a.shared == null) != (b.shared == null)
+                || a.shared != null && a.shared.slot != b.shared.slot
                 || !read(source, a.offset, a.length + 4).equals(read(destination, b.offset, b.length + 4))) {
                 throw new IOException("Compacted record verification failed at slot " + a.slot);
             }
@@ -398,13 +430,17 @@ public final class RegionCompactor {
 
     private static final class Entry {
 
-        final int slot, length;
+        final int slot, length, sectors;
         final long offset;
+        /** The first slot pointing at the same record, or {@code null}. */
+        final Entry shared;
 
-        Entry(int slot, long offset, int length) {
+        Entry(int slot, long offset, int length, int sectors, Entry shared) {
             this.slot = slot;
             this.offset = offset;
             this.length = length;
+            this.sectors = sectors;
+            this.shared = shared;
         }
 
         int packedSectors() {
