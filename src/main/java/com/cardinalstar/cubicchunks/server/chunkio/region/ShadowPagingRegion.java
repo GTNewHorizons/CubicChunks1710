@@ -34,10 +34,12 @@ import java.util.ArrayList;
 import java.util.BitSet;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.IdentityHashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
@@ -60,10 +62,15 @@ import cubicchunks.regionlib.util.CheckedConsumer;
 import cubicchunks.regionlib.util.CorruptedDataException;
 import cubicchunks.regionlib.util.Utils;
 import it.unimi.dsi.fastutil.Pair;
+import it.unimi.dsi.fastutil.ints.Int2IntOpenHashMap;
 
 /**
  * Simplified {@link Region} class implementing shadow paging by using custom sector tracker
  * that doesn't reallocate entries in place.
+ * <p>
+ * Several keys can share one record: keys written in one {@link #writeValues} batch with the same {@link ByteBuffer}
+ * instance point at the same sectors, which are written once. A sector range is released when the last key that
+ * points at it is rewritten or removed.
  */
 public class ShadowPagingRegion<K extends IKey<K>> implements IRegion<K> {
 
@@ -147,6 +154,8 @@ public class ShadowPagingRegion<K extends IKey<K>> implements IRegion<K> {
         List<UnsupportedDataException.WithKey> exceptions = new ArrayList<>();
         Map<K, Optional<RegionEntryLocation>> pendingHeaderUpdates = new HashMap<>(entries.size());
         Map<K, RegionEntryLocation> entryLocationsToUse = new HashMap<>(entries.size());
+        // keys given the same buffer instance share its record
+        Map<ByteBuffer, RegionEntryLocation> sharedLocations = new IdentityHashMap<>();
 
         Lock sectorLock = reserveSectorsLock.writeLock();
         Lock mainLock = dataLock.writeLock();
@@ -155,7 +164,7 @@ public class ShadowPagingRegion<K extends IKey<K>> implements IRegion<K> {
         // entries.forEach((k, v) -> CubicChunks.LOGGER.error(this + ": WRITE: " + k + ", " + v.remaining()));
         try {
             // first pass: reserve header locations:
-            reserveHeaderEntriesPass(entries, exceptions, pendingHeaderUpdates, entryLocationsToUse);
+            reserveHeaderEntriesPass(entries, exceptions, pendingHeaderUpdates, entryLocationsToUse, sharedLocations);
         } finally {
             sectorLock.unlock();
         }
@@ -181,8 +190,8 @@ public class ShadowPagingRegion<K extends IKey<K>> implements IRegion<K> {
     }
 
     private void reserveHeaderEntriesPass(Map<K, ByteBuffer> entries, List<UnsupportedDataException.WithKey> exceptions,
-        Map<K, Optional<RegionEntryLocation>> pendingHeaderUpdates, Map<K, RegionEntryLocation> entryLocationsToUse)
-        throws IOException {
+        Map<K, Optional<RegionEntryLocation>> pendingHeaderUpdates, Map<K, RegionEntryLocation> entryLocationsToUse,
+        Map<ByteBuffer, RegionEntryLocation> sharedLocations) throws IOException {
         for (Iterator<Map.Entry<K, ByteBuffer>> itr = entries.entrySet()
             .iterator(); itr.hasNext();) {
             Map.Entry<K, ByteBuffer> entry = itr.next();
@@ -197,16 +206,23 @@ public class ShadowPagingRegion<K extends IKey<K>> implements IRegion<K> {
                     // to be changed is the headers.
                     prevLocation = null;
                 } else {
-                    int size = value.remaining();
-                    int sizeWithSizeInfo = size + Integer.BYTES;
-                    int numSectors = this.getSectorNumber(sizeWithSizeInfo);
+                    RegionEntryLocation shared = sharedLocations.get(value);
+                    Pair<RegionEntryLocation, RegionEntryLocation> headerUpdate;
+                    if (shared != null) {
+                        // another key of this batch already reserved this buffer's record
+                        headerUpdate = this.sectorTracker.assignShared(key, shared);
+                    } else {
+                        int size = value.remaining();
+                        int sizeWithSizeInfo = size + Integer.BYTES;
+                        int numSectors = this.getSectorNumber(sizeWithSizeInfo);
 
-                    // this may throw UnsupportedDataException if data is too big.
-                    // it won't cause the sector tracker to be updated, meaning that reallocated sectors won't be
-                    // overwritten by
-                    // subsequent writes from the same batch.
-                    Pair<RegionEntryLocation, RegionEntryLocation> headerUpdate = this.sectorTracker
-                        .reserveForKey(key, numSectors);
+                        // this may throw UnsupportedDataException if data is too big.
+                        // it won't cause the sector tracker to be updated, meaning that reallocated sectors won't be
+                        // overwritten by
+                        // subsequent writes from the same batch.
+                        headerUpdate = this.sectorTracker.reserveForKey(key, numSectors);
+                        sharedLocations.put(value, headerUpdate.right());
+                    }
                     prevLocation = Optional.ofNullable(headerUpdate.left());
                     entryLocationsToUse.put(key, headerUpdate.right());
                 }
@@ -224,6 +240,7 @@ public class ShadowPagingRegion<K extends IKey<K>> implements IRegion<K> {
 
         List<ByteBuffer> tempBuffers = new ArrayList<>();
         ByteBuffer lengthPrefixBuffer = ByteBuffer.allocate(Integer.BYTES);
+        Set<ByteBuffer> written = Collections.newSetFromMap(new IdentityHashMap<>());
 
         for (Iterator<Map.Entry<K, ByteBuffer>> itr = entries.entrySet()
             .iterator(); itr.hasNext();) {
@@ -238,6 +255,8 @@ public class ShadowPagingRegion<K extends IKey<K>> implements IRegion<K> {
                 if (value != null) {
                     // Oversized entries were recorded for the fallback provider during reservation.
                     if (!entryLocationsToUse.containsKey(key)) continue;
+                    // a shared record is written once
+                    if (!written.add(value)) continue;
                     int size = value.remaining();
                     int bytesOffset = entryLocationsToUse.get(key)
                         .getOffset() * this.sectorSize;
@@ -286,8 +305,8 @@ public class ShadowPagingRegion<K extends IKey<K>> implements IRegion<K> {
                     // the entry is being deleted, so we need to remove the key from the headers entirely
                     this.sectorTracker.removeKey(key);
                 } else {
-                    // the entry changed, and we need to release the previous sectors
-                    this.sectorTracker.updateUsedSectorsFor(prevLocation.orElse(null), null);
+                    // the entry changed: release the previous sectors unless another key still points at them
+                    this.sectorTracker.release(prevLocation.orElse(null));
                 }
 
                 // write new header value for this key to disk
@@ -590,15 +609,18 @@ public class ShadowPagingRegion<K extends IKey<K>> implements IRegion<K> {
 
         private final BitSet usedSectors;
         private final IKeyIdToSectorMap<?, ?, K> sectorMap;
+        /** Number of keys pointing at each record, by its first sector. */
+        private final Int2IntOpenHashMap references;
 
         /**
          * Set of sectors which are queued to be zeroed out.
          */
         private final BitSet sectorsPendingErasure = new BitSet();
 
-        private SectorTracker(BitSet usedSectors, IKeyIdToSectorMap<?, ?, K> sectorMap) {
+        private SectorTracker(BitSet usedSectors, IKeyIdToSectorMap<?, ?, K> sectorMap, Int2IntOpenHashMap references) {
             this.usedSectors = usedSectors;
             this.sectorMap = sectorMap;
+            this.references = references;
         }
 
         public Optional<RegionEntryLocation> getEntryLocation(int id) {
@@ -622,7 +644,28 @@ public class ShadowPagingRegion<K extends IKey<K>> implements IRegion<K> {
             Optional<RegionEntryLocation> existing = sectorMap.getEntryLocation(key);
             RegionEntryLocation loc = new RegionEntryLocation(0, 0);
             this.sectorMap.setOffsetAndSize(key, loc);
-            this.updateUsedSectorsFor(existing.orElse(null), loc);
+            this.release(existing.orElse(null));
+        }
+
+        /** Drops one key's reference to a record; its sectors are released once no key points at them. */
+        public void release(RegionEntryLocation location) {
+            if (location == null) return;
+            int left = references.addTo(location.getOffset(), -1) - 1;
+            if (left > 0) return;
+            references.remove(location.getOffset());
+            this.updateUsedSectorsFor(location, null);
+        }
+
+        /**
+         * Points the given key at a record already reserved in this batch. Returns the old and new location like
+         * {@link #reserveForKey}; the old location is not released.
+         */
+        public Pair<RegionEntryLocation, RegionEntryLocation> assignShared(K key, RegionEntryLocation location)
+            throws IOException {
+            Optional<RegionEntryLocation> existing = sectorMap.getEntryLocation(key);
+            this.sectorMap.setOffsetAndSize(key, location);
+            references.addTo(location.getOffset(), 1);
+            return Pair.of(existing.orElse(null), location);
         }
 
         /**
@@ -637,6 +680,7 @@ public class ShadowPagingRegion<K extends IKey<K>> implements IRegion<K> {
             RegionEntryLocation found = findFree(requestedSize);
             this.sectorMap.setOffsetAndSize(key, found);
             this.updateUsedSectorsFor(null, found); // mark new sectors as allocated
+            references.put(found.getOffset(), 1);
             return Pair.of(existing.orElse(null), found);
         }
 
@@ -706,18 +750,21 @@ public class ShadowPagingRegion<K extends IKey<K>> implements IRegion<K> {
             for (int i = 0; i < reservedSectors; i++) {
                 usedSectors.set(i, true);
             }
-            // mark used sectors
+            // mark used sectors and count the keys pointing at each record (shared records have several)
+            Int2IntOpenHashMap references = new Int2IntOpenHashMap();
             for (RegionEntryLocation loc : sectorMap) {
                 if (sectorMap.isSpecial(loc)) {
                     continue;
                 }
                 int offset = loc.getOffset();
                 int size = loc.getSize();
+                if (size == 0) continue; // empty slot
                 for (int i = 0; i < size; i++) {
                     usedSectors.set(offset + i);
                 }
+                references.addTo(offset, 1);
             }
-            return new SectorTracker<>(usedSectors, sectorMap);
+            return new SectorTracker<>(usedSectors, sectorMap, references);
         }
     }
 
