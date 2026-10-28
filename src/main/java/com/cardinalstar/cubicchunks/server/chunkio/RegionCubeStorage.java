@@ -75,7 +75,7 @@ public class RegionCubeStorage implements ICubicStorage, RecordingCubeStorage {
      */
     public static ICubicStorage openForWorld(Path worldRoot, Path path, boolean compactEmpty, boolean bundled)
         throws IOException {
-        StartupRegionCompaction.beforeOpen(worldRoot, path);
+        StartupRegionCompaction.beforeOpen(worldRoot, path, bundled);
         return compactEmpty ? new CompactCubeStorage(path, bundled) : new RegionCubeStorage(path);
     }
 
@@ -452,7 +452,7 @@ public class RegionCubeStorage implements ICubicStorage, RecordingCubeStorage {
     }
 
     /** Largest record a sector region stores itself; larger ones go to RegionLib's per-key external files. */
-    private static final int MAX_SHARED_RECORD = 255 * 512 - Integer.BYTES;
+    static final int MAX_SHARED_RECORD = 255 * 512 - Integer.BYTES;
 
     private static EntryLocation3D location(CubePos pos) {
         return new EntryLocation3D(pos.getX(), pos.getY(), pos.getZ());

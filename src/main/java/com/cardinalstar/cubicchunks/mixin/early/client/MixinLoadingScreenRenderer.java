@@ -28,7 +28,8 @@ public class MixinLoadingScreenRenderer {
         String title = currentlyDisplayedText;
         String detail = field_73727_a;
         try {
-            currentlyDisplayedText = I18n.format("cubicchunks.compaction.title");
+            currentlyDisplayedText = I18n
+                .format(snapshot.converting() ? "cubicchunks.conversion.title" : "cubicchunks.compaction.title");
             field_73727_a = I18n.format(
                 "cubicchunks.compaction." + snapshot.phase,
                 snapshot.dimension,

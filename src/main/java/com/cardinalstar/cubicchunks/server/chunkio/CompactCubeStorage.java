@@ -207,7 +207,7 @@ public final class CompactCubeStorage implements ICubicStorage, RecordingCubeSto
         }
     }
 
-    private static byte[] template(CubePos pos, NBTTagCompound root) throws IOException {
+    static byte[] template(CubePos pos, NBTTagCompound root) throws IOException {
         if (!root.hasKey("Level", 10)) return null;
         NBTTagCompound level = root.getCompoundTag("Level");
         if (level.hasKey("Sections")) return null;

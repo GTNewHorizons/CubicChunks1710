@@ -76,6 +76,16 @@ the new format the first time one of its cubes or columns is saved, after which 
 old records are released. Region
 compaction reclaims the freed space on a later start.
 
+To convert a world completely at once instead, set `convertStorageOnWorldLoad=true`
+in `config/cubicchunks.cfg`. During the next server or world startup, before the
+world loads, every cube and column still stored in its own record is rewritten
+into bundle and column group records, and empty cubes move to their compact
+tables; startup compaction then reclaims the freed space. It covers the same
+dimension folders as startup compaction and skips data that is already
+converted, so later starts are quick. A bundle or column group with a record that
+cannot be read is left as it is, and members too large to share a record keep
+their own files.
+
 Older CubicChunks versions cannot read bundle or column group records. After a world has been
 opened with this version, keep backups if you may need to go back. Do not edit the
 format marker in `data/cubicchunks.world_format.dat`.

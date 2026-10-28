@@ -150,6 +150,15 @@ public class CubicChunksConfig {
     @Config.RequiresWorldRestart
     public static boolean compactRegionsOnWorldLoad = true;
 
+    @Config.LangKey("cubicchunks.config.convert_storage_on_world_load")
+    @Config.Comment("Disabled by default. During server/world startup, convert bundle storage worlds completely: every "
+        + "cube and column still stored in its own record is rewritten into bundle and column group records right "
+        + "away, instead of when it is next saved. Covers the same folders as compactRegionsOnWorldLoad, which then "
+        + "reclaims the freed space. Already converted data is skipped, so later starts are quick. "
+        + "Large worlds take longer to start while this runs.")
+    @Config.RequiresWorldRestart
+    public static boolean convertStorageOnWorldLoad = false;
+
     @Config.LangKey("cubicchunks.config.disable_lighting")
     @Config.Comment("Disables all light propagation")
     public static boolean disableLighting = false;
