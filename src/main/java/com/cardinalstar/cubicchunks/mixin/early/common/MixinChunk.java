@@ -347,6 +347,22 @@ public abstract class MixinChunk implements IColumn, IColumnInternal {
     // getBlockLightOpacity
     // ==============================================
 
+    /**
+     * Updates the opacity index for a changed block. Returns true when the height map changed, so that clients only
+     * get height map updates for block columns whose height map changed.
+     */
+    @Unique
+    private boolean setOpacity(int localX, int blockY, int localZ, Block block) {
+        boolean occluded = block.getLightOpacity() > 0;
+
+        if (opacityIndex instanceof HeightMap3D heightMap) {
+            return heightMap.setOccluded(localX, blockY, localZ, occluded);
+        }
+
+        opacityIndex.onOpacityChange(localX, blockY, localZ, occluded);
+        return true;
+    }
+
     @Unique
     private void markDirty(Cube cube) {
         this.isModified = true;
@@ -475,10 +491,12 @@ public abstract class MixinChunk implements IColumn, IColumnInternal {
 
         markDirty(blockToCube(y));
 
-        opacityIndex.onOpacityChange(blockToLocal(x), y, blockToLocal(z), block.getLightOpacity() > 0);
+        boolean heightMapChanged = setOpacity(blockToLocal(x), y, blockToLocal(z), block);
         getPrecipitationIndex().onBlockChange(blockToLocal(x), y, blockToLocal(z), block);
-        getWorldObj().getLightingManager()
-            .onHeightUpdate(x + 16 * this.xPosition, y, z + 16 * this.zPosition);
+        if (heightMapChanged) {
+            getWorldObj().getLightingManager()
+                .onHeightUpdate(x + 16 * this.xPosition, y, z + 16 * this.zPosition);
+        }
     }
 
     @Redirect(
@@ -530,9 +548,10 @@ public abstract class MixinChunk implements IColumn, IColumnInternal {
 
         Block block = cube.getBlock(x, y, z);
 
-        opacityIndex.onOpacityChange(blockToLocal(x), y, blockToLocal(z), block.getLightOpacity() > 0);
-        getWorldObj().getLightingManager()
-            .onHeightUpdate(x + 16 * this.xPosition, y, z + 16 * this.zPosition);
+        if (setOpacity(blockToLocal(x), y, blockToLocal(z), block)) {
+            getWorldObj().getLightingManager()
+                .onHeightUpdate(x + 16 * this.xPosition, y, z + 16 * this.zPosition);
+        }
     }
 
     @Redirect(
