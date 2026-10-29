@@ -30,6 +30,7 @@ import com.cardinalstar.cubicchunks.world.ICubicWorld;
 import com.github.bsideup.jabel.Desugar;
 
 import io.netty.buffer.ByteBuf;
+import io.netty.buffer.PooledByteBufAllocator;
 import io.netty.buffer.Unpooled;
 
 @ParametersAreNonnullByDefault
@@ -47,16 +48,18 @@ public class PacketEncoderColumn extends CCPacketEncoder<PacketEncoderColumn.Pac
     public PacketEncoderColumn() {}
 
     public static PacketColumn createPacket(Chunk column) {
-        ByteBuf buffer = Unpooled.buffer();
-        CCPacketBuffer out = new CCPacketBuffer(buffer);
+        // only the written bytes are copied out, so the pooled buffer is released right away
+        ByteBuf buffer = PooledByteBufAllocator.DEFAULT.buffer();
+        try {
+            WorldEncoder.encodeColumn(new CCPacketBuffer(buffer), column);
 
-        WorldEncoder.encodeColumn(out, column);
+            byte[] data = new byte[buffer.readableBytes()];
+            buffer.readBytes(data);
 
-        // only the written bytes: the backing array also holds the buffer's unused capacity
-        byte[] data = new byte[buffer.readableBytes()];
-        buffer.readBytes(data);
-
-        return new PacketColumn(column.xPosition, column.zPosition, data);
+            return new PacketColumn(column.xPosition, column.zPosition, data);
+        } finally {
+            buffer.release();
+        }
     }
 
     @Override
