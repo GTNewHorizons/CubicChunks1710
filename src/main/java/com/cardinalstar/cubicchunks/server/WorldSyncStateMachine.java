@@ -100,6 +100,9 @@ public class WorldSyncStateMachine {
                     PacketEncoderColumn.createPacket(cube.getColumn())
                         .sendToPlayer(player.player);
 
+                    // the column packet carries the whole current height map, including this tick's changes
+                    dirtyHeightCols.remove(pos.getX(), pos.getZ());
+
                     MinecraftForge.EVENT_BUS
                         .post(new ChunkWatchEvent.Watch(new ChunkCoordIntPair(pos.getX(), pos.getZ()), player.player));
                 }
