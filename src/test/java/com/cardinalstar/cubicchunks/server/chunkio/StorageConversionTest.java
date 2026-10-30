@@ -131,8 +131,8 @@ class StorageConversionTest {
     }
 
     /**
-     * A length beyond the record's sectors makes the read leave the member out; a negative one makes the whole batch
-     * read throw, so the conversion retries group by group.
+     * A length beyond the record's sectors (an I/O error of the record) and a negative one (an exception) both make
+     * the whole batch read throw, so the conversion retries group by group.
      */
     @ParameterizedTest
     @ValueSource(ints = { 0x7fffffff, 0xffffffff })

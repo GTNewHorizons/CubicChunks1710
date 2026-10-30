@@ -226,11 +226,10 @@ final class StorageConversion {
     }
 
     /**
-     * Reads the given groups and writes them again. A group with a member that could not be read is left as it is (the
-     * storage leaves such a member out of its result instead of failing). A large group is first encoded in memory,
-     * and when it does not fit one record only its empty cubes are written (to the compact tables), so it is not
-     * rewritten on every start. A batch that cannot be read or written is retried group by group, so one damaged
-     * record only leaves its own group as it is. Returns how many cubes or columns were written.
+     * Reads the given groups and writes them again. A large group is first encoded in memory, and when it does not fit
+     * one record only its empty cubes are written (to the compact tables), so it is not rewritten on every start. A
+     * batch that cannot be read (a damaged record fails the whole read) or written is retried group by group, so one
+     * damaged record only leaves its own group as it is. Returns how many cubes or columns were written.
      */
     @SuppressWarnings("unchecked")
     private static <P> long rewrite(CompactCubeStorage storage, List<Group<P>> groups, boolean columns, Path region,
@@ -242,17 +241,9 @@ final class StorageConversion {
                 columns ? new PosBatch((List<ChunkCoordIntPair>) positions, Collections.emptyList())
                     : new PosBatch(Collections.emptyList(), (List<CubePos>) positions));
             Map<P, NBTTagCompound> tags = new HashMap<>((Map<P, NBTTagCompound>) (columns ? read.columns : read.cubes));
-            long unreadable = 0, tooLarge = 0;
+            long tooLarge = 0;
             for (Group<P> group : groups) {
-                if (!tags.keySet()
-                    .containsAll(group.members)) {
-                    CubicChunks.LOGGER.error(
-                        "Could not read every member of {} in {}; leaving it as it is",
-                        group.members.get(0),
-                        region);
-                    group.members.forEach(tags::remove);
-                    unreadable += group.members.size();
-                } else if (group.large && !fits(group, tags, columns)) {
+                if (group.large && !fits(group, tags, columns)) {
                     for (P pos : group.members) {
                         // empty cubes still move to the compact tables; the others keep their own records
                         if (columns || CompactCubeStorage.template((CubePos) pos, tags.get(pos)) == null) {
@@ -265,7 +256,6 @@ final class StorageConversion {
             storage.writeBatch(
                 columns ? new NBTBatch((Map<ChunkCoordIntPair, NBTTagCompound>) tags, new HashMap<>())
                     : new NBTBatch(new HashMap<>(), (Map<CubePos, NBTTagCompound>) tags));
-            summary.failed += unreadable;
             summary.tooLarge += tooLarge;
             return tags.size();
         } catch (IOException | RuntimeException e) {

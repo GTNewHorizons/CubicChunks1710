@@ -26,6 +26,7 @@ import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -270,6 +271,9 @@ public class RegionCubeStorage implements ICubicStorage, RecordingCubeStorage {
         var cubes = this.save.load3D(
             DataUtils.mapToList(positions.cubes, c -> new EntryLocation3D(c.getX(), c.getY(), c.getZ())),
             false);
+        // a record that cannot be read fails the batch like one that cannot be decoded: left out, its column or cube
+        // would load as missing and be generated again, and the next save would overwrite the stored record
+        failOnReadErrors(columns.errored, cubes.errored);
 
         Map<ChunkCoordIntPair, NBTTagCompound> columnTags;
         if (!bundled) {
@@ -375,6 +379,17 @@ public class RegionCubeStorage implements ICubicStorage, RecordingCubeStorage {
         }
 
         return new NBTBatch(columnTags, cubeTags);
+    }
+
+    private static void failOnReadErrors(Map<?, IOException> columns, Map<?, IOException> cubes) throws IOException {
+        IOException failure = null;
+        for (Map<?, IOException> errors : Arrays.asList(columns, cubes)) {
+            for (IOException e : errors.values()) {
+                if (failure == null) failure = e;
+                else failure.addSuppressed(e);
+            }
+        }
+        if (failure != null) throw failure;
     }
 
     @Override
