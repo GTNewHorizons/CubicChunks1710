@@ -53,12 +53,15 @@ public abstract class MixinForgeChunkManager {
     }
 
     // After Forge loads the entity's 2D chunk column, also force-load the entity's cube in Y.
+    // loadWorld is Forge's and keeps its name, but the target is a vanilla method and must be remapped, or it matches
+    // nothing outside the development environment.
     @Inject(
         method = "loadWorld",
         at = @At(
             value = "INVOKE",
             target = "Lnet/minecraft/world/World;getChunkFromChunkCoords(II)Lnet/minecraft/world/chunk/Chunk;",
-            shift = At.Shift.AFTER),
+            shift = At.Shift.AFTER,
+            remap = true),
         remap = false)
     private static void injectLoadEntityCube(World world, CallbackInfo ci,
         @Local(name = "tick") ForgeChunkManager.Ticket tick) {
