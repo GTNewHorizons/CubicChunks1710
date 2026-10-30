@@ -44,6 +44,8 @@ public class CubeIO implements ICubeIO {
     // unloaded cubes whose saved data may wait for the rest of their bundle at once; beyond it the oldest are written
     // on the next tick
     private static final int MAX_WAITING_CUBES = 4096;
+    // a save that could not be written is logged at most this often, the ones in between are counted
+    private static final long SAVE_FAILURE_LOG_MILLIS = 60_000;
 
     private final ICubicStorage storage;
     private final IPreloadFailureDelegate preloadFailures;
@@ -66,6 +68,9 @@ public class CubeIO implements ICubeIO {
     /** Waiting bundles with no other cube loaded when their last save arrived, written on the next tick. */
     private final Set<CubePos> complete = new HashSet<>();
     private int waitingCubes;
+    /** {@link #waitClock()} before which failed saves are only counted, and their count. Server thread. */
+    private long nextSaveFailureLog = Long.MIN_VALUE;
+    private int unloggedSaveFailures;
 
     private static final class Waiting {
 
@@ -360,9 +365,16 @@ public class CubeIO implements ICubeIO {
         // with concurrent access to world data structures
 
         // add the column to the save queue
-        NBTTagCompound tag = IONbtWriter.write(column);
+        NBTTagCompound tag;
+        try {
+            tag = IONbtWriter.write(column);
 
-        MinecraftForge.EVENT_BUS.post(new ColumnEvent.SaveNBT(column.worldObj, column, tag));
+            MinecraftForge.EVENT_BUS.post(new ColumnEvent.SaveNBT(column.worldObj, column, tag));
+        } catch (Exception e) {
+            // like vanilla's AnvilChunkLoader.saveChunk: the column stays modified, and an unload goes on without it
+            saveFailed("column", pos, unloading, e);
+            return;
+        }
 
         column.isModified = false;
 
@@ -377,11 +389,20 @@ public class CubeIO implements ICubeIO {
 
     @Override
     public void saveCube(CubePos pos, Cube cube, boolean unloading) {
+        // before writing, so that a change made while the cube is written leaves it modified for the next save
         cube.markSaved();
 
-        NBTTagCompound tag = IONbtWriter.write(cube);
+        NBTTagCompound tag;
+        try {
+            tag = IONbtWriter.write(cube);
 
-        MinecraftForge.EVENT_BUS.post(new CubeEvent.SaveNBT(cube.getWorld(), cube, tag));
+            MinecraftForge.EVENT_BUS.post(new CubeEvent.SaveNBT(cube.getWorld(), cube, tag));
+        } catch (Exception e) {
+            // like vanilla's AnvilChunkLoader.saveChunk: the cube stays modified, and an unload goes on without it
+            cube.markDirty();
+            saveFailed("cube", pos, unloading, e);
+            return;
+        }
 
         long now = System.currentTimeMillis();
 
@@ -412,6 +433,31 @@ public class CubeIO implements ICubeIO {
         }
 
         TaskPool.submit(saveExecutor, new SaveCube(pos, tag));
+    }
+
+    /// Logs a column or cube whose data could not be written, at most once per {@link #SAVE_FAILURE_LOG_MILLIS}: what
+    /// breaks one save usually breaks every save of it.
+    private void saveFailed(String what, Object pos, boolean unloading, Exception e) {
+        long now = waitClock();
+        if (now < nextSaveFailureLog) {
+            unloggedSaveFailures++;
+            return;
+        }
+        nextSaveFailureLog = now + SAVE_FAILURE_LOG_MILLIS;
+        String state = unloading ? "unloaded without it, losing its changes since its last save"
+            : "still modified and will be saved again";
+        if (unloggedSaveFailures > 0) {
+            CubicChunks.LOGGER.error(
+                "Could not save {} {}; it is {} ({} more saves failed since the last message)",
+                what,
+                pos,
+                state,
+                unloggedSaveFailures,
+                e);
+        } else {
+            CubicChunks.LOGGER.error("Could not save {} {}; it is {}", what, pos, state, e);
+        }
+        unloggedSaveFailures = 0;
     }
 
     /**
