@@ -141,13 +141,12 @@ public class IONbtReader {
     static CubeInitLevel getCubeInitLevel(NBTTagCompound nbt) {
         NBTTagCompound level = nbt.getCompoundTag("Level");
 
-        boolean isSurfaceTracked = level.getBoolean("isSurfaceTracked");
         short population = level.getShort("population");
         boolean initLightDone = level.getBoolean("initLightDone");
 
         if (population != Cube.POP_ALL) return CubeInitLevel.Generated;
 
-        if (!isSurfaceTracked && !initLightDone) return CubeInitLevel.Populated;
+        if (!initLightDone) return CubeInitLevel.Populated;
 
         return CubeInitLevel.Lit;
     }
