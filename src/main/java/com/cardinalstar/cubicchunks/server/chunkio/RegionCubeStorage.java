@@ -859,16 +859,26 @@ public class RegionCubeStorage implements ICubicStorage, RecordingCubeStorage {
         }
     }
 
+    // RegionLib's fallback (.ext) region provider lists every slot of a region file that has no .ext file, so only
+    // keys with an entry are reported
+
     @Override
     public void forEachColumn(Consumer<ChunkCoordIntPair> callback) throws IOException {
-        this.save.getSaveSection2D()
-            .forAllKeys(pos -> callback.accept(new ChunkCoordIntPair(pos.getEntryX(), pos.getEntryZ())));
+        SaveSection2D section = this.save.getSaveSection2D();
+        section.forAllKeys(
+            pos -> {
+                if (section.hasEntry(pos)) callback.accept(new ChunkCoordIntPair(pos.getEntryX(), pos.getEntryZ()));
+            });
     }
 
     @Override
     public void forEachCube(Consumer<CubePos> callback) throws IOException {
-        this.save.getSaveSection3D()
-            .forAllKeys(pos -> callback.accept(new CubePos(pos.getEntryX(), pos.getEntryY(), pos.getEntryZ())));
+        SaveSection3D section = this.save.getSaveSection3D();
+        section.forAllKeys(
+            pos -> {
+                if (section.hasEntry(pos))
+                    callback.accept(new CubePos(pos.getEntryX(), pos.getEntryY(), pos.getEntryZ()));
+            });
     }
 
     @Override

@@ -413,9 +413,7 @@ public final class CompactCubeStorage implements ICubicStorage, RecordingCubeSto
         try {
             regular.forEachCube(pos -> {
                 try {
-                    // RegionLib can enumerate absent slots from its fallback region provider.
-                    if (!table(region(pos)).values.containsKey(slot(pos)) && regular.cubeExists(pos))
-                        callback.accept(pos);
+                    if (!table(region(pos)).values.containsKey(slot(pos))) callback.accept(pos);
                 } catch (IOException e) {
                     throw new java.io.UncheckedIOException(e);
                 }
