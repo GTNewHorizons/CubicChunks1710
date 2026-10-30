@@ -116,9 +116,10 @@ public class HeightMap3D implements IHeightMap {
         }
 
         // We don't want to insert >256 heights into the vanilla map because it breaks a ton of mod code.
-        // So we scan from the logical top of the world (256 in OW, 128 in nether) to find the first air->block
-        // transition in that column, defaulting to 0 if there are no blocks in that column (which happens in the end).
-        int fakeTop = tree.getBottomSolidY(worldActualHeight);
+        // So we scan down from the highest Y below the logical top of the world (255 in OW, 127 in nether) to find the
+        // first air->block transition in that column, defaulting to 0 if there are no blocks in that column (which
+        // happens in the end).
+        int fakeTop = tree.getBottomSolidY(worldActualHeight - 1);
 
         vanilla.set(localX, localZ, fakeTop == Coords.NO_HEIGHT ? 0 : fakeTop);
     }
@@ -127,12 +128,6 @@ public class HeightMap3D implements IHeightMap {
     public int getTopBlockY(int localX, int localZ) {
         return this.heightmap.get(localX, localZ)
             .getTopY();
-    }
-
-    @Override
-    public int getTopBlockYBelow(int localX, int blockY, int localZ) {
-        return this.heightmap.get(localX, localZ)
-            .getBottomAirY(blockY);
     }
 
     public byte[] getData() {

@@ -176,17 +176,6 @@ public class LightingManager implements ILightingManager {
     }
 
     @Override
-    public void onTrackCubeSurface(ICube cube) {
-        if (!world.isRemote) {
-            CubicPlayerManager playerManager = getPlayerManager();
-            if (playerManager != null) {
-                playerManager.onSurfaceTracked((Cube) cube);
-            }
-            tryScheduleOnLoadHeightChangeRelight(cube);
-        }
-    }
-
-    @Override
     public void doFirstLight(ICube cube) {
         if (CubicChunksConfig.disableLighting) {
             return;
@@ -218,7 +207,6 @@ public class LightingManager implements ILightingManager {
      */
     private void tryScheduleOnLoadHeightChangeRelight(ICube cube) {
         CubeLightData data = (CubeLightData) ((Cube) cube).getCubeLightData();
-        // checking isSurfaceTracked because external tools could set it, and the heightmap could be wrong
         if (data.lastHeightMap == null) {
             return;
         }
