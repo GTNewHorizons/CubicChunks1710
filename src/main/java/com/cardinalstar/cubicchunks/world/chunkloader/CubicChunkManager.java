@@ -36,6 +36,7 @@ import net.minecraftforge.common.util.Constants;
 
 import com.cardinalstar.cubicchunks.CubicChunksConfig;
 import com.cardinalstar.cubicchunks.mixin.early.common.forge.IForgeChunkManager;
+import com.cardinalstar.cubicchunks.util.Coords;
 import com.cardinalstar.cubicchunks.util.CubePos;
 import com.cardinalstar.cubicchunks.util.ITicket;
 import com.cardinalstar.cubicchunks.world.ICubicWorld;
@@ -46,6 +47,7 @@ import com.gtnewhorizon.gtnhlib.eventbus.EventBusSubscriber;
 import cpw.mods.fml.common.FMLLog;
 import cpw.mods.fml.common.eventhandler.SubscribeEvent;
 import it.unimi.dsi.fastutil.ints.IntArraySet;
+import it.unimi.dsi.fastutil.ints.IntOpenHashSet;
 import it.unimi.dsi.fastutil.ints.IntSet;
 
 /**
@@ -56,15 +58,16 @@ import it.unimi.dsi.fastutil.ints.IntSet;
 @EventBusSubscriber
 public class CubicChunkManager {
 
+    /** The cube Y range a vanilla column ticket loads: the vanilla world height, Y 0 to 255. */
+    private static final int COLUMN_TICKET_MIN_CUBE_Y = 0;
+    private static final int COLUMN_TICKET_MAX_CUBE_Y = 15;
+
     /**
      * ForgeChunkManager doesn't give any way to work with Y coordinates for forced chunks.
-     * So cubic chunks needs to get creative for it to work.
      *
-     * When a mod requests a forced chunk for the first time for that chunk, we store a snapshot
-     * of which cubes have been loaded for the given column at that time and attempt to keep that loaded.
-     * This solution can be exploited by players, so it may be changed in the future.
-     *
-     * When serializing forced chunks, we also store this map in a file, and load it when a world is loaded.
+     * A column forced through ForgeChunkManager keeps the cubes of the vanilla world height loaded (see
+     * onForgeChunkManagerForceChunk), so chunk loaders written for vanilla keep working. The cubes a ticket holds are
+     * stored with the ticket, in the same map as the cubes forced through the cubic API.
      */
 
     /**
@@ -163,8 +166,9 @@ public class CubicChunkManager {
             IntSet cubes = new IntArraySet(entry.getIntArray("cubes"));
             coordsMap.put(new ChunkCoordIntPair(x, z), cubes);
         }
-        // only store the cube Y coords, don't load
-        // mods will request a column to be loaded on loading callback and then we will force the cubes
+        // Only store the cube Y coords, don't load. Mods force their columns and cubes again in their loading callback:
+        // a column forced again holds the vanilla world height (onForgeChunkManagerForceChunk), cubes forced through
+        // the cubic API are held one by one. Stored Y values are a record only and are not loaded by themselves.
         ((ICubicTicketInternal) ticket).setAllForcedChunkCubes(coordsMap);
     }
 
@@ -196,71 +200,59 @@ public class CubicChunkManager {
             .getCubeFromCubeCoords(ticket.getEntityChunkX(), ticket.getEntityChunkY(), ticket.getEntityChunkZ());
     }
 
+    /**
+     * A vanilla column ticket has no Y, so it keeps the cubes of the vanilla world height (Y 0 to 255) of its column
+     * loaded, within the world's height limits. Mods that need other heights use
+     * {@link #forceChunk(ForgeChunkManager.Ticket, CubePos)}.
+     * Forge posts this every time a column is forced, also when mods force their columns again after a restart.
+     */
     @SubscribeEvent
     public static void onForgeChunkManagerForceChunk(ForgeChunkManager.ForceChunkEvent event) {
         ForgeChunkManager.Ticket ticket = event.ticket;
-        World worldInstance = ticket.world;
-        if (!(worldInstance instanceof WorldServer)) {
+        World world = ticket.world;
+        if (!(world instanceof WorldServer)) {
             return;
         }
-        // TODO: properly implement chunk loading
-        // addForcedCubesHeuristic(event, ticket, (WorldServer) worldInstance);
-    }
+        ICubicWorld cubicWorld = (ICubicWorld) world;
+        ICubicTicketInternal cubicTicket = (ICubicTicketInternal) ticket;
+        ChunkCoordIntPair column = event.location;
 
-    // private static void addForcedCubesHeuristic(ForgeChunkManager.ForceChunkEvent event,
-    // ForgeChunkManager.Ticket ticket, WorldServer worldInstance) {
-    // IntSet yCoords = ((ICubicTicketInternal) ticket).getAllForcedChunkCubes()
-    // .get(event.location);
-    // if (yCoords != null && !yCoords.isEmpty()) {
-    // yCoords.forEach(
-    // cubeY -> ((ICubicWorldInternal) ticket.world)
-    // .getCubeFromCubeCoords(event.location.chunkXPos, cubeY, event.location.chunkZPos)
-    // .getTickets()
-    // .add((ITicket) ticket));
-    // return;
-    // }
-    // WorldServer world = worldInstance;
-    // CubicPlayerManager cubeMap = (CubicPlayerManager) world.getPlayerManager();
-    // ColumnWatcher columnWatcher = cubeMap.get;
-    //
-    // if (columnWatcher == null) {
-    // ((ICubicTicketInternal) ticket).setForcedChunkCubes(event.location, new IntArraySet());
-    // return; // TODO: some different heuristic?
-    // }
-    // List<EntityPlayerMP> players = columnWatcher.getWatchingPlayers();
-    // int verticalViewDistance = CubicChunksConfig.verticalCubeLoadDistance;
-    // if (yCoords == null) {
-    // yCoords = new IntArraySet(players.size() * verticalViewDistance * 3);
-    // }
-    // for (EntityPlayerMP player : players) {
-    // for (int dy = -verticalViewDistance; dy <= verticalViewDistance; dy++) {
-    // int cubeY = Coords.getCubeYForEntity(player) + dy;
-    // Cube cube = (Cube) ((ICubicWorld) world)
-    // .getCubeFromCubeCoords(event.location.chunkXPos, cubeY, event.location.chunkZPos);
-    // cube.getTickets()
-    // .add((ITicket) ticket);
-    // yCoords.add(cubeY);
-    // }
-    // }
-    // ((ICubicTicketInternal) ticket).setForcedChunkCubes(event.location, yCoords);
-    // }
+        int minCubeY = Math.max(COLUMN_TICKET_MIN_CUBE_Y, Coords.blockToCube(cubicWorld.getMinHeight()));
+        int maxCubeY = Math.min(COLUMN_TICKET_MAX_CUBE_Y, Coords.blockToCube(cubicWorld.getMaxHeight() - 1));
+
+        IntSet forcedCubes = new IntOpenHashSet();
+        IntSet previous = cubicTicket.getAllForcedChunkCubes()
+            .get(column);
+        if (previous != null) {
+            forcedCubes.addAll(previous);
+        }
+        for (int cubeY = minCubeY; cubeY <= maxCubeY; cubeY++) {
+            Cube cube = (Cube) cubicWorld.getCubeFromCubeCoords(column.chunkXPos, cubeY, column.chunkZPos);
+            cube.getTickets()
+                .add(cubicTicket);
+            forcedCubes.add(cubeY);
+        }
+        cubicTicket.setForcedChunkCubes(column, forcedCubes);
+    }
 
     @SubscribeEvent
     public static void onForgeChunkManagerUnforceChunk(ForgeChunkManager.UnforceChunkEvent event) {
         ForgeChunkManager.Ticket ticket = event.ticket;
         World world = ticket.world;
-        // Null when vanilla mods force chunks via ForgeChunkManager directly, since onForgeChunkManagerForceChunk
-        // does not yet populate the cube map (see TODO there). Nothing to unforce in that case.
         IntSet forcedCubes = ((ICubicTicketInternal) ticket).getAllForcedChunkCubes()
             .get(event.location);
         if (forcedCubes == null) {
             return;
         }
         for (int cubeY : forcedCubes) {
-            Cube cube = (Cube) ((ICubicWorld) world)
-                .getCubeFromCubeCoords(event.location.chunkXPos, cubeY, event.location.chunkZPos);
-            cube.getTickets()
-                .remove((ITicket) ticket);
+            // A cube that is not loaded holds no ticket: after a restart the saved Y values are known before the mod
+            // forces its columns again. Loading it here would only load or generate it to remove nothing.
+            Cube cube = (Cube) ((ICubicWorld) world).getCubeCache()
+                .getLoadedCube(event.location.chunkXPos, cubeY, event.location.chunkZPos);
+            if (cube != null) {
+                cube.getTickets()
+                    .remove((ITicket) ticket);
+            }
         }
         ((ICubicTicketInternal) ticket).clearForcedChunkCubes(event.location);
     }
