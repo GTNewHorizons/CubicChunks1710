@@ -16,6 +16,7 @@ import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.IdentityHashMap;
@@ -24,6 +25,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.UUID;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.Consumer;
 import java.util.zip.GZIPInputStream;
 
@@ -46,10 +49,25 @@ public final class CompactCubeStorage implements ICubicStorage, RecordingCubeSto
     private static final int ENTRIES = 4096;
     private static final int MAX_TEMPLATE_BYTES = 8192;
     private static final int CACHE_BYTES = 4 * 1024 * 1024;
+    /** Reads of a cube found nowhere while tables were published; then it is read once more under the write lock. */
+    private static final int READ_ATTEMPTS = 4;
 
     private final RegionCubeStorage regular;
     private final Path directory;
+    /**
+     * Tables by region, guarded by itself. A published table is never changed: a write publishes a new one after its
+     * file is in place. Table files are read outside the lock.
+     */
     private final LinkedHashMap<CubePos, Table> cache = new LinkedHashMap<>(16, 0.75f, true);
+    /** Tables published by writes so far; changed under the cache lock, after the table is cached. */
+    private volatile long published;
+    /**
+     * Held by writers for their whole write: tables, bundle and column group records are read, changed and written
+     * back. Reads do not take it, so they do not wait for a write's encoding and disk I/O.
+     */
+    private final Object writeLock = new Object();
+    /** Shared by every operation, exclusive for {@link #close()}. */
+    private final ReentrantReadWriteLock openLock = new ReentrantReadWriteLock();
     private boolean closed;
 
     public CompactCubeStorage(Path path) throws IOException {
@@ -91,11 +109,26 @@ public final class CompactCubeStorage implements ICubicStorage, RecordingCubeSto
         return directory.resolve(region.getX() + "." + region.getY() + "." + region.getZ() + ".cce");
     }
 
-    private void checkOpen() throws IOException {
-        if (closed) throw new IOException("Compact cube storage is closed");
+    /** Takes the shared open lock; the caller unlocks it. */
+    private Lock open() throws IOException {
+        Lock lock = openLock.readLock();
+        lock.lock();
+        if (closed) {
+            lock.unlock();
+            throw new IOException("Compact cube storage is closed");
+        }
+        return lock;
     }
 
+    /** Publishes a table written by a write, once its file is in place. */
     private void remember(CubePos key, Table table) {
+        synchronized (cache) {
+            put(key, table);
+            published++;
+        }
+    }
+
+    private void put(CubePos key, Table table) {
         cache.put(key, table);
         long bytes = 0;
         for (Table value : cache.values()) bytes += value.memoryEstimate();
@@ -110,11 +143,33 @@ public final class CompactCubeStorage implements ICubicStorage, RecordingCubeSto
         }
     }
 
+    /**
+     * The current table of a region. A table is read from its file without the cache lock and cached only if no table
+     * was published meanwhile, so it cannot replace a newer one (a write moves its file into place before publishing).
+     */
     private Table table(CubePos key) throws IOException {
-        Table result = cache.get(key);
-        if (result != null) return result;
+        while (true) {
+            long version;
+            synchronized (cache) {
+                Table cached = cache.get(key);
+                if (cached != null) return cached;
+                version = published;
+            }
+            Table loaded = load(key);
+            synchronized (cache) {
+                Table cached = cache.get(key);
+                if (cached != null) return cached;
+                if (published == version) {
+                    put(key, loaded);
+                    return loaded;
+                }
+            }
+        }
+    }
+
+    private Table load(CubePos key) throws IOException {
         Path path = file(key);
-        result = new Table();
+        Table result = new Table();
         if (Files.exists(path)) {
             long size = Files.size(path);
             if (size < 16 || size > 16L + ENTRIES * (MAX_TEMPLATE_BYTES + 8L)) {
@@ -144,7 +199,6 @@ public final class CompactCubeStorage implements ICubicStorage, RecordingCubeSto
                 if (in.read() != -1) throw new IOException("Trailing compact cube data: " + path);
             }
         }
-        remember(key, result);
         return result;
     }
 
@@ -286,50 +340,127 @@ public final class CompactCubeStorage implements ICubicStorage, RecordingCubeSto
     }
 
     @Override
-    public synchronized boolean columnExists(ChunkCoordIntPair pos) throws IOException {
-        checkOpen();
-        return regular.columnExists(pos);
+    public boolean columnExists(ChunkCoordIntPair pos) throws IOException {
+        Lock lock = open();
+        try {
+            return regular.columnExists(pos);
+        } finally {
+            lock.unlock();
+        }
     }
 
+    // Reads do not wait for writes. A cube that becomes compact gets its new table published before its full record
+    // is removed, so a read that finds a cube nowhere reads it again if a table was published meanwhile, at last under
+    // the write lock. A cube that becomes full has its full record written before the table without it is published.
+
     @Override
-    public synchronized boolean cubeExists(CubePos pos) throws IOException {
-        checkOpen();
+    public boolean cubeExists(CubePos pos) throws IOException {
+        Lock lock = open();
+        try {
+            for (int attempt = 0; attempt < READ_ATTEMPTS; attempt++) {
+                long version = published;
+                if (exists(pos)) return true;
+                if (published == version) return false;
+            }
+            synchronized (writeLock) {
+                return exists(pos);
+            }
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    private boolean exists(CubePos pos) throws IOException {
         return table(region(pos)).values.containsKey(slot(pos)) || regular.cubeExists(pos);
     }
 
     @Override
-    public synchronized NBTTagCompound readColumn(ChunkCoordIntPair pos) throws IOException {
-        checkOpen();
-        return regular.readColumn(pos);
+    public NBTTagCompound readColumn(ChunkCoordIntPair pos) throws IOException {
+        Lock lock = open();
+        try {
+            return regular.readColumn(pos);
+        } finally {
+            lock.unlock();
+        }
     }
 
     @Override
-    public synchronized NBTTagCompound readCube(CubePos pos) throws IOException {
-        checkOpen();
+    public NBTTagCompound readCube(CubePos pos) throws IOException {
+        Lock lock = open();
+        try {
+            for (int attempt = 0; attempt < READ_ATTEMPTS; attempt++) {
+                long version = published;
+                NBTTagCompound tag = read(pos);
+                if (tag != null || published == version) return tag;
+            }
+            synchronized (writeLock) {
+                return read(pos);
+            }
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    private NBTTagCompound read(CubePos pos) throws IOException {
         byte[] value = table(region(pos)).values.get(slot(pos));
-        return value == null ? regular.readCube(pos) : restore(pos, value);
+        return value != null ? restore(pos, value) : regular.readCube(pos);
     }
 
     @Override
-    public synchronized NBTBatch readBatch(PosBatch positions) throws IOException {
-        checkOpen();
+    public NBTBatch readBatch(PosBatch positions) throws IOException {
+        Lock lock = open();
+        try {
+            long version = published;
+            NBTBatch result = read(positions.columns, positions.cubes);
+            Collection<CubePos> missing = positions.cubes;
+            for (int attempt = 1;; attempt++) {
+                missing = absent(missing, result.cubes);
+                if (missing.isEmpty() || published == version) return result;
+                version = published;
+                if (attempt < READ_ATTEMPTS) {
+                    result.cubes.putAll(read(Collections.emptyList(), missing).cubes);
+                    continue;
+                }
+                synchronized (writeLock) {
+                    result.cubes.putAll(read(Collections.emptyList(), missing).cubes);
+                }
+                return result;
+            }
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    private NBTBatch read(Collection<ChunkCoordIntPair> columns, Collection<CubePos> cubes) throws IOException {
         Map<CubePos, NBTTagCompound> compact = new HashMap<>();
         Map<CubePos, Table> tables = new HashMap<>();
         List<CubePos> normal = new ArrayList<>();
-        for (CubePos pos : positions.cubes) {
+        for (CubePos pos : cubes) {
             byte[] value = batchTable(region(pos), tables).values.get(slot(pos));
             if (value == null) normal.add(pos);
             else compact.put(pos, restore(pos, value));
         }
-        NBTBatch result = regular.readBatch(new PosBatch(positions.columns, normal));
+        NBTBatch result = regular.readBatch(new PosBatch(columns, normal));
         result.cubes.putAll(compact);
         return result;
     }
 
+    private static List<CubePos> absent(Collection<CubePos> positions, Map<CubePos, NBTTagCompound> found) {
+        List<CubePos> out = new ArrayList<>();
+        for (CubePos pos : positions) if (!found.containsKey(pos)) out.add(pos);
+        return out;
+    }
+
     @Override
-    public synchronized void writeColumn(ChunkCoordIntPair pos, NBTTagCompound nbt) throws IOException {
-        checkOpen();
-        regular.writeColumn(pos, nbt);
+    public void writeColumn(ChunkCoordIntPair pos, NBTTagCompound nbt) throws IOException {
+        Lock lock = open();
+        try {
+            synchronized (writeLock) {
+                regular.writeColumn(pos, nbt);
+            }
+        } finally {
+            lock.unlock();
+        }
     }
 
     @Override
@@ -338,7 +469,7 @@ public final class CompactCubeStorage implements ICubicStorage, RecordingCubeSto
     }
 
     @Override
-    public synchronized void writeBatch(NBTBatch batch) throws IOException {
+    public void writeBatch(NBTBatch batch) throws IOException {
         writeBatch(batch, null);
     }
 
@@ -348,9 +479,20 @@ public final class CompactCubeStorage implements ICubicStorage, RecordingCubeSto
     }
 
     @Override
-    public synchronized void writeBatch(NBTBatch batch,
-        @org.jetbrains.annotations.Nullable Map<CubePos, ByteBuffer> written) throws IOException {
-        checkOpen();
+    public void writeBatch(NBTBatch batch, @org.jetbrains.annotations.Nullable Map<CubePos, ByteBuffer> written)
+        throws IOException {
+        Lock lock = open();
+        try {
+            synchronized (writeLock) {
+                write(batch, written);
+            }
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    private void write(NBTBatch batch, @org.jetbrains.annotations.Nullable Map<CubePos, ByteBuffer> written)
+        throws IOException {
         Map<CubePos, NBTTagCompound> normal = new HashMap<>();
         Map<CubePos, Table> changed = new LinkedHashMap<>();
         Map<CubePos, Table> tables = new HashMap<>();
@@ -402,14 +544,31 @@ public final class CompactCubeStorage implements ICubicStorage, RecordingCubeSto
     }
 
     @Override
-    public synchronized void forEachColumn(Consumer<ChunkCoordIntPair> callback) throws IOException {
-        checkOpen();
-        regular.forEachColumn(callback);
+    public void forEachColumn(Consumer<ChunkCoordIntPair> callback) throws IOException {
+        Lock lock = open();
+        try {
+            synchronized (writeLock) {
+                regular.forEachColumn(callback);
+            }
+        } finally {
+            lock.unlock();
+        }
     }
 
     @Override
-    public synchronized void forEachCube(Consumer<CubePos> callback) throws IOException {
-        checkOpen();
+    public void forEachCube(Consumer<CubePos> callback) throws IOException {
+        Lock lock = open();
+        try {
+            // a stable view: no table or record changes while listing
+            synchronized (writeLock) {
+                listCubes(callback);
+            }
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    private void listCubes(Consumer<CubePos> callback) throws IOException {
         try {
             regular.forEachCube(pos -> {
                 try {
@@ -453,17 +612,31 @@ public final class CompactCubeStorage implements ICubicStorage, RecordingCubeSto
     }
 
     @Override
-    public synchronized void flush() throws IOException {
-        checkOpen();
-        regular.flush();
+    public void flush() throws IOException {
+        Lock lock = open();
+        try {
+            synchronized (writeLock) {
+                regular.flush();
+            }
+        } finally {
+            lock.unlock();
+        }
     }
 
     @Override
-    public synchronized void close() throws IOException {
-        if (closed) return;
-        regular.close();
-        cache.clear();
-        closed = true;
+    public void close() throws IOException {
+        Lock lock = openLock.writeLock();
+        lock.lock();
+        try {
+            if (closed) return;
+            regular.close();
+            synchronized (cache) {
+                cache.clear();
+            }
+            closed = true;
+        } finally {
+            lock.unlock();
+        }
     }
 
     private static final class Table {
