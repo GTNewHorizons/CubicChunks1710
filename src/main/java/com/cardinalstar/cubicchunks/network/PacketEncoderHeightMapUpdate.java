@@ -20,9 +20,6 @@
  */
 package com.cardinalstar.cubicchunks.network;
 
-import java.util.ArrayList;
-import java.util.List;
-
 import javax.annotation.ParametersAreNonnullByDefault;
 
 import net.minecraft.world.ChunkCoordIntPair;
@@ -44,13 +41,15 @@ import com.cardinalstar.cubicchunks.world.cube.Cube;
 import com.cardinalstar.cubicchunks.world.heightmap.HeightMap3D;
 import com.github.bsideup.jabel.Desugar;
 
+import io.netty.buffer.ByteBuf;
+import io.netty.buffer.PooledByteBufAllocator;
 import io.netty.buffer.Unpooled;
 
 @ParametersAreNonnullByDefault
 public class PacketEncoderHeightMapUpdate extends CCPacketEncoder<PacketEncoderHeightMapUpdate.PacketHeightMapUpdate> {
 
     @Desugar
-    public record PacketHeightMapUpdate(ChunkCoordIntPair chunk, BooleanArray2D updates, List<CCPacketBuffer> data)
+    public record PacketHeightMapUpdate(ChunkCoordIntPair chunk, BooleanArray2D updates, byte[] data)
         implements CCPacket {
 
         @Override
@@ -64,19 +63,25 @@ public class PacketEncoderHeightMapUpdate extends CCPacketEncoder<PacketEncoderH
     public static PacketHeightMapUpdate createPacket(Chunk column, BooleanArray2D updates) {
         ChunkCoordIntPair pos = column.getChunkCoordIntPair();
 
-        List<CCPacketBuffer> data = new ArrayList<>();
-
         HeightMap3D opacityIndex = (HeightMap3D) ((IColumnInternal) column).getOpacityIndex();
 
-        for (Vector2ic v : updates) {
-            CCPacketBuffer buffer = new CCPacketBuffer(Unpooled.buffer());
+        // the changed block columns one after another in the order of the mask; only the written bytes are copied out,
+        // so the pooled buffer is released right away
+        ByteBuf buffer = PooledByteBufAllocator.DEFAULT.buffer();
+        try {
+            CCPacketBuffer out = new CCPacketBuffer(buffer);
 
-            opacityIndex.writeData(v.x(), v.y(), buffer);
+            for (Vector2ic v : updates) {
+                opacityIndex.writeCompact(v.x(), v.y(), out);
+            }
 
-            data.add(buffer);
+            byte[] data = new byte[buffer.readableBytes()];
+            buffer.readBytes(data);
+
+            return new PacketHeightMapUpdate(pos, updates.clone(), data);
+        } finally {
+            buffer.release();
         }
-
-        return new PacketHeightMapUpdate(pos, updates.clone(), data);
     }
 
     @Override
@@ -89,7 +94,7 @@ public class PacketEncoderHeightMapUpdate extends CCPacketEncoder<PacketEncoderH
         buffer.writeChunkPos(packet.chunk);
 
         buffer.writeByteArray(packet.updates.toByteArray());
-        buffer.writeList(packet.data, CCPacketBuffer::writeByteBuf);
+        buffer.writeByteArray(packet.data);
     }
 
     @Override
@@ -97,9 +102,8 @@ public class PacketEncoderHeightMapUpdate extends CCPacketEncoder<PacketEncoderH
         ChunkCoordIntPair pos = buffer.readChunkPos();
 
         BooleanArray2D updates = new BooleanArray2D(16, 16, buffer.readByteArray());
-        List<CCPacketBuffer> data = buffer.readList(buf -> new CCPacketBuffer(buf.readByteBuf()));
 
-        return new PacketHeightMapUpdate(pos, updates, data);
+        return new PacketHeightMapUpdate(pos, updates, buffer.readByteArray());
     }
 
     @Override
@@ -127,10 +131,10 @@ public class PacketEncoderHeightMapUpdate extends CCPacketEncoder<PacketEncoderH
             }
         }
 
-        int i = 0;
+        CCPacketBuffer data = new CCPacketBuffer(Unpooled.wrappedBuffer(packet.data));
 
         for (Vector2ic update : packet.updates) {
-            opacityIndex.readData(update.x(), update.y(), packet.data.get(i++));
+            opacityIndex.readCompact(update.x(), update.y(), data);
         }
 
         for (Vector2ic update : packet.updates) {

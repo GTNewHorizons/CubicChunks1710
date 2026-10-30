@@ -266,6 +266,53 @@ public final class YIntervalTree {
         runs = isNormalized(read) ? read : normalize(read);
     }
 
+    /**
+     * Writes the tree contents in the compact form sent to clients: the run count, the first {@code lo} zigzag-encoded,
+     * then each run's {@code hi - lo} and each further run's distance from the previous run minus the required free Y,
+     * all as varints of small non-negative numbers (a negative bound written by {@link #writeData}, the saved form,
+     * takes five bytes). The differences wrap around like the reader's sums, so every int round-trips.
+     */
+    public void writeCompact(CCPacketBuffer buf) {
+        int[] r = runs;
+        buf.writeVarIntToBuffer(r.length >> 1);
+        for (int i = 0; i < r.length; i += 2) {
+            if (i == 0) {
+                buf.writeVarIntToBuffer((r[0] << 1) ^ (r[0] >> 31));
+            } else {
+                buf.writeVarIntToBuffer(r[i] - r[i - 1] - 2);
+            }
+            buf.writeVarIntToBuffer(r[i + 1] - r[i]);
+        }
+    }
+
+    /**
+     * Reads tree contents written by {@link #writeCompact}. Resets all existing state first.
+     */
+    public void readCompact(CCPacketBuffer buf) {
+        int count = buf.readVarIntFromBuffer();
+        if (count <= 0) {
+            runs = EMPTY;
+            return;
+        }
+        // each value takes at least one byte: reject a corrupt count before allocating for it
+        if (count > buf.readableBytes() / 2) {
+            throw new IndexOutOfBoundsException("height map run count " + count + " exceeds the remaining data");
+        }
+        int[] read = new int[count * 2];
+        for (int i = 0; i < read.length; i += 2) {
+            int lo;
+            if (i == 0) {
+                int zigzag = buf.readVarIntFromBuffer();
+                lo = (zigzag >>> 1) ^ -(zigzag & 1);
+            } else {
+                lo = read[i - 1] + 2 + buf.readVarIntFromBuffer();
+            }
+            read[i] = lo;
+            read[i + 1] = lo + buf.readVarIntFromBuffer();
+        }
+        runs = isNormalized(read) ? read : normalize(read);
+    }
+
     // ---- Internals --------------------------------------------------------
 
     /** Returns the array index of the lo of the highest run in {@code r} with {@code lo <= y}, or -2 if none. */

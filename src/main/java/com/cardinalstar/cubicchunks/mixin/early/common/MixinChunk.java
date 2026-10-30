@@ -1095,12 +1095,12 @@ public abstract class MixinChunk implements IColumn, IColumnInternal {
 
     @Override
     public void writeHeightmapDataForClient(CCPacketBuffer out) {
-        ((HeightMap3D) this.opacityIndex).writeData(out);
+        ((HeightMap3D) this.opacityIndex).writeCompact(out);
     }
 
     @Override
     public void loadClientHeightmapData(CCPacketBuffer in) {
-        ((HeightMap3D) this.opacityIndex).readData(in);
+        ((HeightMap3D) this.opacityIndex).readCompact(in);
 
         // The server only sends the opacity index. Until the cubes arrive, assume their opaque blocks stop rain.
         if (cubeMap.isEmpty()) {
