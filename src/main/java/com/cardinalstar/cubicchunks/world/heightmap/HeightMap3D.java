@@ -129,12 +129,6 @@ public class HeightMap3D implements IHeightMap {
             .getTopY();
     }
 
-    @Override
-    public int getTopBlockYBelow(int localX, int blockY, int localZ) {
-        return this.heightmap.get(localX, localZ)
-            .getBottomAirY(blockY);
-    }
-
     public byte[] getData() {
         ByteBuf buf = PooledByteBufAllocator.DEFAULT.buffer();
 
