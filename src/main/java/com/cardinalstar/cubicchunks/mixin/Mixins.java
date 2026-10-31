@@ -266,6 +266,10 @@ public enum Mixins implements IMixins {
         .addCommonMixins("common.MixinNetHandlerPlayServer")
         .setPhase(Phase.EARLY)
         .setApplyIf(() -> true)),
+    MIXIN_SPAWN_COMMAND_HEIGHT(new MixinBuilder("Accept explicit spawn coordinates within physical world bounds")
+        .addCommonMixins("common.MixinCommandSetSpawnpoint", "common.MixinCommandSetDefaultSpawnpoint")
+        .setPhase(Phase.EARLY)
+        .setApplyIf(() -> true)),
 
     // =============================================================
     // Client Mixins
