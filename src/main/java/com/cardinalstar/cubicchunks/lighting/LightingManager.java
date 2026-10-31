@@ -50,7 +50,6 @@ import com.cardinalstar.cubicchunks.world.cube.Cube;
 @ParametersAreNonnullByDefault
 public class LightingManager implements ILightingManager {
 
-    public static final int MAX_CLIENT_LIGHT_SCAN_DEPTH = 64;
     private final World world;
     private final PhosphorLightEngine lightEngine;
     @Nullable
@@ -64,10 +63,6 @@ public class LightingManager implements ILightingManager {
         } else {
             this.firstLightProcessor = null;
         }
-    }
-
-    private CubeLightData getLightData(ICube cube) {
-        return (CubeLightData) ((Cube) cube).getCubeLightData();
     }
 
     @Override
@@ -124,14 +119,14 @@ public class LightingManager implements ILightingManager {
 
     @Override
     public void writeToNbt(ICube cube, NBTTagCompound lightingInfo) {
-        int[] lastHeightmap = cube.getColumn().heightMap;
-        lightingInfo.setIntArray("LastHeightMap", lastHeightmap);
+        lightingInfo.setIntArray("LastHeightMap", currentHeights(cube.getColumn()));
         LightingHooks.writeNeighborLightChecksToNBT(cube, lightingInfo);
     }
 
     @Override
     public void readFromNbt(ICube cube, NBTTagCompound lightingInfo) {
-        CubeLightData lightData = getLightData(cube);
+        CubeLightData lightData = (CubeLightData) ((Cube) cube).getCubeLightData();
+
         lightData.lastHeightMap = lightingInfo.hasKey("LastHeightMap") ? lightingInfo.getIntArray("LastHeightMap")
             : null;
         if (lightData.lastHeightMap != null) {
@@ -147,9 +142,8 @@ public class LightingManager implements ILightingManager {
                 }
                 int idx = i >> 5;
                 int bit = (i & 31) << 1;
-                long v = lightData.lastSaveHeightMapInfo[idx];
-                v |= ((long) flags) << bit;
-                lightData.lastSaveHeightMapInfo[idx] = v;
+
+                lightData.lastSaveHeightMapInfo[idx] |= (long) flags << bit;
             }
         }
         LightingHooks.readNeighborLightChecksFromNBT(cube, lightingInfo);
@@ -182,17 +176,6 @@ public class LightingManager implements ILightingManager {
     }
 
     @Override
-    public void onTrackCubeSurface(ICube cube) {
-        if (!world.isRemote) {
-            CubicPlayerManager playerManager = getPlayerManager();
-            if (playerManager != null) {
-                playerManager.onSurfaceTracked((Cube) cube);
-            }
-            tryScheduleOnLoadHeightChangeRelight(cube);
-        }
-    }
-
-    @Override
     public void doFirstLight(ICube cube) {
         if (CubicChunksConfig.disableLighting) {
             return;
@@ -208,12 +191,23 @@ public class LightingManager implements ILightingManager {
     }
 
     /**
+     * The real top block Y + 1 for each block column, as compared on load. Not {@code Chunk.heightMap}: that is capped
+     * at the world's actual height for mods.
+     */
+    private static int[] currentHeights(IColumnInternal column) {
+        int[] heights = new int[Cube.SIZE * Cube.SIZE];
+        for (int i = 0; i < heights.length; i++) {
+            heights[i] = column.getTopYWithStaging(i & 0xF, i >> 4) + 1;
+        }
+        return heights;
+    }
+
+    /**
      * If lastHeightMap is not null, update current height map from saved data
      */
     private void tryScheduleOnLoadHeightChangeRelight(ICube cube) {
         CubeLightData data = (CubeLightData) ((Cube) cube).getCubeLightData();
-        // checking isSurfaceTracked because external tools could set it, and the heightmap could be wrong
-        if (data.lastHeightMap == null || !cube.isSurfaceTracked()) {
+        if (data.lastHeightMap == null) {
             return;
         }
 
@@ -276,7 +270,7 @@ public class LightingManager implements ILightingManager {
 
         @Override
         public boolean needsSaving(ICube cube) {
-            int[] heightmap = cube.getColumn().heightMap;
+            int[] heightmap = currentHeights(cube.getColumn());
             for (int i = 0; i < heightmap.length; i++) {
                 int cy = Coords.blockToCube(heightmap[i] - 1);
                 int idx = i >> 5;
@@ -302,7 +296,7 @@ public class LightingManager implements ILightingManager {
         @Override
         public void markSaved(ICube cube) {
             Arrays.fill(lastSaveHeightMapInfo, 0L);
-            int[] heightmap = cube.getColumn().heightMap;
+            int[] heightmap = currentHeights(cube.getColumn());
             for (int i = 0; i < heightmap.length; i++) {
                 int cy = Coords.blockToCube(heightmap[i] - 1);
                 int flags = 0;
@@ -314,9 +308,8 @@ public class LightingManager implements ILightingManager {
                 }
                 int idx = i >> 5;
                 int bit = (i & 31) << 1;
-                long v = lastSaveHeightMapInfo[idx];
-                v |= ((long) flags) << bit;
-                lastSaveHeightMapInfo[idx] = v;
+
+                lastSaveHeightMapInfo[idx] |= (long) flags << bit;
             }
         }
     }
