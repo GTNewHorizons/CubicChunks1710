@@ -1,21 +1,18 @@
 package com.cardinalstar.cubicchunks.server.chunkio;
 
 import java.io.IOException;
-import java.time.Duration;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.Future;
 
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.world.ChunkCoordIntPair;
 import net.minecraft.world.chunk.Chunk;
 import net.minecraftforge.common.MinecraftForge;
 
-import org.jetbrains.annotations.Nullable;
-
 import com.cardinalstar.cubicchunks.CubicChunks;
+import com.cardinalstar.cubicchunks.CubicChunksConfig;
 import com.cardinalstar.cubicchunks.api.event.ColumnEvent;
 import com.cardinalstar.cubicchunks.api.event.CubeEvent;
 import com.cardinalstar.cubicchunks.api.world.storage.ICubicStorage;
@@ -28,17 +25,14 @@ import com.cardinalstar.cubicchunks.util.DataUtils;
 import com.cardinalstar.cubicchunks.world.cube.Cube;
 import com.github.bsideup.jabel.Desugar;
 
-import it.unimi.dsi.fastutil.objects.Object2ObjectLinkedOpenHashMap;
 import it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap;
-import lombok.AllArgsConstructor;
-import lombok.NoArgsConstructor;
 
 public class CubeIO implements ICubeIO {
 
-    private static final long EXPIRY = Duration.ofSeconds(120)
-        .toMillis();
-    private static final int COLUMN_CACHE_LIMIT = 5000;
-    private static final int CUBE_CACHE_LIMIT = 30000;
+    // read-ahead data is normally taken within ticks; drop it if the load was cancelled (it is still on disk)
+    private static final long PRELOAD_EXPIRY_MILLIS = 30_000;
+    // how long a save is remembered to refuse reads that started before it (the old cache kept saves this long)
+    private static final long SAVE_FENCE_MILLIS = 120_000;
     // how many entries a single save may check when trimming, to keep saves fast
     private static final int SAVE_TRIM_CHECKS = 100;
 
@@ -48,9 +42,8 @@ public class CubeIO implements ICubeIO {
     private final ITaskExecutor<CubePos, Optional<NBTTagCompound>> cubeLoadExecutor;
     private final ITaskExecutor<Savable, Void> saveExecutor;
 
-    private final Object2ObjectLinkedOpenHashMap<ChunkCoordIntPair, SaveData> columnCache = new Object2ObjectLinkedOpenHashMap<>();
-
-    private final Object2ObjectLinkedOpenHashMap<CubePos, SaveData> cubeCache = new Object2ObjectLinkedOpenHashMap<>();
+    private final IOCache<ChunkCoordIntPair> columnCache;
+    private final IOCache<CubePos> cubeCache;
 
     interface Savable {
     }
@@ -61,20 +54,12 @@ public class CubeIO implements ICubeIO {
     @Desugar
     private record SaveCube(CubePos pos, NBTTagCompound tag) implements Savable {}
 
-    @NoArgsConstructor
-    @AllArgsConstructor
-    private static class SaveData {
-
-        @Nullable
-        public NBTTagCompound tag;
-        @Nullable
-        public Future<?> task;
-        public long lastAccess;
-    }
-
     public CubeIO(ICubicStorage storage, IPreloadFailureDelegate preloadFailures) {
         this.storage = storage;
         this.preloadFailures = preloadFailures;
+        long cubeBudget = (long) Math.max(0, CubicChunksConfig.optimizations.saveCacheMegabytes) << 20;
+        this.cubeCache = new IOCache<>(cubeBudget, PRELOAD_EXPIRY_MILLIS, SAVE_FENCE_MILLIS);
+        this.columnCache = new IOCache<>(cubeBudget / 8, PRELOAD_EXPIRY_MILLIS, SAVE_FENCE_MILLIS);
 
         columnLoadExecutor = tasks -> {
             try {
@@ -114,28 +99,37 @@ public class CubeIO implements ICubeIO {
 
             @Override
             public void execute(List<ITaskFuture<Savable, Void>> tasks) {
-                Map<ChunkCoordIntPair, NBTTagCompound> columns = new Object2ObjectOpenHashMap<>();
-                Map<CubePos, NBTTagCompound> cubes = new Object2ObjectOpenHashMap<>();
-
-                for (ITaskFuture<Savable, Void> task : tasks) {
-                    Savable savable = task.getTask();
-
-                    if (savable instanceof SaveColumn column) {
-                        columns.put(column.pos, column.tag);
-                    }
-
-                    if (savable instanceof SaveCube cube) {
-                        cubes.put(cube.pos, cube.tag);
-                    }
-                }
-
                 IOException ex = null;
 
                 try {
+                    Map<ChunkCoordIntPair, NBTTagCompound> columns = new Object2ObjectOpenHashMap<>();
+                    Map<CubePos, NBTTagCompound> cubes = new Object2ObjectOpenHashMap<>();
+
+                    for (ITaskFuture<Savable, Void> task : tasks) {
+                        Savable savable = task.getTask();
+
+                        if (savable instanceof SaveColumn column) {
+                            columns.put(column.pos, column.tag);
+                        }
+
+                        if (savable instanceof SaveCube cube) {
+                            cubes.put(cube.pos, cube.tag);
+                        }
+                    }
+
                     storage.writeBatch(new ICubicStorage.NBTBatch(columns, cubes));
                 } catch (IOException e) {
                     CubicChunks.LOGGER.error("Could not save columns or cubes", e);
                     ex = e;
+                } finally {
+                    // also after a failure: the data stays readable from the cache until it is evicted. Settles every
+                    // queued save; one replaced by a newer save in this batch is ignored by the cache.
+                    long now = System.currentTimeMillis();
+                    for (ITaskFuture<Savable, Void> task : tasks) {
+                        Savable savable = task.getTask();
+                        if (savable instanceof SaveColumn column) settle(columnCache, column.pos, column.tag, now);
+                        if (savable instanceof SaveCube cube) settle(cubeCache, cube.pos, cube.tag, now);
+                    }
                 }
 
                 for (ITaskFuture<Savable, Void> task : tasks) {
@@ -148,19 +142,32 @@ public class CubeIO implements ICubeIO {
             }
 
             @Override
+            public boolean requiresSerialExecution() {
+                // a later save of a position must reach storage after an earlier one
+                return true;
+            }
+
+            @Override
             public boolean canMerge(List<ITaskFuture<Savable, Void>> tasks, Savable savable) {
                 return true;
             }
         };
     }
 
+    /// Ends a pending save. Must not throw: a save left pending would make flush() and close() wait forever.
+    private static <K> void settle(IOCache<K> cache, K pos, NBTTagCompound tag, long now) {
+        try {
+            cache.written(pos, tag, now);
+        } catch (Throwable t) {
+            CubicChunks.LOGGER.error("Could not cache saved data for {}", pos, t);
+            cache.discardPending(pos, tag);
+        }
+    }
+
     @Override
     public boolean columnExists(ChunkCoordIntPair pos) {
-        synchronized (columnCache) {
-            SaveData data = columnCache.get(pos);
-
-            if (data != null) return data.tag != null;
-        }
+        Boolean cached = columnCache.exists(pos);
+        if (cached != null) return cached;
 
         try {
             if (storage.columnExists(pos)) return true;
@@ -173,11 +180,8 @@ public class CubeIO implements ICubeIO {
 
     @Override
     public boolean cubeExists(CubePos pos) {
-        synchronized (cubeCache) {
-            SaveData data = cubeCache.get(pos);
-
-            if (data != null) return data.tag != null;
-        }
+        Boolean cached = cubeCache.exists(pos);
+        if (cached != null) return cached;
 
         try {
             if (storage.cubeExists(pos)) return true;
@@ -190,27 +194,20 @@ public class CubeIO implements ICubeIO {
 
     @Override
     public NBTTagCompound loadColumn(ChunkCoordIntPair pos) throws LoadFailureException {
-        synchronized (columnCache) {
-            SaveData data = columnCache.get(pos);
-
-            if (data != null) {
-                return data.tag == null ? null : (NBTTagCompound) data.tag.copy();
-            }
-        }
+        Optional<NBTTagCompound> cached = columnCache.take(pos);
+        if (cached != null) return cached.orElse(null);
 
         try {
+            long fence = columnCache.fence();
             NBTTagCompound tag = storage.readColumn(pos);
 
-            synchronized (columnCache) {
-                SaveData cached = columnCache.get(pos);
-                if (cached != null) {
-                    return cached.tag == null ? null : (NBTTagCompound) cached.tag.copy();
-                }
+            // a save that was queued while reading is newer than what was read
+            cached = columnCache.take(pos);
+            if (cached != null) return cached.orElse(null);
+            // ... and if its write already finished and its entry is gone, storage has it now
+            if (columnCache.savedSince(pos, fence)) tag = storage.readColumn(pos);
 
-                if (tag == null) {
-                    columnCache.put(pos, new SaveData(null, null, System.currentTimeMillis()));
-                }
-            }
+            if (tag == null) columnCache.putAbsent(pos, System.currentTimeMillis());
 
             return tag;
         } catch (IOException e) {
@@ -221,27 +218,20 @@ public class CubeIO implements ICubeIO {
 
     @Override
     public NBTTagCompound loadCube(CubePos pos) throws LoadFailureException {
-        synchronized (cubeCache) {
-            SaveData data = cubeCache.get(pos);
-
-            if (data != null) {
-                return data.tag == null ? null : (NBTTagCompound) data.tag.copy();
-            }
-        }
+        Optional<NBTTagCompound> cached = cubeCache.take(pos);
+        if (cached != null) return cached.orElse(null);
 
         try {
+            long fence = cubeCache.fence();
             NBTTagCompound tag = storage.readCube(pos);
 
-            synchronized (cubeCache) {
-                SaveData cached = cubeCache.get(pos);
-                if (cached != null) {
-                    return cached.tag == null ? null : (NBTTagCompound) cached.tag.copy();
-                }
+            // a save that was queued while reading is newer than what was read
+            cached = cubeCache.take(pos);
+            if (cached != null) return cached.orElse(null);
+            // ... and if its write already finished and its entry is gone, storage has it now
+            if (cubeCache.savedSince(pos, fence)) tag = storage.readCube(pos);
 
-                if (tag == null) {
-                    cubeCache.put(pos, new SaveData(null, null, System.currentTimeMillis()));
-                }
-            }
+            if (tag == null) cubeCache.putAbsent(pos, System.currentTimeMillis());
 
             return tag;
         } catch (IOException e) {
@@ -255,42 +245,12 @@ public class CubeIO implements ICubeIO {
     public void trimCaches() {
         long now = System.currentTimeMillis();
 
-        synchronized (columnCache) {
-            trimCache(columnCache, COLUMN_CACHE_LIMIT, Integer.MAX_VALUE, now);
-        }
-
-        synchronized (cubeCache) {
-            trimCache(cubeCache, CUBE_CACHE_LIMIT, Integer.MAX_VALUE, now);
-        }
+        columnCache.trim(now, Integer.MAX_VALUE);
+        cubeCache.trim(now, Integer.MAX_VALUE);
     }
 
-    /// Checks up to {@code maxChecks} of the oldest entries and removes those whose save has finished, while the cache
-    /// is larger than {@code limit}. Entries are normally kept until they expire, but while the cache is more than
-    /// twice
-    /// its limit (e.g. during LOD generation) unexpired entries are removed as well. Must be called while holding the
-    /// cache's lock.
-    private static <K> void trimCache(Object2ObjectLinkedOpenHashMap<K, SaveData> cache, int limit, int maxChecks,
-        long now) {
-        int i = 0;
-
-        var iter = cache.object2ObjectEntrySet()
-            .fastIterator();
-
-        while (cache.size() > limit && i++ < maxChecks && iter.hasNext()) {
-            SaveData data = iter.next()
-                .getValue();
-
-            if (data.task != null && data.task.isDone()) {
-                data.task = null;
-            }
-
-            if (data.task == null && (data.lastAccess + EXPIRY < now || cache.size() > limit * 2)) {
-                iter.remove();
-            }
-        }
-    }
-
-    public void saveColumn(ChunkCoordIntPair pos, Chunk column) {
+    @Override
+    public void saveColumn(ChunkCoordIntPair pos, Chunk column, boolean unloading) {
         // NOTE: this function blocks the world thread
         // make it as fast as possible by offloading processing to the IO thread
         // except we have to write the NBT in this thread to avoid problems
@@ -303,86 +263,64 @@ public class CubeIO implements ICubeIO {
 
         column.isModified = false;
 
-        Future<?> task = TaskPool.submit(saveExecutor, new SaveColumn(pos, tag));
-
         long now = System.currentTimeMillis();
 
-        synchronized (columnCache) {
-            columnCache.put(pos, new SaveData(tag, task, now));
+        // cached before queueing, so the write cannot finish before its entry exists
+        columnCache.putPending(pos, tag, unloading, now);
+        columnCache.trim(now, SAVE_TRIM_CHECKS);
 
-            trimCache(columnCache, COLUMN_CACHE_LIMIT, SAVE_TRIM_CHECKS, now);
-        }
+        TaskPool.submit(saveExecutor, new SaveColumn(pos, tag));
     }
 
-    public void saveCube(CubePos pos, Cube cube) {
+    @Override
+    public void saveCube(CubePos pos, Cube cube, boolean unloading) {
         cube.markSaved();
 
         NBTTagCompound tag = IONbtWriter.write(cube);
 
         MinecraftForge.EVENT_BUS.post(new CubeEvent.SaveNBT(cube.getWorld(), cube, tag));
 
-        Future<?> task = TaskPool.submit(saveExecutor, new SaveCube(pos, tag));
-
         long now = System.currentTimeMillis();
 
-        synchronized (cubeCache) {
-            cubeCache.put(pos, new SaveData(tag, task, now));
+        // cached before queueing, so the write cannot finish before its entry exists
+        cubeCache.putPending(pos, tag, unloading, now);
+        cubeCache.trim(now, SAVE_TRIM_CHECKS);
 
-            trimCache(cubeCache, CUBE_CACHE_LIMIT, SAVE_TRIM_CHECKS, now);
+        TaskPool.submit(saveExecutor, new SaveCube(pos, tag));
+    }
+
+    /// Waits until every queued save has been handed to storage and its write has finished.
+    private void awaitWrites() {
+        TaskPool.flush();
+
+        while (columnCache.pendingCount() > 0 || cubeCache.pendingCount() > 0) {
+            Thread.yield();
         }
     }
 
     // only used by "/save-all flush" command
     @Override
     public void flush() throws IOException {
-        TaskPool.flush();
+        awaitWrites();
 
         this.storage.flush();
     }
 
     @Override
     public void close() throws IOException {
-        TaskPool.flush();
-
-        while (true) {
-            synchronized (columnCache) {
-                if (columnCache.isEmpty()) break;
-
-                columnCache.object2ObjectEntrySet()
-                    .removeIf(e -> e.getValue().task == null || e.getValue().task.isDone());
-            }
-
-            Thread.yield();
-        }
-
-        while (true) {
-            synchronized (cubeCache) {
-                if (cubeCache.isEmpty()) break;
-
-                cubeCache.object2ObjectEntrySet()
-                    .removeIf(e -> e.getValue().task == null || e.getValue().task.isDone());
-            }
-
-            Thread.yield();
-        }
+        awaitWrites();
 
         this.storage.close();
     }
 
     @Override
     public void preloadColumn(ChunkCoordIntPair pos) {
-        synchronized (columnCache) {
-            if (columnCache.containsKey(pos)) return;
-        }
+        if (columnCache.contains(pos)) return;
+        long fence = columnCache.fence();
 
         TaskPool.submit(columnLoadExecutor, pos, tag -> {
-            synchronized (columnCache) {
-                if (columnCache.containsKey(pos)) {
-                    return;
-                }
-
-                columnCache.put(pos, new SaveData(tag.orElse(null), null, System.currentTimeMillis()));
-            }
+            // something newer (e.g. a save) was cached or saved meanwhile
+            if (!columnCache.putPreloaded(pos, tag.orElse(null), fence, System.currentTimeMillis())) return;
 
             if (!tag.isPresent()) {
                 if (preloadFailures != null) preloadFailures.onColumnPreloadFailed(pos);
@@ -392,20 +330,15 @@ public class CubeIO implements ICubeIO {
 
     @Override
     public void preloadCube(CubePos pos, CubeInitLevel wanted) {
-        synchronized (cubeCache) {
-            if (cubeCache.containsKey(pos)) return;
-        }
+        if (cubeCache.contains(pos)) return;
+        long fence = cubeCache.fence();
 
         TaskPool.submit(cubeLoadExecutor, pos, tag -> {
-            synchronized (cubeCache) {
-                if (cubeCache.containsKey(pos)) {
-                    return;
-                }
-
-                cubeCache.put(pos, new SaveData(tag.orElse(null), null, System.currentTimeMillis()));
-            }
-
+            // read before handing the tag over: once cached, the server thread may take and change it
             CubeInitLevel actual = !tag.isPresent() ? CubeInitLevel.None : IONbtReader.getCubeInitLevel(tag.get());
+
+            // something newer (e.g. a save) was cached or saved meanwhile
+            if (!cubeCache.putPreloaded(pos, tag.orElse(null), fence, System.currentTimeMillis())) return;
 
             if (actual.ordinal() < wanted.ordinal()) {
                 if (preloadFailures != null) {
