@@ -167,6 +167,13 @@ public class CubicChunksConfig {
             ManagementFactory.getOperatingSystemMXBean()
                 .getAvailableProcessors() / 2);
 
+        @Config.LangKey("cubicchunks.config.optimizations.save_cache_megabytes")
+        @Config.Comment("Memory per cubic dimension for recently unloaded cubes, kept compressed so that reloading them"
+            + " soon does not read the disk. Columns get an eighth of this on top. Saves that are still being written"
+            + " are always kept. 0 disables it.")
+        @Config.RangeInt(min = 0, max = 4096)
+        public int saveCacheMegabytes = 32;
+
     }
 
     static {

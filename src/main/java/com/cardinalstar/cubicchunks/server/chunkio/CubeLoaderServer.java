@@ -690,7 +690,7 @@ public class CubeLoaderServer implements ICubeLoader {
 
         public void onColumnUnloaded() {
             try {
-                cubeIO.saveColumn(pos, column);
+                cubeIO.saveColumn(pos, column, true);
             } finally {
                 callback.onColumnUnloaded(column);
             }
@@ -963,7 +963,7 @@ public class CubeLoaderServer implements ICubeLoader {
 
         public void onCubeUnloaded() {
             if (this.isInitedTo(CubeInitLevel.Generated)) {
-                cubeIO.saveCube(pos, cube);
+                cubeIO.saveCube(pos, cube, true);
             }
 
             ((IColumn) column.column).removeCube(getY());
