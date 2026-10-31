@@ -69,15 +69,24 @@ public class HeightMap3D implements IHeightMap {
 
     @Override
     public void onOpacityChange(int localX, int blockY, int localZ, boolean occluded) {
+        setOccluded(localX, blockY, localZ, occluded);
+    }
+
+    /**
+     * Same as {@link #onOpacityChange}. Returns true when the height map changed.
+     */
+    public boolean setOccluded(int localX, int blockY, int localZ, boolean occluded) {
         if (blockY > CubicChunks.MAX_SUPPORTED_BLOCK_Y || blockY < CubicChunks.MIN_SUPPORTED_BLOCK_Y) {
-            return;
+            return false;
         }
 
         YIntervalTree tree = this.heightmap.get(localX, localZ);
 
         if (tree.set(blockY, occluded)) {
             updateVanilla(localX, localZ, tree);
+            return true;
         }
+        return false;
     }
 
     /**
