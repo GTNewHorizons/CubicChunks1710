@@ -81,6 +81,10 @@ public enum Mixins implements IMixins {
         .addCommonMixins("common.MixinBlockVine_Height")
         .setPhase(Phase.EARLY)
         .setApplyIf(() -> true)),
+    MIXIN_PORTAL_FRAME_HEIGHT(
+        new MixinBuilder("Validate portal frames below zero").addCommonMixins("common.MixinBlockPortalSize")
+            .setPhase(Phase.EARLY)
+            .setApplyIf(() -> true)),
     MIXIN_S01PACKET_JOIN_GAME(new MixinBuilder("Giving the packet info to initialize cubicWorlds for clients.")
         .addCommonMixins("common.vanillaclient.MixinS01PacketJoinGame")
         .setPhase(Phase.EARLY)
