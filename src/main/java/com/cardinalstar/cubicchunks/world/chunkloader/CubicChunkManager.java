@@ -25,6 +25,7 @@ import java.util.Map;
 
 import javax.annotation.ParametersAreNonnullByDefault;
 
+import net.minecraft.entity.Entity;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.nbt.NBTTagList;
 import net.minecraft.world.ChunkCoordIntPair;
@@ -155,7 +156,8 @@ public class CubicChunkManager {
         if (cubicNBT == null) {
             return;
         }
-        int entityCubeY = cubicNBT.getInteger("entityCubeY");
+        // the cube Y of the entity an entity ticket is bound to, so that loading the world can find it again
+        ((ICubicTicketInternal) ticket).setEntityChunkY(cubicNBT.getInteger("entityCubeY"));
         Map<ChunkCoordIntPair, IntSet> coordsMap = new HashMap<>();
 
         NBTTagList chunkMap = cubicNBT.getTagList("chunkMap", Constants.NBT.TAG_COMPOUND);
@@ -173,12 +175,16 @@ public class CubicChunkManager {
     }
 
     public static void onSerializeTicket(NBTTagCompound ticket, ForgeChunkManager.Ticket tick) {
+        Entity entity = tick.getType() == ForgeChunkManager.Type.ENTITY ? tick.getEntity() : null;
         if (((ICubicTicketInternal) tick).getAllForcedChunkCubes()
-            .isEmpty()) {
+            .isEmpty() && entity == null) {
             return;
         }
         NBTTagCompound cubicNBT = new NBTTagCompound();
-        cubicNBT.setInteger("entityCubeY", ((ICubicTicketInternal) tick).getEntityChunkY());
+        // Forge saves the column of the entity's chunk coordinates; its cube is the matching chunkCoordY
+        cubicNBT.setInteger(
+            "entityCubeY",
+            entity != null ? entity.chunkCoordY : ((ICubicTicketInternal) tick).getEntityChunkY());
 
         NBTTagList chunkMap = new NBTTagList();
         ((ICubicTicketInternal) tick).getAllForcedChunkCubes()
