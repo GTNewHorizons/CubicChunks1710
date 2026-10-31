@@ -270,6 +270,10 @@ public enum Mixins implements IMixins {
         .addCommonMixins("common.MixinCommandSetSpawnpoint", "common.MixinCommandSetDefaultSpawnpoint")
         .setPhase(Phase.EARLY)
         .setApplyIf(() -> true)),
+    MIXIN_SPREAD_PLAYER_HEIGHT(new MixinBuilder("Find safe spread-player surfaces at signed heights with bounded work")
+        .addCommonMixins("common.MixinSpreadPlayerPosition")
+        .setPhase(Phase.EARLY)
+        .setApplyIf(() -> true)),
 
     // =============================================================
     // Client Mixins
