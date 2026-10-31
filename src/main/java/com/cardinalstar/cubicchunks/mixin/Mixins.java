@@ -73,6 +73,10 @@ public enum Mixins implements IMixins {
         new MixinBuilder("Allowing lilypads to stay above 256 adn below 0.").addCommonMixins("common.MixinBlockLilyPad")
             .setPhase(Phase.EARLY)
             .setApplyIf(() -> true)),
+    MIXIN_BEACON_HEIGHT(
+        new MixinBuilder("Validate beacon pyramids below zero").addCommonMixins("common.MixinTileEntityBeacon")
+            .setPhase(Phase.EARLY)
+            .setApplyIf(() -> true)),
     MIXIN_S01PACKET_JOIN_GAME(new MixinBuilder("Giving the packet info to initialize cubicWorlds for clients.")
         .addCommonMixins("common.vanillaclient.MixinS01PacketJoinGame")
         .setPhase(Phase.EARLY)
