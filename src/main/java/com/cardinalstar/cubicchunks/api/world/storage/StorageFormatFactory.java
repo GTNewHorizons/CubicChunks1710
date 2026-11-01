@@ -34,7 +34,11 @@ import cpw.mods.fml.common.registry.GameRegistry.UniqueIdentifier;
 
 public abstract class StorageFormatFactory extends AbstractRegistryEntry<StorageFormatFactory> {
 
-    public static final UniqueIdentifier DEFAULT = new UniqueIdentifier("cubicchunks:anvil3d");
+    public static final UniqueIdentifier ANVIL3D = new UniqueIdentifier("cubicchunks:anvil3d");
+    public static final UniqueIdentifier COMPACT_EMPTY = new UniqueIdentifier("cubicchunks:anvil3d-compact-empty");
+    /** Compact empty cubes plus 2x2x2 bundle records for the other cubes. Existing worlds are converted to it. */
+    public static final UniqueIdentifier BUNDLES = new UniqueIdentifier("cubicchunks:anvil3d-bundles");
+    public static final UniqueIdentifier DEFAULT = BUNDLES;
     public static final Registry<StorageFormatFactory> REGISTRY = new Registry<>();
 
     public abstract Path getWorldSaveDirectory(ISaveHandler saveHandler, WorldServer worldServer);

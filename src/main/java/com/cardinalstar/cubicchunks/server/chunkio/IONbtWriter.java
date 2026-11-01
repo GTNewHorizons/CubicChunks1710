@@ -36,6 +36,7 @@ import net.minecraft.world.NextTickListEntry;
 import net.minecraft.world.WorldServer;
 import net.minecraft.world.chunk.Chunk;
 import net.minecraft.world.chunk.storage.ExtendedBlockStorage;
+import net.minecraftforge.common.util.Constants;
 import net.minecraftforge.event.world.ChunkDataEvent;
 
 import org.apache.logging.log4j.Level;
@@ -259,6 +260,27 @@ class IONbtWriter {
         NBTTagCompound lightingInfo = new NBTTagCompound();
         cubeNbt.setTag("LightingInfo", lightingInfo);
         lightingManager.writeToNbt(cube, lightingInfo);
+        clipLastHeightMap(cube.getY(), lightingInfo);
+    }
+
+    /**
+     * On load, each saved height (top block Y + 1) is only compared with this cube: below it (up to its bottom Y),
+     * inside it, or above it (from its bottom Y + 17). Clamping to that range gives the same lighting result and makes
+     * the saved data of empty cubes identical, so they compress and share compact templates. Always a new array: the
+     * stored one can be the column's live height map.
+     */
+    static void clipLastHeightMap(int cubeY, NBTTagCompound lightingInfo) {
+        if (!lightingInfo.hasKey("LastHeightMap", Constants.NBT.TAG_INT_ARRAY)) {
+            return;
+        }
+        int[] heights = lightingInfo.getIntArray("LastHeightMap");
+        int below = Coords.cubeToMinBlock(cubeY);
+        long above = (long) below + Cube.SIZE + 1;
+        int[] clipped = new int[heights.length];
+        for (int i = 0; i < heights.length; i++) {
+            clipped[i] = (int) Math.max(below, Math.min(above, heights[i]));
+        }
+        lightingInfo.setIntArray("LastHeightMap", clipped);
     }
 
     private static void writeBiomes(Cube cube, NBTTagCompound nbt) {

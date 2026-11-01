@@ -82,7 +82,10 @@ public class CubeLoaderServer implements ICubeLoader {
     public CubeLoaderServer(WorldServer world, ICubicStorage storage, IWorldGenerator generator,
         CubeLoaderCallback callback) {
         this.world = world;
-        this.cubeIO = new CubeIO(storage, generator instanceof IPreloadFailureDelegate delegate ? delegate : null);
+        this.cubeIO = new CubeIO(
+            storage,
+            generator instanceof IPreloadFailureDelegate delegate ? delegate : null,
+            pos -> cubes.get(pos.getX(), pos.getY(), pos.getZ()) != null);
         this.generator = generator;
         this.callback = callback;
 
@@ -455,6 +458,11 @@ public class CubeLoaderServer implements ICubeLoader {
     }
 
     @Override
+    public void tickIO() {
+        cubeIO.tick();
+    }
+
+    @Override
     public void trimCaches() {
         cubeIO.trimCaches();
     }
@@ -690,7 +698,7 @@ public class CubeLoaderServer implements ICubeLoader {
 
         public void onColumnUnloaded() {
             try {
-                cubeIO.saveColumn(pos, column);
+                cubeIO.saveColumn(pos, column, true);
             } finally {
                 callback.onColumnUnloaded(column);
             }
@@ -968,7 +976,7 @@ public class CubeLoaderServer implements ICubeLoader {
 
         public void onCubeUnloaded() {
             if (this.isInitedTo(CubeInitLevel.Generated)) {
-                cubeIO.saveCube(pos, cube);
+                cubeIO.saveCube(pos, cube, true);
             }
 
             ((IColumn) column.column).removeCube(getY());

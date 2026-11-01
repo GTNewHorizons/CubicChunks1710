@@ -98,8 +98,10 @@ public class CubicChunksConfig {
     public static boolean doClientLightFixes = false;
 
     @Config.LangKey("cubicchunks.config.storage_format")
-    @Config.Comment("The storage format. Note: this will be used for all newly created worlds. Existing worlds will continue to use the format they were created with.\n"
-        + "If empty, the storage format for new worlds will be determined automatically.")
+    @Config.Comment("The storage format for newly created worlds. If empty, new worlds use bundle storage"
+        + " (cubicchunks:anvil3d-bundles), and existing cubicchunks:anvil3d and cubicchunks:anvil3d-compact-empty worlds"
+        + " are converted to it when opened. Setting any other format creates new worlds in it and converts no"
+        + " existing world.")
     public static String storageFormat = "";
 
     @Config.LangKey("cubicchunks.config.spawn_generate_distance_horizontal")
@@ -139,13 +141,33 @@ public class CubicChunksConfig {
     @Config.RequiresWorldRestart
     public static boolean useShadowPagingIO = true;
 
+    @Config.LangKey("cubicchunks.config.compact_regions_on_world_load")
+    @Config.Comment("Enabled by default. Reclaim unused space in Anvil3D region files only during server/world startup. "
+        + "Includes existing DIM<number> and DIM_SPACESTATION<number> folders without loading their chunks, "
+        + "plus custom paths opened during startup. "
+        + "Only files that can shrink are replaced; cube data and compression are unchanged. "
+        + "Large fragmented saves may take longer to start. Gameplay dimension loads and reloads never compact.")
+    @Config.RequiresWorldRestart
+    public static boolean compactRegionsOnWorldLoad = true;
+
+    @Config.LangKey("cubicchunks.config.convert_storage_on_world_load")
+    @Config.Comment("Disabled by default. During server/world startup, convert bundle storage worlds completely: every "
+        + "cube and column still stored in its own record is rewritten into bundle and column group records right "
+        + "away, instead of when it is next saved. Covers the same folders as compactRegionsOnWorldLoad, which then "
+        + "reclaims the freed space. Already converted data is skipped, so later starts are quick. "
+        + "Large worlds take longer to start while this runs.")
+    @Config.RequiresWorldRestart
+    public static boolean convertStorageOnWorldLoad = false;
+
     @Config.LangKey("cubicchunks.config.disable_lighting")
     @Config.Comment("Disables all light propagation")
     public static boolean disableLighting = false;
 
     @Config.LangKey("cubicchunks.config.chunk_compression")
-    @Config.Comment("Controls the default compression algorithm used for chunks and cubes. Can be changed arbitrarily without corrupting worlds.")
-    public static TagCompression chunkCompression = TagCompression.LZ4;
+    @Config.Comment("Compression for newly saved chunks and cubes: ZSTD (default, level 1), GZIP, LZ4, or NONE. "
+        + "Existing records remain readable regardless of this setting. Older CC versions may not read these codecs; "
+        + "switching back only changes future writes, not existing records.")
+    public static TagCompression chunkCompression = TagCompression.ZSTD;
 
     @Config.Ignore
     public static int defaultMaxCubesPerChunkloadingTicket = 25 * 16;
@@ -166,6 +188,20 @@ public class CubicChunksConfig {
             1,
             ManagementFactory.getOperatingSystemMXBean()
                 .getAvailableProcessors() / 2);
+
+        @Config.LangKey("cubicchunks.config.optimizations.save_cache_megabytes")
+        @Config.Comment("Memory per cubic dimension for recently unloaded cubes, kept compressed so that reloading them"
+            + " soon does not read the disk. Columns get an eighth of this on top. Saves that are still being written"
+            + " are always kept. 0 disables it.")
+        @Config.RangeInt(min = 0, max = 4096)
+        public int saveCacheMegabytes = 32;
+
+        @Config.LangKey("cubicchunks.config.optimizations.bundle_write_wait_seconds")
+        @Config.Comment("With bundle storage, how long the saved data of an unloaded cube may wait for the other cubes of"
+            + " its 2x2x2 bundle to unload, so that the bundle is written once. The data stays in memory meanwhile."
+            + " 0 writes immediately.")
+        @Config.RangeInt(min = 0, max = 60)
+        public int bundleWriteWaitSeconds = 10;
 
     }
 

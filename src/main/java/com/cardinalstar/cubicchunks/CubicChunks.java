@@ -47,6 +47,7 @@ import com.cardinalstar.cubicchunks.event.handlers.CommonEventHandler;
 import com.cardinalstar.cubicchunks.network.NetworkChannel;
 import com.cardinalstar.cubicchunks.server.ICubicChunksServer;
 import com.cardinalstar.cubicchunks.server.chunkio.RegionCubeStorage;
+import com.cardinalstar.cubicchunks.server.chunkio.StartupRegionCompaction;
 import com.cardinalstar.cubicchunks.util.CompatHandler;
 import com.cardinalstar.cubicchunks.util.Mods;
 import com.cardinalstar.cubicchunks.util.SideUtils;
@@ -64,9 +65,12 @@ import cpw.mods.fml.common.event.FMLInitializationEvent;
 import cpw.mods.fml.common.event.FMLPostInitializationEvent;
 import cpw.mods.fml.common.event.FMLPreInitializationEvent;
 import cpw.mods.fml.common.event.FMLServerAboutToStartEvent;
+import cpw.mods.fml.common.event.FMLServerStartedEvent;
+import cpw.mods.fml.common.event.FMLServerStoppedEvent;
 import cpw.mods.fml.common.network.NetworkCheckHandler;
 import cpw.mods.fml.common.network.NetworkRegistry;
 import cpw.mods.fml.common.network.internal.NetworkModHolder;
+import cpw.mods.fml.common.registry.GameRegistry.UniqueIdentifier;
 import cpw.mods.fml.common.versioning.ArtifactVersion;
 import cpw.mods.fml.common.versioning.DefaultArtifactVersion;
 import cpw.mods.fml.common.versioning.InvalidVersionSpecificationException;
@@ -192,6 +196,7 @@ public class CubicChunks {
 
     @Mod.EventHandler
     public void onServerAboutToStart(FMLServerAboutToStartEvent event) {
+        StartupRegionCompaction.begin();
         SideUtils.runForSide(() -> () -> {
             MinecraftServer server = event.getServer();
             server.setBuildLimit(CubicChunks.MAX_SUPPORTED_BLOCK_Y);
@@ -201,8 +206,24 @@ public class CubicChunks {
         });
     }
 
+    @Mod.EventHandler
+    public void onServerStarted(FMLServerStartedEvent event) {
+        StartupRegionCompaction.finish();
+    }
+
+    @Mod.EventHandler
+    public void onServerStopped(FMLServerStoppedEvent event) {
+        StartupRegionCompaction.finish();
+    }
+
     public static void registerAnvil3dStorageFormatProvider() {
-        StorageFormatFactory.REGISTRY.register(StorageFormatFactory.DEFAULT, new DefaultStorageFormatFactory());
+        StorageFormatFactory.REGISTRY
+            .register(StorageFormatFactory.ANVIL3D, new DefaultStorageFormatFactory(StorageFormatFactory.ANVIL3D));
+        StorageFormatFactory.REGISTRY.register(
+            StorageFormatFactory.COMPACT_EMPTY,
+            new DefaultStorageFormatFactory(StorageFormatFactory.COMPACT_EMPTY));
+        StorageFormatFactory.REGISTRY
+            .register(StorageFormatFactory.BUNDLES, new DefaultStorageFormatFactory(StorageFormatFactory.BUNDLES));
     }
 
     @NetworkCheckHandler
@@ -281,9 +302,16 @@ public class CubicChunks {
 
     private static class DefaultStorageFormatFactory extends StorageFormatFactory {
 
-        public DefaultStorageFormatFactory() {
-            setRegistryName(StorageFormatFactory.DEFAULT);
-            setUnlocalizedName("cubicchunks.gui.storagefmt.anvil3d");
+        private final boolean compactEmpty, bundled;
+
+        public DefaultStorageFormatFactory(UniqueIdentifier format) {
+            this.bundled = format.equals(StorageFormatFactory.BUNDLES);
+            this.compactEmpty = bundled || format.equals(StorageFormatFactory.COMPACT_EMPTY);
+            setRegistryName(format);
+            setUnlocalizedName(
+                bundled ? "cubicchunks.gui.storagefmt.anvil3d_bundles"
+                    : compactEmpty ? "cubicchunks.gui.storagefmt.anvil3d_compact_empty"
+                        : "cubicchunks.gui.storagefmt.anvil3d");
         }
 
         @Override
@@ -301,7 +329,13 @@ public class CubicChunks {
 
         @Override
         public ICubicStorage provideStorage(World world, Path path) throws IOException {
-            return new RegionCubeStorage(path);
+            return RegionCubeStorage.openForWorld(
+                world.getSaveHandler()
+                    .getWorldDirectory()
+                    .toPath(),
+                path,
+                compactEmpty,
+                bundled);
         }
     }
 }

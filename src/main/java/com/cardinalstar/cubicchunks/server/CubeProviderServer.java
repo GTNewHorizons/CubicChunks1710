@@ -306,6 +306,7 @@ public class CubeProviderServer extends ChunkProviderServer
 
     public void tick() {
         getCubeLoader().setNow(worldObj.getTotalWorldTime());
+        getCubeLoader().tickIO();
 
         doEagerLoading();
     }

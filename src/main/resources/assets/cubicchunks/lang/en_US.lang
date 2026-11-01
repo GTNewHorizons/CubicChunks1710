@@ -10,6 +10,11 @@ cubicchunks.gui.worldmenu.cc_default=CubicChunks: Default
 #################################
 
 cubicchunks.gui.vertical_cube_load_distance=Vertical Distance: %d cubes
+cubicchunks.gui.storagefmt.anvil3d_compact_empty=Anvil3D with compact empty cubes
+cubicchunks.gui.storagefmt.anvil3d_bundles=Anvil3D with 2x2x2 cube bundles
+cubicchunks.config.chunk_compression=Chunk and cube compression
+cubicchunks.config.compact_regions_on_world_load=Compact region files at server startup
+cubicchunks.config.convert_storage_on_world_load=Convert storage completely at server startup
 
 #################################
 ###         commands          ###
@@ -29,6 +34,8 @@ cubicchunks.config.enable_chunk_debugging=Enable Chunk Status Debugging
 
 cubicchunks.config.optimizations=Optimizations
 cubicchunks.config.optimizations.background_threads=Background Threads
+cubicchunks.config.optimizations.save_cache_megabytes=Save Cache Size (MiB)
+cubicchunks.config.optimizations.bundle_write_wait_seconds=Bundle Write Wait (seconds)
 
 generator.VanillaCubic=Vanilla + Cubic
 
@@ -37,3 +44,10 @@ generator.VanillaCubic=Vanilla + Cubic
 #################################
 
 cubicchunks.build.too.low=Minimum building depth reached
+
+cubicchunks.compaction.title=Compacting world regions
+cubicchunks.compaction.discovering=%1$s: finding regions (%4$s s)
+cubicchunks.compaction.checking=%1$s: checking %2$s/%3$s regions (%4$s s)
+cubicchunks.compaction.compacting=%1$s: packing %2$s/%3$s regions (%4$s s)
+cubicchunks.conversion.title=Converting world storage
+cubicchunks.compaction.converting=%1$s: converting %2$s/%3$s regions (%4$s s)
