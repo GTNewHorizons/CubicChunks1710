@@ -13,6 +13,8 @@ import cpw.mods.fml.common.registry.GameRegistry.UniqueIdentifier;
 public class WorldFormatSavedData extends WorldSavedData {
 
     private StorageFormatFactory format;
+    /** The format name stored in the world, kept when no registered format has it. */
+    private String storedName;
 
     public WorldFormatSavedData(String name) {
         super(name);
@@ -24,11 +26,12 @@ public class WorldFormatSavedData extends WorldSavedData {
 
     @Override
     public void readFromNBT(NBTTagCompound tag) {
-        format = StorageFormatFactory.REGISTRY.get(new UniqueIdentifier(tag.getString("format")));
-
-        if (format == null) {
-            throw new IllegalStateException(
-                "Could not load world: save format was not registered: " + tag.getString("format"));
+        storedName = tag.getString("format");
+        // MapStorage only logs an exception thrown here and goes on with the data; an unknown format fails in get()
+        try {
+            format = StorageFormatFactory.REGISTRY.get(new UniqueIdentifier(storedName));
+        } catch (RuntimeException e) {
+            format = null;
         }
     }
 
@@ -38,8 +41,8 @@ public class WorldFormatSavedData extends WorldSavedData {
     }
 
     /**
-     * Existing anvil3d and compact-empty worlds are converted to bundle storage unless {@code storageFormat} names
-     * another format: an explicit setting, even one that is not a known format, is never overridden.
+     * Existing anvil3d worlds are converted to bundle storage unless {@code storageFormat} names another format: an
+     * explicit setting, even one that is not a known format, is never overridden.
      */
     static boolean convertsExistingWorlds() {
         String configured = CubicChunksConfig.storageFormat.trim();
@@ -60,11 +63,20 @@ public class WorldFormatSavedData extends WorldSavedData {
         WorldFormatSavedData data = (WorldFormatSavedData) world.mapStorage
             .loadData(WorldFormatSavedData.class, "cubicchunks.world_format");
 
+        if (data != null && data.format == null) {
+            if (StorageFormatFactory.COMPACT_EMPTY.toString()
+                .equals(data.storedName)) {
+                throw new IllegalStateException(
+                    "Could not load world: it stores empty cubes in compact tables (" + data.storedName
+                        + "), which this version of CubicChunks cannot read. Convert it first with a version that"
+                        + " can, see docs/bundle-storage.md.");
+            }
+            throw new IllegalStateException("Could not load world: save format was not registered: " + data.storedName);
+        }
+
         if (data != null && convertsExistingWorlds()
-            && (data.format.getRegistryName()
-                .equals(StorageFormatFactory.ANVIL3D)
-                || data.format.getRegistryName()
-                    .equals(StorageFormatFactory.COMPACT_EMPTY))) {
+            && data.format.getRegistryName()
+                .equals(StorageFormatFactory.ANVIL3D)) {
             // Existing worlds are converted: bundle storage reads their records and rewrites each bundle when one of
             // its cubes is saved. Older CubicChunks builds cannot read bundle records, so the marker changes first.
             CubicChunks.LOGGER.warn(

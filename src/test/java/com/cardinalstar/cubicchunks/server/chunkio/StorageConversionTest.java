@@ -68,8 +68,10 @@ class StorageConversionTest {
             cubes.put(sky, StorageTestData.empty(sky));
             empty.add(sky);
         }
+        // the columns of every cube (an empty cube's state needs its column), and one group without cubes
         for (ChunkCoordIntPair origin : new ChunkCoordIntPair[] { new ChunkCoordIntPair(0, 0),
-            new ChunkCoordIntPair(-4, 6), new ChunkCoordIntPair(30, -34) }) {
+            new ChunkCoordIntPair(2, 0), new ChunkCoordIntPair(-4, 6), new ChunkCoordIntPair(14, -18),
+            new ChunkCoordIntPair(30, -34) }) {
             columns.putAll(columnGroup(origin, seed++, 0b1111));
         }
         try (RegionCubeStorage plain = new RegionCubeStorage(save)) {
@@ -91,12 +93,15 @@ class StorageConversionTest {
         return count;
     }
 
-    /** Every full cube shares its bundle's record, empty cubes left the region files, columns share their group's. */
+    /**
+     * Every full cube shares its bundle's record, empty cubes are states in their columns instead of records, columns
+     * share their group's.
+     */
     private void assertConverted() throws Exception {
         Map<CubePos, Set<Integer>> bundles = new HashMap<>();
         for (CubePos pos : cubes.keySet()) {
             if (empty.contains(pos))
-                assertEquals(0, header(save, pos), "empty cube " + pos + " is in its compact table");
+                assertEquals(0, header(save, pos), "empty cube " + pos + " is a state in its column");
             else bundles.computeIfAbsent(CubeBundleCodec.origin(pos), k -> new HashSet<>())
                 .add(header(save, pos));
         }
@@ -106,7 +111,7 @@ class StorageConversionTest {
             groups.computeIfAbsent(ColumnGroupCodec.origin(pos), k -> new HashSet<>())
                 .add(header(save, pos));
         for (Set<Integer> records : groups.values()) assertEquals(1, records.size());
-        try (CompactCubeStorage storage = new CompactCubeStorage(save, true)) {
+        try (RegionCubeStorage storage = new RegionCubeStorage(save, true)) {
             NBTBatch read = storage.readBatch(new PosBatch(columns.keySet(), cubes.keySet()));
             assertEquals(cubes, read.cubes);
             assertEquals(columns, read.columns);

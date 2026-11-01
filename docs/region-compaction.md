@@ -27,7 +27,7 @@ Quitting and reopening a singleplayer world starts a new server and therefore a 
 Only `region2d/*.2dr` and `region3d/*.3dr` in the selected dimensions are processed, one file at a time.
 A [bundle](bundle-storage.md) record shared by the cubes of a bundle, or by the columns of a
 column group, is copied once and stays shared.
-Oversized `.ext` entries and compact-empty `.cce` tables are not changed. Already packed files are checked but
+Oversized `.ext` entries are not changed. Already packed files are checked but
 not replaced. Normal play can create new holes, which the next server/world startup can reclaim. Large fragmented
 saves can take longer to start; this synchronous work delays startup, not a player's later dimension transfer.
 The delay depends on the region files and unused space. The log reports the number
@@ -70,7 +70,7 @@ run the compactor itself.
 - For a dimension saved in a custom location, supply that dimension directory separately. It does not recursively
   discover dimensions or descend into backups, conversion staging areas, or unrelated formats.
 - Supports standard CC `.2dr` and `.3dr` region files with 512-byte sectors, including mixed codecs.
-- Leaves oversized `.ext` entries, compact-empty `.cce` tables, vanilla `.mca`, and all other world data alone.
+- Leaves oversized `.ext` entries, vanilla `.mca`, and all other world data alone.
 - Rejects symlinked selected directories/files and malformed or overlapping region allocations. Missing final
   sector padding is accepted if the full record exists; never grows an already packed file just to add padding.
   This is not a corruption-repair tool. A dry run creates persistent zero-byte lock files outside the save if absent.

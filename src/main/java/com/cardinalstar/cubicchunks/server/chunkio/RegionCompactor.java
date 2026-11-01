@@ -108,7 +108,7 @@ public final class RegionCompactor {
                 after,
                 before - after,
                 apply ? "reclaimed" : "reclaimable");
-            out.println("Oversized .ext records and compact-empty .cce tables were not modified.");
+            out.println("Oversized .ext records were not modified.");
         } finally {
             IOException failure = null;
             for (int i = locks.size() - 1; i >= 0; i--) {

@@ -1,8 +1,8 @@
 # Cube bundle storage
 
 Bundle storage (`cubicchunks:anvil3d-bundles`) is the default storage format. It
-keeps [compact empty cubes](compact-empty-storage.md) and stores every other cube
-in records of aligned 2x2x2 cube groups ("bundles"). A bundle holds the block data
+stores [empty cubes](#empty-cubes) as two bytes in their column's record and every
+other cube in records of aligned 2x2x2 cube groups ("bundles"). A bundle holds the block data
 of up to eight cubes with one block palette shared by all of them, which together
 with fewer, larger records needs considerably less disk space than one record per
 cube. Columns are stored in aligned 2x2 groups in the `region2d` files.
@@ -48,6 +48,30 @@ stay where they are. Bundle storage always uses shadow paging, whatever
 `useShadowPagingIO` is set to. A member whose stored data cannot be decoded is
 logged and left unchanged while the rest of its bundle is written.
 
+## Empty cubes
+
+Most cubes of a world are empty, above the terrain and, in converted worlds, also
+below it. An empty cube has no record of its own: it is a state in its column's
+record, from which its data is rebuilt when it is read. A state is a flags byte
+(initial lighting done, surface tracked and whether that tag is present, whether
+the saved height map is entirely below or above the cube, and whether the cube has
+the game's lighting info or, like cubes converted from vanilla worlds, none) and the
+cube's population status. A cube is stored this way only when rebuilding it gives
+back exactly its data. One with blocks, entities, tile entities, scheduled ticks,
+pending neighbor light checks, 3D biomes, a saved height map that crosses it or any
+other tag keeps a full record.
+
+The states of a column's cubes are a `CubeStates` tag of the column's record: the
+lowest cube Y, then two bytes per cube Y up to the highest, at most 4096 cube Ys.
+The tag belongs to the storage; columns are read without it.
+
+A full record always wins over a state. A cube that becomes empty has its state
+written before its full record is removed, and one that gets a full record keeps its
+old state until the next write of its column drops it. An interrupted save
+therefore leaves either the old or the new cube, and a read never finds a cube in
+neither place. An empty cube whose column has no record yet is written as a full
+record and becomes a state when its column is written.
+
 ## Saving and the save cache
 
 When a cube unloads, its saved data may wait for the other loaded cubes of its
@@ -64,12 +88,12 @@ The save cache (`saveCacheMegabytes`) keeps the written records themselves for
 recently unloaded cubes: the cubes of a bundle share their record, so it is held
 once, compressed, and nothing is serialized a second time. Reloading one of these
 cubes decodes the whole record once and keeps its other members briefly, as for
-read-ahead. Compact empty cubes are not kept, since their tables are cheap to read.
+read-ahead. Empty cubes are not kept, since their states are cheap to read.
 
 ## Existing worlds
 
-Worlds using `cubicchunks:anvil3d` or `cubicchunks:anvil3d-compact-empty` are
-switched to bundle storage when they are opened, unless `storageFormat` in
+Worlds using `cubicchunks:anvil3d` are switched to bundle storage when they are
+opened, unless `storageFormat` in
 `config/cubicchunks.cfg` is set to a format other than `cubicchunks:anvil3d-bundles`. Conversion is gradual: per-cube
 and per-column records keep being read, and a bundle or column group is written in
 the new format the first time one of its cubes or columns is saved, after which its
@@ -79,8 +103,8 @@ compaction reclaims the freed space on a later start.
 To convert a world completely at once instead, set `convertStorageOnWorldLoad=true`
 in `config/cubicchunks.cfg`. During the next server or world startup, before the
 world loads, every cube and column still stored in its own record is rewritten
-into bundle and column group records, and empty cubes move to their compact
-tables; startup compaction then reclaims the freed space. It covers the same
+into bundle and column group records, and empty cubes become states in their
+columns; startup compaction then reclaims the freed space. It covers the same
 dimension folders as startup compaction and skips data that is already
 converted, so later starts are quick. A bundle or column group with a record that
 cannot be read is left as it is, and members too large to share a record keep
@@ -89,3 +113,12 @@ their own files.
 Older CubicChunks versions cannot read bundle or column group records. After a world has been
 opened with this version, keep backups if you may need to go back. Do not edit the
 format marker in `data/cubicchunks.world_format.dat`.
+
+### Worlds with compact empty-cube tables
+
+Worlds created with v0.1.27-alpha-pre use `cubicchunks:anvil3d-compact-empty`,
+which kept empty cubes in compact tables in a `region3d-empty` directory. This
+version cannot read those tables and refuses to open such a world rather than
+generating its empty cubes again. Open it once with the storage converter build of
+CubicChunks, which writes every compact table's cubes as states and removes the
+tables; afterwards the world opens with this version.

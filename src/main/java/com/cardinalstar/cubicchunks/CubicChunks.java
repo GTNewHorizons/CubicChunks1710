@@ -219,9 +219,6 @@ public class CubicChunks {
     public static void registerAnvil3dStorageFormatProvider() {
         StorageFormatFactory.REGISTRY
             .register(StorageFormatFactory.ANVIL3D, new DefaultStorageFormatFactory(StorageFormatFactory.ANVIL3D));
-        StorageFormatFactory.REGISTRY.register(
-            StorageFormatFactory.COMPACT_EMPTY,
-            new DefaultStorageFormatFactory(StorageFormatFactory.COMPACT_EMPTY));
         StorageFormatFactory.REGISTRY
             .register(StorageFormatFactory.BUNDLES, new DefaultStorageFormatFactory(StorageFormatFactory.BUNDLES));
     }
@@ -302,16 +299,13 @@ public class CubicChunks {
 
     private static class DefaultStorageFormatFactory extends StorageFormatFactory {
 
-        private final boolean compactEmpty, bundled;
+        private final boolean bundled;
 
         public DefaultStorageFormatFactory(UniqueIdentifier format) {
             this.bundled = format.equals(StorageFormatFactory.BUNDLES);
-            this.compactEmpty = bundled || format.equals(StorageFormatFactory.COMPACT_EMPTY);
             setRegistryName(format);
             setUnlocalizedName(
-                bundled ? "cubicchunks.gui.storagefmt.anvil3d_bundles"
-                    : compactEmpty ? "cubicchunks.gui.storagefmt.anvil3d_compact_empty"
-                        : "cubicchunks.gui.storagefmt.anvil3d");
+                bundled ? "cubicchunks.gui.storagefmt.anvil3d_bundles" : "cubicchunks.gui.storagefmt.anvil3d");
         }
 
         @Override
@@ -334,7 +328,6 @@ public class CubicChunks {
                     .getWorldDirectory()
                     .toPath(),
                 path,
-                compactEmpty,
                 bundled);
         }
     }

@@ -27,7 +27,10 @@ import com.cardinalstar.cubicchunks.api.world.storage.ICubicStorage.NBTBatch;
 import com.cardinalstar.cubicchunks.api.world.storage.ICubicStorage.PosBatch;
 import com.cardinalstar.cubicchunks.util.CubePos;
 
-/** Bundle storage: cubes in 2x2x2 bundle records, columns in 2x2 group records, and what happens to damaged data. */
+/**
+ * Bundle storage: cubes in 2x2x2 bundle records, columns in 2x2 group records, empty cubes as states in their columns,
+ * and what happens to damaged data.
+ */
 class BundleStorageTest {
 
     @TempDir
@@ -50,12 +53,12 @@ class BundleStorageTest {
         CubicChunksConfig.chunkCompression = compression;
     }
 
-    private static void write(CompactCubeStorage storage, Map<ChunkCoordIntPair, NBTTagCompound> columns,
+    private static void write(RegionCubeStorage storage, Map<ChunkCoordIntPair, NBTTagCompound> columns,
         Map<CubePos, NBTTagCompound> cubes) throws IOException {
         storage.writeBatch(new NBTBatch(new HashMap<>(columns), new HashMap<>(cubes)));
     }
 
-    private static void assertStored(CompactCubeStorage storage, Map<ChunkCoordIntPair, NBTTagCompound> columns,
+    private static void assertStored(RegionCubeStorage storage, Map<ChunkCoordIntPair, NBTTagCompound> columns,
         Map<CubePos, NBTTagCompound> cubes) throws IOException {
         for (Map.Entry<CubePos, NBTTagCompound> e : cubes.entrySet()) {
             assertTrue(storage.cubeExists(e.getKey()), "exists " + e.getKey());
@@ -95,7 +98,7 @@ class BundleStorageTest {
         Map<CubePos, NBTTagCompound> cubes = new HashMap<>(bundle(a, 1, 0xff));
         cubes.putAll(bundle(b, 2, 0b10010001));
         Map<ChunkCoordIntPair, NBTTagCompound> cols = columnGroup(columns, 3, 0b1111);
-        try (CompactCubeStorage storage = new CompactCubeStorage(save, true)) {
+        try (RegionCubeStorage storage = new RegionCubeStorage(save, true)) {
             write(storage, cols, cubes);
             assertStored(storage, cols, cubes);
             assertFalse(storage.cubeExists(CubeBundleCodec.member(b, 1)), "absent members stay absent");
@@ -103,7 +106,7 @@ class BundleStorageTest {
         assertOneRecord(a, 0xff);
         assertOneRecord(b, 0b10010001);
         assertOneRecord(columns, 0b1111);
-        try (CompactCubeStorage storage = new CompactCubeStorage(save, true)) {
+        try (RegionCubeStorage storage = new RegionCubeStorage(save, true)) {
             assertStored(storage, cols, cubes);
         }
     }
@@ -114,10 +117,10 @@ class BundleStorageTest {
         ChunkCoordIntPair columns = new ChunkCoordIntPair(4, 4);
         Map<CubePos, NBTTagCompound> cubes = new HashMap<>(bundle(origin, 4, 0xff));
         Map<ChunkCoordIntPair, NBTTagCompound> cols = new HashMap<>(columnGroup(columns, 5, 0b1111));
-        try (CompactCubeStorage legacy = new CompactCubeStorage(save)) {
+        try (RegionCubeStorage legacy = new RegionCubeStorage(save)) {
             write(legacy, cols, cubes);
         }
-        try (CompactCubeStorage storage = new CompactCubeStorage(save, true)) {
+        try (RegionCubeStorage storage = new RegionCubeStorage(save, true)) {
             assertStored(storage, cols, cubes); // per-cube and per-column records are read as before
             CubePos cube = CubeBundleCodec.member(origin, 5);
             ChunkCoordIntPair column = ColumnGroupCodec.member(columns, 2);
@@ -134,20 +137,88 @@ class BundleStorageTest {
     }
 
     @Test
-    void cubesMoveBetweenBundlesAndTheCompactTables() throws Exception {
+    void emptyCubesAreStatesInTheirColumns() throws Exception {
+        CubePos origin = new CubePos(6, -4, 2);
+        ChunkCoordIntPair group = new ChunkCoordIntPair(6, 2);
+        Map<CubePos, NBTTagCompound> cubes = new HashMap<>(bundle(origin, 16, 0b00001111));
+        for (int s = 4; s < 8; s++) {
+            CubePos pos = CubeBundleCodec.member(origin, s);
+            cubes.put(pos, empty(pos));
+        }
+        Map<ChunkCoordIntPair, NBTTagCompound> cols = columnGroup(group, 17, 0b1111);
+        try (RegionCubeStorage storage = new RegionCubeStorage(save, true)) {
+            write(storage, cols, cubes);
+            assertStored(storage, cols, cubes);
+            Set<CubePos> listed = new HashSet<>();
+            storage.forEachCube(listed::add);
+            assertEquals(cubes.keySet(), listed, "every cube is listed once");
+        }
+        assertOneRecord(origin, 0b00001111);
+        int states = 0;
+        for (int s = 0; s < 4; s++) states += stateCount(storedStates(save, ColumnGroupCodec.member(group, s)));
+        assertEquals(4, states, "the empty cubes are states in their columns");
+        try (RegionCubeStorage storage = new RegionCubeStorage(save, true)) {
+            assertStored(storage, cols, cubes);
+        }
+    }
+
+    private static int stateCount(CubeStates.Column states) {
+        int[] count = new int[1];
+        states.forEach(y -> count[0]++);
+        return count[0];
+    }
+
+    @Test
+    void cubesMoveBetweenBundlesAndColumnStates() throws Exception {
         CubePos origin = new CubePos(-2, 4, 8), sky = CubeBundleCodec.member(origin, 6);
+        ChunkCoordIntPair column = sky.chunkPos();
         Map<CubePos, NBTTagCompound> cubes = new HashMap<>(bundle(origin, 7, 0xff));
-        try (CompactCubeStorage storage = new CompactCubeStorage(save, true)) {
-            write(storage, Collections.emptyMap(), cubes);
+        Map<ChunkCoordIntPair, NBTTagCompound> cols = Collections.singletonMap(column, column(column, 71));
+        try (RegionCubeStorage storage = new RegionCubeStorage(save, true)) {
+            write(storage, cols, cubes);
             cubes.put(sky, empty(sky));
             write(storage, Collections.emptyMap(), Collections.singletonMap(sky, cubes.get(sky)));
-            assertStored(storage, Collections.emptyMap(), cubes);
+            assertStored(storage, cols, cubes);
             assertOneRecord(origin, 0xff & ~(1 << 6));
+            assertTrue(storedStates(save, column).get(sky.getY()) >= 0, "a state once it is empty");
             cubes.put(sky, cube(sky, 70));
             write(storage, Collections.emptyMap(), Collections.singletonMap(sky, cubes.get(sky)));
-            assertStored(storage, Collections.emptyMap(), cubes);
+            assertStored(storage, cols, cubes);
+            assertOneRecord(origin, 0xff);
+            // the full record wins over the old state, which the next write of the column drops
+            write(storage, cols, Collections.emptyMap());
+            assertTrue(storedStates(save, column).isEmpty(), "the stale state is dropped");
+            assertStored(storage, cols, cubes);
         }
-        assertOneRecord(origin, 0xff);
+    }
+
+    @Test
+    void anEmptyCubeWaitsInAFullRecordUntilItsColumnIsWritten() throws Exception {
+        CubePos pos = new CubePos(20, 6, -20);
+        ChunkCoordIntPair column = pos.chunkPos();
+        Map<CubePos, NBTTagCompound> cubes = Collections.singletonMap(pos, empty(pos));
+        Map<ChunkCoordIntPair, NBTTagCompound> cols = Collections.singletonMap(column, column(column, 18));
+        try (RegionCubeStorage storage = new RegionCubeStorage(save, true)) {
+            write(storage, Collections.emptyMap(), cubes);
+            assertNotEquals(0, header(save, pos), "no column record to hold its state yet");
+            assertStored(storage, Collections.emptyMap(), cubes);
+            write(storage, cols, Collections.emptyMap());
+            assertEquals(0, header(save, pos), "a state once its column is written");
+            assertStored(storage, cols, cubes);
+        }
+        try (RegionCubeStorage storage = new RegionCubeStorage(save, true)) {
+            assertStored(storage, cols, cubes);
+        }
+    }
+
+    @Test
+    void aWorldWithCompactTablesIsRefused() throws Exception {
+        Files.createDirectories(save.resolve("region3d-empty"));
+        IOException refused = assertThrows(IOException.class, () -> new RegionCubeStorage(save, true));
+        assertTrue(
+            refused.getMessage()
+                .contains("compact tables"));
+        assertThrows(IOException.class, () -> new RegionCubeStorage(save));
     }
 
     @Test
@@ -161,11 +232,11 @@ class BundleStorageTest {
                 savedColumn = ColumnGroupCodec.member(columns, 3);
             Map<CubePos, NBTTagCompound> cubes = new HashMap<>(bundle(origin, 8, 0b11));
             Map<ChunkCoordIntPair, NBTTagCompound> cols = new HashMap<>(columnGroup(columns, 9, 0b11));
-            try (CompactCubeStorage storage = new CompactCubeStorage(save, true)) {
+            try (RegionCubeStorage storage = new RegionCubeStorage(save, true)) {
                 write(storage, cols, cubes);
             }
             // the damaged members have their own records next to the shared ones
-            try (RegionCubeStorage plain = new RegionCubeStorage(save, true, false)) {
+            try (RegionCubeStorage plain = new RegionCubeStorage(save)) {
                 plain.writeCube(damagedCube, cube(damagedCube, 90));
                 plain.writeColumn(damagedColumn, column(damagedColumn, 91));
             }
@@ -174,7 +245,7 @@ class BundleStorageTest {
             damageLength(columnRegion(save, damagedColumn), columnRecord, length);
             cubes.put(savedCube, cube(savedCube, 92));
             cols.put(savedColumn, column(savedColumn, 93));
-            try (CompactCubeStorage storage = new CompactCubeStorage(save, true)) {
+            try (RegionCubeStorage storage = new RegionCubeStorage(save, true)) {
                 write(
                     storage,
                     Collections.singletonMap(savedColumn, cols.get(savedColumn)),
@@ -188,12 +259,128 @@ class BundleStorageTest {
         }
     }
 
+    /** Empty cubes at {@code ys} of a column, and the column itself, written in one batch. */
+    private static Map<CubePos, NBTTagCompound> emptyCubes(RegionCubeStorage storage, ChunkCoordIntPair column,
+        long seed, int... ys) throws IOException {
+        Map<CubePos, NBTTagCompound> cubes = new HashMap<>();
+        for (int y : ys) {
+            CubePos pos = new CubePos(column.chunkXPos, y, column.chunkZPos);
+            cubes.put(pos, empty(pos));
+        }
+        write(storage, Collections.singletonMap(column, column(column, seed)), cubes);
+        return cubes;
+    }
+
     @Test
-    void aCubeBecomingFullKeepsItsCompactEntryWhenItsWriteFails() throws Exception {
+    void aColumnSavedNextToADamagedOneKeepsItsStates() throws Exception {
+        // a length beyond the record's sectors fails the read; a negative one fails the whole group read unchecked
+        for (int length : new int[] { 0x7fffffff, 0xffffffff }) {
+            ChunkCoordIntPair group = new ChunkCoordIntPair(length > 0 ? 40 : 48, 0);
+            ChunkCoordIntPair saved = ColumnGroupCodec.member(group, 0), damaged = ColumnGroupCodec.member(group, 1);
+            Map<CubePos, NBTTagCompound> cubes;
+            try (RegionCubeStorage storage = new RegionCubeStorage(save, true)) {
+                cubes = emptyCubes(storage, saved, 20, 3, 4);
+            }
+            try (RegionCubeStorage plain = new RegionCubeStorage(save)) {
+                plain.writeColumn(damaged, column(damaged, 21));
+            }
+            damageLength(columnRegion(save, damaged), header(save, damaged), length);
+            try (RegionCubeStorage storage = new RegionCubeStorage(save, true)) {
+                write(storage, Collections.singletonMap(saved, column(saved, 22)), Collections.emptyMap());
+                assertStored(storage, Collections.singletonMap(saved, column(saved, 22)), cubes);
+            }
+        }
+    }
+
+    @Test
+    void aColumnWhoseStatesCannotBeReadIsNotOverwrittenWithoutThem() throws Exception {
+        // its record reads but its states tag is invalid: the save keeps the tag as it is
+        ChunkCoordIntPair column = new ChunkCoordIntPair(60, 0);
+        NBTTagCompound invalid = column(column, 30), tag = new NBTTagCompound();
+        tag.setInteger("MinY", 0);
+        tag.setByteArray("States", new byte[] { 1 });
+        invalid.setTag(CubeStates.TAG, tag);
+        try (RegionCubeStorage plain = new RegionCubeStorage(save)) {
+            plain.writeColumn(column, invalid);
+        }
+        // an empty cube of that column saved with it cannot become a state: it gets a full record
+        CubePos emptyCube = new CubePos(column.chunkXPos, 3, column.chunkZPos);
+        try (RegionCubeStorage storage = new RegionCubeStorage(save, true)) {
+            write(
+                storage,
+                Collections.singletonMap(column, column(column, 31)),
+                Collections.singletonMap(emptyCube, empty(emptyCube)));
+            assertEquals(column(column, 31), storage.readColumn(column));
+            assertEquals(empty(emptyCube), storage.readCube(emptyCube));
+        }
+        assertEquals(
+            tag,
+            storedColumn(save, column).getTag(CubeStates.TAG),
+            "the invalid states are kept as they were");
+        assertNotEquals(0, header(save, emptyCube), "a full record instead of a state");
+
+        // its record cannot be read and its states are not cached: the save is refused, the record left as it is
+        ChunkCoordIntPair unreadable = new ChunkCoordIntPair(62, 0);
+        try (RegionCubeStorage plain = new RegionCubeStorage(save)) {
+            plain.writeColumn(unreadable, column(unreadable, 34));
+        }
+        int record = header(save, unreadable);
+        damageLength(columnRegion(save, unreadable), record, 0x7fffffff);
+        try (RegionCubeStorage storage = new RegionCubeStorage(save, true)) {
+            assertThrows(
+                IOException.class,
+                () -> write(
+                    storage,
+                    Collections.singletonMap(unreadable, column(unreadable, 35)),
+                    Collections.emptyMap()));
+        }
+        assertEquals(record, header(save, unreadable), "its record is left as it is");
+
+        // with its states known (cached when written), a saved column is written although its record cannot be read
+        ChunkCoordIntPair known = new ChunkCoordIntPair(64, 0);
+        try (RegionCubeStorage storage = new RegionCubeStorage(save, true)) {
+            Map<CubePos, NBTTagCompound> cubes = emptyCubes(storage, known, 32, 1, 2);
+            damageLength(columnRegion(save, known), header(save, known), 0x7fffffff);
+            write(storage, Collections.singletonMap(known, column(known, 33)), Collections.emptyMap());
+            assertStored(storage, Collections.singletonMap(known, column(known, 33)), cubes);
+        }
+    }
+
+    @Test
+    void invalidStatesOfOneColumnOnlyGiveItsOwnEmptyCubesFullRecords() throws Exception {
+        ChunkCoordIntPair group = new ChunkCoordIntPair(70, 0);
+        ChunkCoordIntPair invalidColumn = ColumnGroupCodec.member(group, 0), saved = ColumnGroupCodec.member(group, 1);
+        NBTTagCompound invalid = column(invalidColumn, 40), tag = new NBTTagCompound();
+        tag.setInteger("MinY", 0);
+        tag.setByteArray("States", new byte[] { 2, 0 });
+        invalid.setTag(CubeStates.TAG, tag);
+        try (RegionCubeStorage plain = new RegionCubeStorage(save)) {
+            plain.writeColumn(invalidColumn, invalid);
+            plain.writeColumn(saved, column(saved, 41));
+        }
+        CubePos emptyCube = new CubePos(invalidColumn.chunkXPos, 5, invalidColumn.chunkZPos),
+            elsewhere = new CubePos(200, 0, 200);
+        Map<CubePos, NBTTagCompound> cubes = new HashMap<>();
+        cubes.put(emptyCube, empty(emptyCube));
+        cubes.put(elsewhere, cube(elsewhere, 42));
+        Map<ChunkCoordIntPair, NBTTagCompound> cols = Collections.singletonMap(saved, column(saved, 43));
+        try (RegionCubeStorage storage = new RegionCubeStorage(save, true)) {
+            write(storage, cols, cubes);
+            assertNotEquals(0, header(save, emptyCube), "a full record instead of a state");
+            assertStored(storage, cols, cubes);
+        }
+    }
+
+    @Test
+    void aCubeBecomingFullKeepsItsStateWhenItsWriteFails() throws Exception {
         CubePos pos = new CubePos(30, 30, 30), other = new CubePos(40, 30, 30);
         NBTTagCompound emptyCube = empty(pos), otherCube = cube(other, 100);
-        try (CompactCubeStorage storage = new CompactCubeStorage(save, true)) {
-            write(storage, Collections.emptyMap(), Collections.singletonMap(pos, emptyCube));
+        try (RegionCubeStorage storage = new RegionCubeStorage(save, true)) {
+            write(
+                storage,
+                Collections.singletonMap(pos.chunkPos(), column(pos.chunkPos(), 102)),
+                Collections.singletonMap(pos, emptyCube));
+            assertEquals(0, header(save, pos), "stored as a state");
             // the cube gets blocks, but its NBT cannot be written (a string over the 64 KiB modified UTF-8 limit)
             NBTTagCompound full = cube(pos, 101);
             char[] big = new char[70_000];
@@ -212,7 +399,7 @@ class BundleStorageTest {
     void tooLargeGroupsKeepTheirMembersInTheirOwnRecords() throws Exception {
         CubePos origin = new CubePos(0, 8, 0);
         Map<CubePos, NBTTagCompound> cubes = new HashMap<>(bundle(origin, 11, 0b11));
-        try (CompactCubeStorage storage = new CompactCubeStorage(save, true)) {
+        try (RegionCubeStorage storage = new RegionCubeStorage(save, true)) {
             write(storage, Collections.emptyMap(), cubes);
             int shared = header(save, origin);
             // two cubes with 80 KB of incompressible data each do not fit one record together
@@ -233,7 +420,7 @@ class BundleStorageTest {
     void tooLargeColumnGroupsKeepTheirColumnsInTheirOwnRecords() throws Exception {
         ChunkCoordIntPair origin = new ChunkCoordIntPair(6, 6);
         Map<ChunkCoordIntPair, NBTTagCompound> cols = new HashMap<>(columnGroup(origin, 15, 0b11));
-        try (CompactCubeStorage storage = new CompactCubeStorage(save, true)) {
+        try (RegionCubeStorage storage = new RegionCubeStorage(save, true)) {
             write(storage, cols, Collections.emptyMap());
             int shared = header(save, origin);
             Map<ChunkCoordIntPair, NBTTagCompound> large = new HashMap<>();
@@ -263,7 +450,7 @@ class BundleStorageTest {
         Map<CubePos, NBTTagCompound> cubes = new HashMap<>(bundle(a, 12, 0xff));
         cubes.putAll(bundle(b, 13, 0b1110001));
         Map<ChunkCoordIntPair, NBTTagCompound> cols = new HashMap<>(columnGroup(columns, 14, 0b1111));
-        try (CompactCubeStorage storage = new CompactCubeStorage(save, true)) {
+        try (RegionCubeStorage storage = new RegionCubeStorage(save, true)) {
             write(storage, cols, cubes);
             // rewriting members leaves free sectors between records
             for (int i = 0; i < 12; i++) {
@@ -286,7 +473,7 @@ class BundleStorageTest {
         assertOneRecord(a, 0xff);
         assertOneRecord(b, 0b1110001);
         assertOneRecord(columns, 0b1111);
-        try (CompactCubeStorage storage = new CompactCubeStorage(save, true)) {
+        try (RegionCubeStorage storage = new RegionCubeStorage(save, true)) {
             assertStored(storage, cols, cubes);
         }
     }

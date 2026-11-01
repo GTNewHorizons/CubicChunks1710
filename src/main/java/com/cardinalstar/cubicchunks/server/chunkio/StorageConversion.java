@@ -30,7 +30,8 @@ import com.cardinalstar.cubicchunks.util.CubePos;
 /**
  * Converts a dimension's stored cubes and columns to bundle storage at once instead of as they are saved: every bundle
  * and column group that still has a member outside one shared bundle or group record is read and written again, which
- * also moves empty cubes into the compact tables. Left as they are: groups with a member in an oversized external file,
+ * also stores empty cubes as states in their columns. Left as they are: groups with a member in an oversized external
+ * file,
  * groups whose members together are too large for one record, and groups with a record that cannot be read.
  */
 final class StorageConversion {
@@ -71,7 +72,7 @@ final class StorageConversion {
         regions.addAll(regionFiles(dimension.resolve("region2d"), COLUMN_REGION));
         regions.addAll(regionFiles(dimension.resolve("region3d"), CUBE_REGION));
         if (regions.isEmpty()) return summary;
-        try (CompactCubeStorage storage = new CompactCubeStorage(dimension, true)) {
+        try (RegionCubeStorage storage = new RegionCubeStorage(dimension, true)) {
             for (Path region : regions) {
                 listener.progress(summary.regions, regions.size());
                 Matcher cube = CUBE_REGION.matcher(
@@ -179,7 +180,7 @@ final class StorageConversion {
         return out;
     }
 
-    private static void convertCubes(CompactCubeStorage storage, Path region, Matcher name, Summary summary)
+    private static void convertCubes(RegionCubeStorage storage, Path region, Matcher name, Summary summary)
         throws IOException {
         int rx = Integer.parseInt(name.group(1)), ry = Integer.parseInt(name.group(2)),
             rz = Integer.parseInt(name.group(3));
@@ -201,7 +202,7 @@ final class StorageConversion {
         }
     }
 
-    private static void convertColumns(CompactCubeStorage storage, Path region, Summary summary) throws IOException {
+    private static void convertColumns(RegionCubeStorage storage, Path region, Summary summary) throws IOException {
         Matcher name = COLUMN_REGION.matcher(
             region.getFileName()
                 .toString());
@@ -227,12 +228,12 @@ final class StorageConversion {
 
     /**
      * Reads the given groups and writes them again. A large group is first encoded in memory, and when it does not fit
-     * one record only its empty cubes are written (to the compact tables), so it is not rewritten on every start. A
+     * one record only its empty cubes are written (as states), so it is not rewritten on every start. A
      * batch that cannot be read (a damaged record fails the whole read) or written is retried group by group, so one
      * damaged record only leaves its own group as it is. Returns how many cubes or columns were written.
      */
     @SuppressWarnings("unchecked")
-    private static <P> long rewrite(CompactCubeStorage storage, List<Group<P>> groups, boolean columns, Path region,
+    private static <P> long rewrite(RegionCubeStorage storage, List<Group<P>> groups, boolean columns, Path region,
         Summary summary) {
         try {
             List<P> positions = new ArrayList<>();
@@ -245,8 +246,8 @@ final class StorageConversion {
             for (Group<P> group : groups) {
                 if (group.large && !fits(group, tags, columns)) {
                     for (P pos : group.members) {
-                        // empty cubes still move to the compact tables; the others keep their own records
-                        if (columns || CompactCubeStorage.template((CubePos) pos, tags.get(pos)) == null) {
+                        // empty cubes still become states; the others keep their own records
+                        if (columns || CubeStates.encode((CubePos) pos, tags.get(pos)) < 0) {
                             tags.remove(pos);
                             tooLarge++;
                         }
@@ -288,8 +289,8 @@ final class StorageConversion {
                 for (P pos : group.members) {
                     CubePos cube = (CubePos) pos;
                     NBTTagCompound tag = tags.get(pos);
-                    // empty cubes go to the compact tables, not into the bundle
-                    if (tag == null || CompactCubeStorage.template(cube, tag) != null) continue;
+                    // empty cubes become states, not bundle members
+                    if (tag == null || CubeStates.encode(cube, tag) >= 0) continue;
                     members[CubeBundleCodec.slot(cube)] = tag;
                     any = true;
                 }

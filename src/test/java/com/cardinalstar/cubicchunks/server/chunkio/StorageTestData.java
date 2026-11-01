@@ -63,20 +63,28 @@ final class StorageTestData {
         return cube(pos, seed, 6);
     }
 
-    /** A cube the compact tables take: no sections, entities, tile entities or ticks. */
+    /**
+     * An empty cube as the game saves it, which is stored as a state in its column: no sections, entities, tile
+     * entities
+     * or ticks, and a (clipped) saved height map below it.
+     */
     static NBTTagCompound empty(CubePos pos) {
         NBTTagCompound level = position(pos);
         level.setShort("population", (short) 255);
+        level.setBoolean("isSurfaceTracked", true);
         level.setBoolean("initLightDone", true);
         level.setTag("Entities", new NBTTagList());
         level.setTag("TileEntities", new NBTTagList());
         level.setTag("TileTicks", new NBTTagList());
         NBTTagCompound lighting = new NBTTagCompound();
         int[] heights = new int[256];
-        Arrays.fill(heights, 71);
+        Arrays.fill(heights, pos.getY() * 16);
         lighting.setIntArray("LastHeightMap", heights);
+        lighting.setLong("NeighborLightChecksSky", 0);
+        lighting.setLong("NeighborLightChecksBlock", 0);
         level.setTag("LightingInfo", lighting);
         level.setString("LightingInfoType", "phosphor_cc");
+        level.setByteArray("Biomes", new byte[] { 0 });
         NBTTagCompound root = new NBTTagCompound();
         root.setTag("Level", level);
         return root;
@@ -170,6 +178,28 @@ final class StorageTestData {
             file.read(entry, slot * 4L);
         }
         return entry.getInt(0);
+    }
+
+    /** The states stored in a column's record, read from its region file. */
+    static CubeStates.Column storedStates(Path save, ChunkCoordIntPair column) throws Exception {
+        NBTTagCompound tag = storedColumn(save, column);
+        return tag == null ? CubeStates.Column.EMPTY : CubeStates.Column.read(tag);
+    }
+
+    /** A column's NBT as stored in its record, read from its region file, or {@code null}. */
+    static NBTTagCompound storedColumn(Path save, ChunkCoordIntPair column) throws Exception {
+        int packed = header(save, column);
+        if (packed == 0) return null;
+        ByteBuffer record;
+        try (FileChannel file = FileChannel.open(columnRegion(save, column))) {
+            ByteBuffer length = ByteBuffer.allocate(4);
+            file.read(length, (long) (packed >>> 8) * 512);
+            record = ByteBuffer.allocate(length.getInt(0));
+            file.read(record, (long) (packed >>> 8) * 512 + 4);
+        }
+        record.flip();
+        return ColumnGroupCodec.isGroup(record) ? ColumnGroupCodec.read(record)
+            .member(ColumnGroupCodec.slot(column)) : CCNBTUtils.loadTag(record);
     }
 
     /** Overwrites the length prefix of the record a header entry points at. */
