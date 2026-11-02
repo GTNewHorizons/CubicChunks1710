@@ -138,7 +138,7 @@ public class CCNBTUtils {
         }
     }
 
-    private static int getTagSizeEstimate(NBTBase tag) {
+    static int getTagSizeEstimate(NBTBase tag) {
         switch (tag.getId()) {
             case NBT.TAG_BYTE -> {
                 return 2;
