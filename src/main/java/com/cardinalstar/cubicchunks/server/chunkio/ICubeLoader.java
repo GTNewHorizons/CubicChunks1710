@@ -57,4 +57,7 @@ public interface ICubeLoader extends Flushable, Closeable {
     void doGC();
 
     void trimCaches();
+
+    /** Called every server tick after {@link #setNow}. */
+    default void tickIO() {}
 }

@@ -117,9 +117,12 @@ public class LightingManager implements ILightingManager {
         }
     }
 
+    /** Saved as each cube's LightingInfoType. */
+    public static final String ID = "phosphor_cc";
+
     @Override
     public String getId() {
-        return "phosphor_cc";
+        return ID;
     }
 
     @Override
