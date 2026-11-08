@@ -13,7 +13,7 @@ import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
 public abstract class MixinPathNavigate {
 
     @Expression("(int) @(?)")
-    @ModifyExpressionValue(method = "getPathableYPos", at = @At("MIXINEXTRAS:EXPRESSION"))
+    @ModifyExpressionValue(method = { "getPathableYPos", "tryMoveToXYZ" }, at = @At("MIXINEXTRAS:EXPRESSION"))
     double wrapIntAssignCast(double original) {
         return MathHelper.floor_double(original);
     }

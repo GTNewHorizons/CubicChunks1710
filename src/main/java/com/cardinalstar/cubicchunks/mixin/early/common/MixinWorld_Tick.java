@@ -77,10 +77,11 @@ public abstract class MixinWorld_Tick implements ICubicWorld {
         int entityPosX = MathHelper.floor_double(entity.posX);
         int entityPosZ = MathHelper.floor_double(entity.posZ);
 
-        if ((entityPosX < 30000000 && entityPosX >= -30000000
+        if (!(entityPosX >= -30000000 && entityPosX < 30000000
             && entityPosZ >= -30000000
             && entityPosZ < 30000000
-            && entityPosY >= getMaxHeight() || entityPosY < getMinHeight())) {
+            && entityPosY >= getMinHeight()
+            && entityPosY < getMaxHeight())) {
             return true; // can tick everything outside of limits
         }
 

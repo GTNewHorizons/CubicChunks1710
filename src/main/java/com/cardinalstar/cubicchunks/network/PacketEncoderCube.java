@@ -35,6 +35,7 @@ import com.cardinalstar.cubicchunks.world.cube.Cube;
 import com.github.bsideup.jabel.Desugar;
 
 import io.netty.buffer.ByteBuf;
+import io.netty.buffer.PooledByteBufAllocator;
 import io.netty.buffer.Unpooled;
 
 @ParametersAreNonnullByDefault
@@ -54,15 +55,18 @@ public class PacketEncoderCube extends CCPacketEncoder<PacketCube> {
     public static PacketCube createPacket(Cube cube) {
         CubeStatusVisualizer.put(cube.getCoords(), CubeStatus.Synced);
 
-        ByteBuf cubeData = Unpooled.buffer();
+        // only the written bytes are copied out, so the pooled buffer is released right away
+        ByteBuf cubeData = PooledByteBufAllocator.DEFAULT.buffer();
+        try {
+            WorldEncoder.encodeCube(new CCPacketBuffer(cubeData), cube);
 
-        WorldEncoder.encodeCube(new CCPacketBuffer(cubeData), cube);
+            byte[] data = new byte[cubeData.readableBytes()];
+            cubeData.readBytes(data);
 
-        byte[] data = new byte[cubeData.writerIndex()];
-
-        cubeData.readBytes(data);
-
-        return new PacketCube(cube.getCoords(), data);
+            return new PacketCube(cube.getCoords(), data);
+        } finally {
+            cubeData.release();
+        }
     }
 
     @Override

@@ -440,7 +440,7 @@ public abstract class MixinWorld_HeightLimit implements ICubicWorld {
         int y = Coords.blockToCube(entity.posY);
         int z = Coords.blockToCube(entity.posZ);
 
-        return this.cubeExists(x >> 4, y >> 4, z >> 4);
+        return this.cubeExists(x, y, z);
     }
 
     // TODO FIX

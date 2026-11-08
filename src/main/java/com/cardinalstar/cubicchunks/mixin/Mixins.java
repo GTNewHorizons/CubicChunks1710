@@ -73,6 +73,22 @@ public enum Mixins implements IMixins {
         new MixinBuilder("Allowing lilypads to stay above 256 adn below 0.").addCommonMixins("common.MixinBlockLilyPad")
             .setPhase(Phase.EARLY)
             .setApplyIf(() -> true)),
+    MIXIN_BEACON_HEIGHT(
+        new MixinBuilder("Validate beacon pyramids below zero").addCommonMixins("common.MixinTileEntityBeacon")
+            .setPhase(Phase.EARLY)
+            .setApplyIf(() -> true)),
+    MIXIN_VINE_HEIGHT(new MixinBuilder("Allow vines to grow across the physical height range")
+        .addCommonMixins("common.MixinBlockVine_Height")
+        .setPhase(Phase.EARLY)
+        .setApplyIf(() -> true)),
+    MIXIN_PORTAL_FRAME_HEIGHT(
+        new MixinBuilder("Validate portal frames below zero").addCommonMixins("common.MixinBlockPortalSize")
+            .setPhase(Phase.EARLY)
+            .setApplyIf(() -> true)),
+    MIXIN_PISTON_HEIGHT(new MixinBuilder("Keep vanilla piston movement inside physical bounds")
+        .addCommonMixins("common.MixinBlockPistonBase_Height")
+        .setPhase(Phase.EARLY)
+        .setApplyIf(() -> true)),
     MIXIN_S01PACKET_JOIN_GAME(new MixinBuilder("Giving the packet info to initialize cubicWorlds for clients.")
         .addCommonMixins("common.vanillaclient.MixinS01PacketJoinGame")
         .setPhase(Phase.EARLY)
@@ -87,6 +103,10 @@ public enum Mixins implements IMixins {
         .setApplyIf(() -> true)),
     MIXIN_S28_HEIGHT_LIMITS(new MixinBuilder("Changing packet S28 to read and write full integer Y values.")
         .addCommonMixins("common.MixinS28PacketEffect")
+        .setPhase(Phase.EARLY)
+        .setApplyIf(() -> true)),
+    MIXIN_S0A_HEIGHT_LIMITS(new MixinBuilder("Changing packet S0A to read and write full integer Y values.")
+        .addCommonMixins("common.MixinS0APacketUseBed")
         .setPhase(Phase.EARLY)
         .setApplyIf(() -> true)),
     MIXIN_S07PACKET_RESPAWN(new MixinBuilder("Giving respawn packets info to initialize cubicWorlds for clients.")
@@ -244,6 +264,14 @@ public enum Mixins implements IMixins {
         .setApplyIf(() -> true)),
     MIXIN_NET_HANDLER_PLAY_SERVER(new MixinBuilder("Remove height check from NetHandlerPlayServer")
         .addCommonMixins("common.MixinNetHandlerPlayServer")
+        .setPhase(Phase.EARLY)
+        .setApplyIf(() -> true)),
+    MIXIN_SPAWN_COMMAND_HEIGHT(new MixinBuilder("Accept explicit spawn coordinates within physical world bounds")
+        .addCommonMixins("common.MixinCommandSetSpawnpoint", "common.MixinCommandSetDefaultSpawnpoint")
+        .setPhase(Phase.EARLY)
+        .setApplyIf(() -> true)),
+    MIXIN_SPREAD_PLAYER_HEIGHT(new MixinBuilder("Find safe spread-player surfaces at signed heights with bounded work")
+        .addCommonMixins("common.MixinSpreadPlayerPosition")
         .setPhase(Phase.EARLY)
         .setApplyIf(() -> true)),
 
