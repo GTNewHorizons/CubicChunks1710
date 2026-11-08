@@ -367,7 +367,8 @@ public class CubicPlayerManager extends PlayerManager implements CubeLoaderCallb
             verticalViewDistance,
             (x, y, z) -> onPlayerStoppedViewingCube(watchingPlayer, x, y, z));
 
-        watchingPlayer.sync.flush();
+        // when changing dimension, the player's dimension is already the new one here
+        watchingPlayer.sync.onPlayerLeft(player.dimension == getWorldServer().provider.dimensionId);
     }
 
     // CHECKED: 1.10.2-12.18.1.2092
@@ -495,10 +496,12 @@ public class CubicPlayerManager extends PlayerManager implements CubeLoaderCallb
         return wrapper != null && wrapper.isWatchingColumn(columnX, columnZ);
     }
 
+    /** Whether the player's client has this cube and is meant to keep it, unlike a cube still waiting to be sent. */
     public boolean isPlayerWatchingCube(EntityPlayerMP player, int cubeX, int cubeY, int cubeZ) {
         var wrapper = players.get(player.getEntityId());
 
-        return wrapper != null && wrapper.isWatchingCube(cubeX, cubeY, cubeZ);
+        return wrapper != null && wrapper.isWatchingCube(cubeX, cubeY, cubeZ)
+            && wrapper.sync.isSynced(cubeX, cubeY, cubeZ);
     }
 
     // CHECKED: 1.10.2-12.18.1.2092

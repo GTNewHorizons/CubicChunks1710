@@ -82,6 +82,15 @@ public class CubicChunksConfig {
         + " Dedicated servers use vertical-view-distance in server.properties instead.")
     public static int verticalCubeLoadDistance = 8;
 
+    @Config.LangKey("cubicchunks.config.max_cubes_sent_per_tick")
+    @Config.Comment("How much cube loading and unloading the server sends to one player per tick, nearest first, in cubes with "
+        + "blocks (an empty cube costs a client about an eighth of one, an unloaded one about a quarter); when more is "
+        + "waiting, a twentieth of it per tick, so that everything is done within a second. Clients apply received "
+        + "cubes on the game thread, so a whole slab of cubes in one tick makes a frame stutter when crossing into a "
+        + "new column.")
+    @Config.RangeInt(min = 1)
+    public static int maxCubesSentPerTick = 24;
+
     @Config.LangKey("cubicchunks.config.enable_chunk_debugging")
     @Config.Comment("Displays coloured boxes over cubes at Y=8 for debugging purposes.")
     public static boolean enableChunkStatusDebugging = false;
