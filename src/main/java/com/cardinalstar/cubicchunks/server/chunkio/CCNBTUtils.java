@@ -170,7 +170,7 @@ public class CCNBTUtils {
         }
     }
 
-    private static int getTagSizeEstimate(NBTBase tag) {
+    static int getTagSizeEstimate(NBTBase tag) {
         // Standalone storage tools run without Minecraft's mixin accessors.
         if (tag instanceof NBTTagCompound && !(tag instanceof AccessorNBTTagCompound)) return 512;
         switch (tag.getId()) {

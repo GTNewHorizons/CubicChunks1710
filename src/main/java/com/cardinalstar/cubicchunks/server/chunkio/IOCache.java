@@ -373,7 +373,7 @@ final class IOCache<K> {
     @Nullable
     static byte[] pack(NBTTagCompound tag) {
         try {
-            ByteArrayOutputStream raw = new ByteArrayOutputStream(4096);
+            ByteArrayOutputStream raw = new ByteArrayOutputStream(CCNBTUtils.getTagSizeEstimate(tag));
             try (DataOutputStream out = new DataOutputStream(raw)) {
                 CompressedStreamTools.write(tag, out);
             }
