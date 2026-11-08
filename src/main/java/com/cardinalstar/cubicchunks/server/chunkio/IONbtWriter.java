@@ -25,6 +25,7 @@ import static net.minecraftforge.common.MinecraftForge.EVENT_BUS;
 import java.util.ArrayList;
 import java.util.List;
 
+import javax.annotation.Nullable;
 import javax.annotation.ParametersAreNonnullByDefault;
 
 import net.minecraft.block.Block;
@@ -114,6 +115,38 @@ class IONbtWriter {
         EVENT_BUS.post(new DataSave(cube.getWorld(), cube, cubeNbt));
 
         return cubeNbt;
+    }
+
+    /**
+     * The part of a cube's NBT that clients are sent, in the same form as in {@link #write(Cube)}: {@code Level} with
+     * {@code Sections} (unless the cube is empty) and {@code Biomes}. {@code null} for an empty cube without biomes.
+     */
+    @Nullable
+    static NBTTagCompound writeClientPart(Cube cube) {
+        NBTTagCompound level = new NBTTagCompound();
+
+        if (!cube.isEmpty()) {
+            NBTTagList sections = new NBTTagList();
+            level.setTag("Sections", sections);
+
+            NBTTagCompound section = new NBTTagCompound();
+            sections.appendTag(section);
+
+            if (!Mods.ChunkAPI.isModLoaded()) {
+                writeBlocks(cube, section);
+            } else {
+                DataRegistryImpl.writeSubChunkToNBT(cube.getColumn(), cube.getStorage(), section);
+            }
+        }
+
+        writeBiomes(cube, level);
+
+        // a single byte is the "no biomes" flag
+        if (cube.isEmpty() && level.getByteArray("Biomes").length <= 1) return null;
+
+        NBTTagCompound root = new NBTTagCompound();
+        root.setTag("Level", level);
+        return root;
     }
 
     private static void writeBaseColumn(Chunk column, NBTTagCompound nbt) {// coords

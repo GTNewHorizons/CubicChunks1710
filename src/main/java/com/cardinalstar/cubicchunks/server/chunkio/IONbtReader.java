@@ -237,6 +237,39 @@ public class IONbtReader {
         return cube;
     }
 
+    /** Sets a client cube's blocks and biomes from what the server sent; {@code null} makes it an empty cube. */
+    static void readClientPart(Cube cube, @Nullable NBTTagCompound root) {
+        NBTTagCompound level = root == null ? new NBTTagCompound() : root.getCompoundTag("Level");
+        NBTTagList sections = level.getTagList("Sections", NBT.TAG_COMPOUND);
+
+        if (sections.tagCount() > 0) {
+            NBTTagCompound section = sections.getCompoundTagAt(0);
+
+            if (Mods.ChunkAPI.isModLoaded()) {
+                section.setInteger("Y", cube.getY());
+
+                ExtendedBlockStorage ebs = new ExtendedBlockStorage(
+                    Coords.cubeToMinBlock(cube.getY()),
+                    !cube.getWorld().provider.hasNoSky);
+
+                DataRegistryImpl.readSubChunkFromNBT(cube.getColumn(), ebs, section);
+                ebs.removeInvalidBlocks();
+                cube.setStorageFromSave(ebs);
+            } else {
+                readBlocks(section, cube.getWorld(), cube);
+            }
+        } else {
+            cube.setStorageFromSave(null);
+        }
+
+        if (level.hasKey("Biomes")) {
+            readBiomes(cube, level);
+        } else {
+            // the "no biomes" flag
+            cube.readBiomeArray(new CCPacketBuffer(Unpooled.wrappedBuffer(new byte[1])));
+        }
+    }
+
     private static void readBlocks(NBTTagCompound section, World world, Cube cube) {
         ExtendedBlockStorage ebs = new ExtendedBlockStorage(
             Coords.cubeToMinBlock(cube.getY()),

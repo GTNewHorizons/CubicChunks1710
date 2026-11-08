@@ -20,29 +20,37 @@
  */
 package com.cardinalstar.cubicchunks.network;
 
+import java.io.IOException;
+import java.util.Arrays;
+import java.util.Map;
+
 import javax.annotation.ParametersAreNonnullByDefault;
 
-import net.jpountz.lz4.LZ4Factory;
+import net.minecraft.nbt.NBTTagCompound;
+import net.minecraft.tileentity.TileEntity;
+import net.minecraft.world.ChunkPosition;
 import net.minecraft.world.World;
 
 import com.cardinalstar.cubicchunks.CubicChunks;
 import com.cardinalstar.cubicchunks.client.CubeProviderClient;
 import com.cardinalstar.cubicchunks.network.PacketEncoderCube.PacketCube;
+import com.cardinalstar.cubicchunks.server.chunkio.CubeClientData;
+import com.cardinalstar.cubicchunks.util.AddressTools;
 import com.cardinalstar.cubicchunks.util.CubePos;
 import com.cardinalstar.cubicchunks.util.CubeStatusVisualizer;
 import com.cardinalstar.cubicchunks.util.CubeStatusVisualizer.CubeStatus;
 import com.cardinalstar.cubicchunks.world.cube.Cube;
 import com.github.bsideup.jabel.Desugar;
 
-import io.netty.buffer.ByteBuf;
-import io.netty.buffer.PooledByteBufAllocator;
-import io.netty.buffer.Unpooled;
-
+/**
+ * A cube's blocks and biomes ({@link CubeClientData}) and the local addresses of its tile entities on the server, where
+ * the client creates its own.
+ */
 @ParametersAreNonnullByDefault
 public class PacketEncoderCube extends CCPacketEncoder<PacketCube> {
 
     @Desugar
-    public record PacketCube(CubePos cubePos, byte[] data) implements CCPacket {
+    public record PacketCube(CubePos cubePos, byte[] data, short[] tiles) implements CCPacket {
 
         @Override
         public byte getPacketID() {
@@ -52,21 +60,23 @@ public class PacketEncoderCube extends CCPacketEncoder<PacketCube> {
 
     public PacketEncoderCube() {}
 
-    public static PacketCube createPacket(Cube cube) {
+    public static PacketCube createPacket(Cube cube) throws IOException {
         CubeStatusVisualizer.put(cube.getCoords(), CubeStatus.Synced);
 
-        // only the written bytes are copied out, so the pooled buffer is released right away
-        ByteBuf cubeData = PooledByteBufAllocator.DEFAULT.buffer();
-        try {
-            WorldEncoder.encodeCube(new CCPacketBuffer(cubeData), cube);
+        return new PacketCube(cube.getCoords(), CubeClientData.encode(cube), tilePositions(cube));
+    }
 
-            byte[] data = new byte[cubeData.readableBytes()];
-            cubeData.readBytes(data);
-
-            return new PacketCube(cube.getCoords(), data);
-        } finally {
-            cubeData.release();
+    /** The local addresses of a server cube's tile entities. */
+    private static short[] tilePositions(Cube cube) {
+        short[] tiles = new short[cube.cubeTileEntityMap.size()];
+        int count = 0;
+        for (Map.Entry<ChunkPosition, TileEntity> entry : cube.cubeTileEntityMap.entrySet()) {
+            if (entry.getValue()
+                .isInvalid()) continue;
+            ChunkPosition pos = entry.getKey();
+            tiles[count++] = (short) AddressTools.getLocalAddress(pos.chunkPosX, pos.chunkPosY, pos.chunkPosZ);
         }
+        return count == tiles.length ? tiles : Arrays.copyOf(tiles, count);
     }
 
     @Override
@@ -77,26 +87,30 @@ public class PacketEncoderCube extends CCPacketEncoder<PacketCube> {
     @Override
     public void writePacket(CCPacketBuffer buffer, PacketCube packet) {
         buffer.writeCubePos(packet.cubePos);
+        buffer.writeByteArray(packet.data);
 
-        buffer.writeVarIntToBuffer(packet.data.length);
-        buffer.writeByteArray(
-            LZ4Factory.fastestInstance()
-                .fastCompressor()
-                .compress(packet.data));
+        buffer.writeVarIntToBuffer(packet.tiles.length);
+        for (short tile : packet.tiles) {
+            buffer.writeShort(tile);
+        }
     }
 
     @Override
-    public PacketCube readPacket(CCPacketBuffer buf) {
-        CubePos pos = buf.readCubePos();
+    public PacketCube readPacket(CCPacketBuffer buffer) {
+        CubePos pos = buffer.readCubePos();
+        byte[] data = buffer.readByteArray();
 
-        byte[] decompressed = new byte[buf.readVarIntFromBuffer()];
-        byte[] data = buf.readByteArray();
+        // at most one per block
+        int count = buffer.readVarIntFromBuffer();
+        if (count < 0 || count > Cube.SIZE * Cube.SIZE * Cube.SIZE) {
+            throw new IllegalArgumentException("Invalid tile entity count " + count);
+        }
+        short[] tiles = new short[count];
+        for (int i = 0; i < count; i++) {
+            tiles[i] = buffer.readShort();
+        }
 
-        LZ4Factory.fastestInstance()
-            .fastDecompressor()
-            .decompress(data, decompressed);
-
-        return new PacketCube(pos, decompressed);
+        return new PacketCube(pos, data, tiles);
     }
 
     @Override
@@ -104,6 +118,14 @@ public class PacketEncoderCube extends CCPacketEncoder<PacketCube> {
         CubeProviderClient cubeCache = (CubeProviderClient) world.getChunkProvider();
 
         CubePos pos = packet.cubePos;
+
+        NBTTagCompound clientData;
+        try {
+            clientData = CubeClientData.decode(packet.data);
+        } catch (IOException | RuntimeException e) {
+            CubicChunks.LOGGER.error("Could not decode the cube at {}", pos, e);
+            return;
+        }
 
         Cube cube = cubeCache.loadCube(pos); // new cube
         if (cube == null) {
@@ -113,7 +135,7 @@ public class PacketEncoderCube extends CCPacketEncoder<PacketCube> {
 
         cube.setClientCube();
 
-        WorldEncoder.decodeCube(new CCPacketBuffer(Unpooled.wrappedBuffer(packet.data)), cube, world);
+        WorldEncoder.applyCube(cube, world, clientData, packet.tiles);
 
         if (!cube.isCubeLoaded()) {
             cube.onCubeLoad();

@@ -1,5 +1,6 @@
 package com.cardinalstar.cubicchunks.server;
 
+import java.io.IOException;
 import java.util.Iterator;
 
 import net.minecraft.network.Packet;
@@ -207,8 +208,13 @@ public class WorldSyncStateMachine {
     }
 
     private void sendCubeData(Cube cube) {
-        PacketEncoderCube.createPacket(cube)
-            .sendToPlayer(player.player);
+        try {
+            PacketEncoderCube.createPacket(cube)
+                .sendToPlayer(player.player);
+        } catch (IOException e) {
+            CubicChunks.LOGGER.error("Could not encode the cube at {} for {}", cube.getCoords(), player.player, e);
+            return;
+        }
 
         cube.cubeTileEntityMap.forEach((tePos, te) -> {
             Packet desc = te.getDescriptionPacket();
