@@ -362,7 +362,7 @@ public enum Mixins implements IMixins {
         .setPhase(Phase.EARLY)
         .setApplyIf(() -> true)),
     MIXIN_FORGE_CHUNK_MANAGER(new MixinBuilder("Add cubic chunk hooks to ForgeChunkManager loadWorld/saveWorld")
-        .addCommonMixins("common.forge.MixinForgeChunkManager")
+        .addCommonMixins("common.forge.MixinForgeChunkManager", "common.forge.IForgeChunkManager")
         .setPhase(Phase.EARLY)
         .setApplyIf(() -> true)),
     MIXIN_DIMENSION_MANAGER(new MixinBuilder("Unload empty cubic dimensions like Forge does for chunks")

@@ -20,6 +20,8 @@
  */
 package com.cardinalstar.cubicchunks.mixin.early.common;
 
+import static com.cardinalstar.cubicchunks.util.Coords.blockToCube;
+
 import javax.annotation.ParametersAreNonnullByDefault;
 
 import net.minecraft.entity.Entity;
@@ -33,6 +35,7 @@ import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Redirect;
 
+import com.cardinalstar.cubicchunks.mixin.api.ICubicWorldInternal;
 import com.cardinalstar.cubicchunks.world.ICubicWorld;
 import com.llamalad7.mixinextras.sugar.Local;
 
@@ -86,6 +89,13 @@ public abstract class MixinWorld_Tick implements ICubicWorld {
         }
 
         int r = (endBlockX - startBlockX) >> 1;
+
+        // Forge checks no area around entities in the columns it forces; cube tickets force cubes, so do the same there
+        if (r > 0 && this instanceof ICubicWorldInternal.Server server
+            && server.getForcedCubes()
+                .get(blockToCube(entityPosX), blockToCube(entityPosY), blockToCube(entityPosZ)) != null) {
+            r = 0;
+        }
 
         return checkChunksExist(
             entityPosX - r,

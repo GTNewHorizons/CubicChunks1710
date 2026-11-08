@@ -39,6 +39,7 @@ import net.minecraft.world.ChunkCoordIntPair;
 import net.minecraft.world.NextTickListEntry;
 import net.minecraft.world.SpawnerAnimals;
 import net.minecraft.world.World;
+import net.minecraft.world.WorldProvider;
 import net.minecraft.world.WorldServer;
 import net.minecraft.world.WorldType;
 import net.minecraft.world.chunk.Chunk;
@@ -56,6 +57,7 @@ import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.Redirect;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 import com.cardinalstar.cubicchunks.CubicChunks;
@@ -80,8 +82,12 @@ import com.cardinalstar.cubicchunks.world.chunkloader.CubicChunkManager;
 import com.cardinalstar.cubicchunks.world.cube.ICubeProvider;
 import com.cardinalstar.cubicchunks.world.savedata.WorldFormatSavedData;
 import com.cardinalstar.cubicchunks.worldgen.VanillaWorldGenerator;
+import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
+
+import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
+import it.unimi.dsi.fastutil.longs.LongSet;
 
 /**
  * Implementation of {@link ICubicWorldServer} interface.
@@ -98,6 +104,8 @@ public abstract class MixinWorldServer extends MixinWorld implements ICubicWorld
     private final XYZMap<ICube> cc$forcedCubes = new XYZMap<>();
     @Unique
     private final XZMap<IColumn> cc$forcedColumns = new XZMap<>();
+    @Unique
+    private final LongSet cc$forcedCubeOnlyColumns = new LongOpenHashSet();
     @Unique
     private SpawnCubes cc$spawnArea;
     @Unique
@@ -281,6 +289,50 @@ public abstract class MixinWorldServer extends MixinWorld implements ICubicWorld
     @Override
     public void unforceChunk(ForgeChunkManager.Ticket ticket, CubePos chunk) {
         CubicChunkManager.unforceChunk(ticket, chunk);
+    }
+
+    /// Forge stops updating the entities and tile entities of a world 1200 ticks after it has neither players nor
+    /// forced columns. Cubes forced by cube tickets keep it updating as well.
+    @ModifyExpressionValue(
+        method = "updateEntities",
+        at = @At(
+            value = "INVOKE",
+            target = "Lcom/google/common/collect/ImmutableSetMultimap;isEmpty()Z",
+            remap = false))
+    private boolean idleOnlyWithoutForcedCubes(boolean noForcedColumns) {
+        return noForcedColumns && cc$forcedCubes.getSize() == 0;
+    }
+
+    /// Forge random ticks the columns it forces; cube tickets force cubes, so their columns join the active set too.
+    /// {@link IColumn#getTickableStorages()} limits the block ticks there to ticketed and watched cubes.
+    @Inject(
+        method = "func_147456_g",
+        at = @At(value = "INVOKE", target = "Lnet/minecraft/world/World;func_147456_g()V", shift = At.Shift.AFTER))
+    private void addForcedCubeColumns(CallbackInfo ci) {
+        cc$forcedCubeOnlyColumns.clear();
+        for (IColumn column : cc$forcedColumns) {
+            if (activeChunkSet.add(new ChunkCoordIntPair(column.getX(), column.getZ()))) {
+                cc$forcedCubeOnlyColumns.add(ChunkCoordIntPair.chunkXZ2Int(column.getX(), column.getZ()));
+            }
+        }
+    }
+
+    /// Weather works at the surface, which a cube ticket far above or below it does not hold, and would load or
+    /// generate cubes there. Skip it in columns that are active only for cube tickets.
+    @WrapOperation(
+        method = "func_147456_g",
+        at = {
+            @At(
+                value = "INVOKE",
+                target = "Lnet/minecraft/world/WorldProvider;canDoLightning(Lnet/minecraft/world/chunk/Chunk;)Z",
+                remap = false),
+            @At(
+                value = "INVOKE",
+                target = "Lnet/minecraft/world/WorldProvider;canDoRainSnowIce(Lnet/minecraft/world/chunk/Chunk;)Z",
+                remap = false) })
+    private boolean skipWeatherInForcedCubeColumns(WorldProvider provider, Chunk column, Operation<Boolean> original) {
+        return !cc$forcedCubeOnlyColumns.contains(ChunkCoordIntPair.chunkXZ2Int(column.xPosition, column.zPosition))
+            && original.call(provider, column);
     }
 
     @WrapOperation(
