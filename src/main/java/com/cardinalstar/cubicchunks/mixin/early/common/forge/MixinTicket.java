@@ -90,12 +90,14 @@ public abstract class MixinTicket implements ICubicTicketInternal {
 
     @Override
     public void addRequestedCube(CubePos pos) {
+        forcedCubes.add(pos);
         cubePosMap.computeIfAbsent(pos.chunkPos(), chunkPos -> new IntOpenHashSet(32))
             .add(pos.getY());
     }
 
     @Override
     public void removeRequestedCube(CubePos pos) {
+        forcedCubes.remove(pos);
         IntSet set = cubePosMap.get(pos.chunkPos());
         if (set != null) {
             set.remove(pos.getY());
@@ -113,6 +115,7 @@ public abstract class MixinTicket implements ICubicTicketInternal {
     @Override
     public void clearForcedChunkCubes(ChunkCoordIntPair location) {
         cubePosMap.remove(location);
+        forcedCubes.removeIf(pos -> pos.getX() == location.chunkXPos && pos.getZ() == location.chunkZPos);
     }
 
     @Override
