@@ -48,6 +48,7 @@ import com.cardinalstar.cubicchunks.api.IHeightMap;
 import com.cardinalstar.cubicchunks.api.event.CubeEvent.DataLoad;
 import com.cardinalstar.cubicchunks.lighting.ILightingManager;
 import com.cardinalstar.cubicchunks.mixin.api.ICubicWorldInternal;
+import com.cardinalstar.cubicchunks.mixin.early.common.AccessorExtendedBlockStorage;
 import com.cardinalstar.cubicchunks.network.CCPacketBuffer;
 import com.cardinalstar.cubicchunks.util.Coords;
 import com.cardinalstar.cubicchunks.util.Mods;
@@ -253,7 +254,16 @@ public class IONbtReader {
                     !cube.getWorld().provider.hasNoSky);
 
                 DataRegistryImpl.readSubChunkFromNBT(cube.getColumn(), ebs, section);
-                ebs.removeInvalidBlocks();
+
+                // a palettized section comes with the counts of its palette (CubeBundleCodec.setBlockCounts)
+                if (section.hasKey(CubeBundleCodec.BLOCK_REFS, NBT.TAG_INT)
+                    && section.hasKey(CubeBundleCodec.TICK_REFS, NBT.TAG_INT)) {
+                    ((AccessorExtendedBlockStorage) ebs)
+                        .setBlockRefCount(section.getInteger(CubeBundleCodec.BLOCK_REFS));
+                    ((AccessorExtendedBlockStorage) ebs).setTickRefCount(section.getInteger(CubeBundleCodec.TICK_REFS));
+                } else {
+                    ebs.removeInvalidBlocks();
+                }
                 cube.setStorageFromSave(ebs);
             } else {
                 readBlocks(section, cube.getWorld(), cube);

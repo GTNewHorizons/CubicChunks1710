@@ -36,7 +36,7 @@ public final class CubeClientData {
     public static NBTTagCompound decode(byte[] bytes) throws IOException {
         if (bytes.length == 0) return null;
         return CubeBundleCodec.read(ByteBuffer.wrap(bytes))
-            .member(0);
+            .clientMember(0);
     }
 
     /** Applies decoded client data to a client cube; {@code null} makes it an empty cube. */
