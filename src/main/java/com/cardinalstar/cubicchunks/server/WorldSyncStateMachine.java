@@ -55,6 +55,28 @@ public class WorldSyncStateMachine {
     }
 
     public void flush() {
+        // height map changes first: a cube loaded on the server this tick reaches the client after its heights
+        for (var e : dirtyHeightCols.fastEntryIterable()) {
+            if (!syncedColumns.containsKey(e.getX(), e.getZ())) {
+                CubicChunks.LOGGER.trace(
+                    "Tried to sync {} height map updates to a column at {} which was not synced",
+                    e.getValue()
+                        .cardinality(),
+                    new ChunkCoordIntPair(e.getX(), e.getZ()));
+
+                continue;
+            }
+
+            if (player.isWatchingColumn(e.getX(), e.getZ())) {
+                Chunk column = provider.getLoadedColumn(e.getX(), e.getZ());
+
+                if (column != null) {
+                    PacketEncoderHeightMapUpdate.createPacket(column, e.getValue())
+                        .sendToPlayer(player.player);
+                }
+            }
+        }
+
         Iterator<XYZAddressable> cubeIter = dirtyCubes.fastIterator();
 
         while (cubeIter.hasNext()) {
@@ -99,9 +121,6 @@ public class WorldSyncStateMachine {
 
                     PacketEncoderColumn.createPacket(cube.getColumn())
                         .sendToPlayer(player.player);
-
-                    // the column packet carries the whole current height map, including this tick's changes
-                    dirtyHeightCols.remove(pos.getX(), pos.getZ());
 
                     MinecraftForge.EVENT_BUS
                         .post(new ChunkWatchEvent.Watch(new ChunkCoordIntPair(pos.getX(), pos.getZ()), player.player));
@@ -156,27 +175,6 @@ public class WorldSyncStateMachine {
                             }
                         }
                     }
-                }
-            }
-        }
-
-        for (var e : dirtyHeightCols.fastEntryIterable()) {
-            if (!syncedColumns.containsKey(e.getX(), e.getZ())) {
-                CubicChunks.LOGGER.trace(
-                    "Tried to sync {} height map updates to a column at {} which was not synced",
-                    e.getValue()
-                        .cardinality(),
-                    new ChunkCoordIntPair(e.getX(), e.getZ()));
-
-                continue;
-            }
-
-            if (player.isWatchingColumn(e.getX(), e.getZ())) {
-                Chunk column = provider.getLoadedColumn(e.getX(), e.getZ());
-
-                if (column != null) {
-                    PacketEncoderHeightMapUpdate.createPacket(column, e.getValue())
-                        .sendToPlayer(player.player);
                 }
             }
         }

@@ -64,15 +64,17 @@ public class PacketEncoderHeightMapUpdate extends CCPacketEncoder<PacketEncoderH
         ChunkCoordIntPair pos = column.getChunkCoordIntPair();
 
         HeightMap3D opacityIndex = (HeightMap3D) ((IColumnInternal) column).getOpacityIndex();
+        HeightMap3D precipitationIndex = ((IColumnInternal) column).getPrecipitationIndex();
 
-        // the changed block columns one after another in the order of the mask; only the written bytes are copied out,
-        // so the pooled buffer is released right away
+        // the changed block columns one after another in the order of the mask, each with its opacity and then its
+        // precipitation runs; only the written bytes are copied out, so the pooled buffer is released right away
         ByteBuf buffer = PooledByteBufAllocator.DEFAULT.buffer();
         try {
             CCPacketBuffer out = new CCPacketBuffer(buffer);
 
             for (Vector2ic v : updates) {
                 opacityIndex.writeCompact(v.x(), v.y(), out);
+                precipitationIndex.writeCompact(v.x(), v.y(), out);
             }
 
             byte[] data = new byte[buffer.readableBytes()];
@@ -120,6 +122,7 @@ public class PacketEncoderHeightMapUpdate extends CCPacketEncoder<PacketEncoderH
 
         ILightingManager lm = ((ICubicWorldInternal) column.worldObj).getLightingManager();
         HeightMap3D opacityIndex = (HeightMap3D) ((IColumnInternal) column).getOpacityIndex();
+        HeightMap3D precipitationIndex = ((IColumnInternal) column).getPrecipitationIndex();
 
         int[] oldHeights = new int[Cube.SIZE * Cube.SIZE];
 
@@ -135,6 +138,7 @@ public class PacketEncoderHeightMapUpdate extends CCPacketEncoder<PacketEncoderH
 
         for (Vector2ic update : packet.updates) {
             opacityIndex.readCompact(update.x(), update.y(), data);
+            precipitationIndex.readCompact(update.x(), update.y(), data);
         }
 
         for (Vector2ic update : packet.updates) {

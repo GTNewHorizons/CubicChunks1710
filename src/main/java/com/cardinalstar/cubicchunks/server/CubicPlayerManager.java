@@ -24,6 +24,7 @@ import static com.cardinalstar.cubicchunks.util.Coords.blockToCube;
 import static net.minecraft.util.MathHelper.clamp_int;
 
 import java.util.Arrays;
+import java.util.BitSet;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -49,6 +50,7 @@ import com.cardinalstar.cubicchunks.network.ProtocolCheck;
 import com.cardinalstar.cubicchunks.server.CubeProviderServer.EagerCubeLoadRequest;
 import com.cardinalstar.cubicchunks.server.chunkio.CubeInitLevel;
 import com.cardinalstar.cubicchunks.server.chunkio.CubeLoaderCallback;
+import com.cardinalstar.cubicchunks.util.Coords;
 import com.cardinalstar.cubicchunks.util.CubePos;
 import com.cardinalstar.cubicchunks.util.CubeStatusVisualizer;
 import com.cardinalstar.cubicchunks.util.CubeStatusVisualizer.CubeStatus;
@@ -240,6 +242,21 @@ public class CubicPlayerManager extends PlayerManager implements CubeLoaderCallb
         });
     }
 
+    /**
+     * A loaded cube added to its column's opacity or precipitation index (block columns {@code z << 4 | x}). Players
+     * that have the column get those block columns again, also when they are sent the cube: clients do not derive
+     * height maps from cubes.
+     */
+    public void onCubeHeightsLoaded(Cube cube, BitSet changed) {
+        for (var player : players.getPlayerArray()) {
+            for (int i = changed.nextSetBit(0); i >= 0; i = changed.nextSetBit(i + 1)) {
+                player.sync.onColumnHeightMarkedDirty(
+                    Coords.localToBlock(cube.getX(), i & 15),
+                    Coords.localToBlock(cube.getZ(), i >> 4));
+            }
+        }
+    }
+
     @Override
     public void onCubeUnloaded(Cube cube) {
         loadedCubes.remove(cube);
@@ -276,6 +293,9 @@ public class CubicPlayerManager extends PlayerManager implements CubeLoaderCallb
             Cube cube = provider.getLoadedCube(column.xPosition, cubeY, column.zPosition);
 
             if (cube != null) {
+                // the blocks were replaced without going through the column's setBlock
+                cube.updateHeightMap();
+
                 for (var player : players.getPlayerArray()) {
                     player.sync.resendCube(cube);
                 }
