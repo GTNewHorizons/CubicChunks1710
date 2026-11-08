@@ -37,6 +37,7 @@ import com.cardinalstar.cubicchunks.api.compat.CubicChunksVideoSettings;
 import com.cardinalstar.cubicchunks.mixin.api.ICubicWorldInternal;
 import com.cardinalstar.cubicchunks.mixin.early.client.IGuiOptionsRowList;
 import com.cardinalstar.cubicchunks.mixin.early.client.IGuiVideoSettings;
+import com.cardinalstar.cubicchunks.network.CubePredecoder;
 import com.cardinalstar.cubicchunks.server.ICubicPlayerList;
 import com.cardinalstar.cubicchunks.util.MathUtil;
 import com.cardinalstar.cubicchunks.util.Mods;
@@ -45,9 +46,15 @@ import cpw.mods.fml.client.FMLClientHandler;
 import cpw.mods.fml.common.FMLCommonHandler;
 import cpw.mods.fml.common.eventhandler.SubscribeEvent;
 import cpw.mods.fml.common.gameevent.TickEvent;
+import cpw.mods.fml.common.network.FMLNetworkEvent;
 
 @ParametersAreNonnullByDefault
 public class ClientEventHandler {
+
+    @SubscribeEvent
+    public void onClientConnected(FMLNetworkEvent.ClientConnectedToServerEvent event) {
+        CubePredecoder.install(event.manager);
+    }
 
     @SubscribeEvent
     public void onWorldClientTickEvent(TickEvent.ClientTickEvent evt) {

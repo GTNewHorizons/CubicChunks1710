@@ -23,7 +23,9 @@ package com.cardinalstar.cubicchunks.network;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Map;
+import java.util.concurrent.Future;
 
+import javax.annotation.Nullable;
 import javax.annotation.ParametersAreNonnullByDefault;
 
 import net.minecraft.nbt.NBTTagCompound;
@@ -50,7 +52,13 @@ import com.github.bsideup.jabel.Desugar;
 public class PacketEncoderCube extends CCPacketEncoder<PacketCube> {
 
     @Desugar
-    public record PacketCube(CubePos cubePos, byte[] data, short[] tiles) implements CCPacket {
+    public record PacketCube(CubePos cubePos, byte[] data, short[] tiles, @Nullable Future<NBTTagCompound> decoded)
+        implements CCPacket {
+
+        /** This packet with its client data already being decoded ({@link CubePredecoder}). */
+        PacketCube withDecoded(Future<NBTTagCompound> decoding) {
+            return new PacketCube(cubePos, data, tiles, decoding);
+        }
 
         @Override
         public byte getPacketID() {
@@ -63,7 +71,7 @@ public class PacketEncoderCube extends CCPacketEncoder<PacketCube> {
     public static PacketCube createPacket(Cube cube) throws IOException {
         CubeStatusVisualizer.put(cube.getCoords(), CubeStatus.Synced);
 
-        return new PacketCube(cube.getCoords(), CubeClientData.encode(cube), tilePositions(cube));
+        return new PacketCube(cube.getCoords(), CubeClientData.encode(cube), tilePositions(cube), null);
     }
 
     /** The local addresses of a server cube's tile entities. */
@@ -110,7 +118,7 @@ public class PacketEncoderCube extends CCPacketEncoder<PacketCube> {
             tiles[i] = buffer.readShort();
         }
 
-        return new PacketCube(pos, data, tiles);
+        return new PacketCube(pos, data, tiles, null);
     }
 
     @Override
@@ -121,7 +129,8 @@ public class PacketEncoderCube extends CCPacketEncoder<PacketCube> {
 
         NBTTagCompound clientData;
         try {
-            clientData = CubeClientData.decode(packet.data);
+            clientData = packet.decoded != null ? CubePredecoder.join(packet.decoded) : null;
+            if (clientData == null) clientData = CubeClientData.decode(packet.data);
         } catch (IOException | RuntimeException e) {
             CubicChunks.LOGGER.error("Could not decode the cube at {}", pos, e);
             return;

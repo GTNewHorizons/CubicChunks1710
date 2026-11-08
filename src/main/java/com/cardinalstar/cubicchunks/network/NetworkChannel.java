@@ -3,9 +3,11 @@ package com.cardinalstar.cubicchunks.network;
 import java.util.Arrays;
 import java.util.EnumMap;
 import java.util.List;
+import java.util.concurrent.Future;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.entity.player.EntityPlayerMP;
+import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.world.World;
 import net.minecraft.world.chunk.Chunk;
 
@@ -105,6 +107,10 @@ public class NetworkChannel extends MessageToMessageCodec<FMLProxyPacket, CCPack
 
         CCPacketEncoder<CCPacket> encoder = this.encoders[buffer.readByte()];
         CCPacket packet = encoder.readPacket(new CCPacketBuffer(buffer));
+        if (packet instanceof PacketEncoderCube.PacketCube cube) {
+            Future<NBTTagCompound> decoding = CubePredecoder.take(proxyPacket);
+            if (decoding != null) packet = cube.withDecoded(decoding);
+        }
         encoder.setINetHandler(proxyPacket.handler(), packet);
         output.add(packet);
     }
