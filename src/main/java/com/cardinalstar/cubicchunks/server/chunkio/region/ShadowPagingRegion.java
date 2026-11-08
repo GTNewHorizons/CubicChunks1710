@@ -371,9 +371,9 @@ public class ShadowPagingRegion<K extends IKey<K>> implements IRegion<K> {
             readFully(file, buf, position);
 
             int dataLength = buf.getInt(0);
-            if (dataLength > sectorCount * sectorSize) {
-                throw new CorruptedDataException(
-                    "Expected data size max " + sectorCount * sectorSize + " but found " + dataLength);
+            int maxLength = sectorCount * sectorSize - Integer.BYTES;
+            if (dataLength > maxLength) {
+                throw new CorruptedDataException("Expected data size max " + maxLength + " but found " + dataLength);
             }
 
             // read data
@@ -534,7 +534,11 @@ public class ShadowPagingRegion<K extends IKey<K>> implements IRegion<K> {
 
     public static void readFully(FileChannel src, ByteBuffer data, long position) throws IOException {
         while (data.hasRemaining()) {
-            src.read(data, position);
+            int read = src.read(data, position);
+            if (read < 0) {
+                throw new CorruptedDataException("Unexpected end of region file at " + position);
+            }
+            position += read;
         }
     }
 
