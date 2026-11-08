@@ -238,13 +238,6 @@ public interface ICube extends XYZAddressable, MetaContainer {
     boolean isFullyPopulated();
 
     /**
-     * Gets internal isSurfaceTracked value. Intended to be used only for serialization.
-     *
-     * @return true if the contents of thic cube have already been supplied to surface tracker
-     */
-    boolean isSurfaceTracked();
-
-    /**
      * Check whether this cube's initial diffuse skylight has been calculated
      *
      * @return {@code true} if it has been calculated, {@code false} otherwise
@@ -252,7 +245,7 @@ public interface ICube extends XYZAddressable, MetaContainer {
     boolean isInitialLightingDone();
 
     default CubeInitLevel getInitLevel() {
-        if (isFullyPopulated() && isInitialLightingDone() && isSurfaceTracked()) {
+        if (isFullyPopulated() && isInitialLightingDone()) {
             return CubeInitLevel.Lit;
         } else if (isFullyPopulated()) {
             return CubeInitLevel.Populated;

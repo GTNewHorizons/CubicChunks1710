@@ -100,6 +100,9 @@ public class WorldSyncStateMachine {
                     PacketEncoderColumn.createPacket(cube.getColumn())
                         .sendToPlayer(player.player);
 
+                    // the column packet carries the whole current height map, including this tick's changes
+                    dirtyHeightCols.remove(pos.getX(), pos.getZ());
+
                     MinecraftForge.EVENT_BUS
                         .post(new ChunkWatchEvent.Watch(new ChunkCoordIntPair(pos.getX(), pos.getZ()), player.player));
                 }
@@ -172,7 +175,7 @@ public class WorldSyncStateMachine {
                 Chunk column = provider.getLoadedColumn(e.getX(), e.getZ());
 
                 if (column != null) {
-                    PacketEncoderHeightMapUpdate.createPacket(e.getValue(), column)
+                    PacketEncoderHeightMapUpdate.createPacket(column, e.getValue())
                         .sendToPlayer(player.player);
                 }
             }
@@ -189,12 +192,7 @@ public class WorldSyncStateMachine {
 
     public void onColumnHeightMarkedDirty(int x, int z) {
         dirtyHeightCols.computeIfAbsent(x >> 4, z >> 4, (x1, z1) -> new BooleanArray2D(16, 16))
-            .set(x & 0xF, z & 0xF);
-    }
-
-    public void onSurfaceTracked(Cube cube) {
-        dirtyHeightCols.computeIfAbsent(cube.getX(), cube.getZ(), (x1, z1) -> new BooleanArray2D(16, 16))
-            .set(0, 256, true);
+            .set2d(x & 0xF, z & 0xF);
     }
 
     public void onBlockMarkedDirty(int x, int y, int z) {
