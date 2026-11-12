@@ -119,14 +119,16 @@ public class CubicChunksConfig {
     public static int spawnLoadDistanceY = 8;
 
     @Config.LangKey("cubicchunks.config.default_min_height")
-    @Config.Comment("World min height. Values that are not an integer multiple of 16 may cause unintended behavior")
-    @Config.RangeInt(min = CubicChunks.MIN_SUPPORTED_BLOCK_Y, max = 0)
+    @Config.Comment("World min height. Values that are not an integer multiple of 16 may cause unintended behavior. "
+        + "Values below the supported minimum (set by the cubicchunks.heightBits system property) are clamped to it.")
+    @Config.RangeInt(min = Integer.MIN_VALUE, max = 0)
     public static int defaultMinHeight = 0;
 
     @Config.LangKey("cubicchunks.config.default_max_height")
-    @Config.Comment("World max height. Values that are not an integer multiple of 16 may cause unintended behavior")
-    @Config.RangeInt(min = 16, max = CubicChunks.MAX_SUPPORTED_BLOCK_Y)
-    public static int defaultMaxHeight = 1 << 30;
+    @Config.Comment("World max height. Values that are not an integer multiple of 16 may cause unintended behavior. "
+        + "Values above the supported maximum (set by the cubicchunks.heightBits system property) are clamped to it.")
+    @Config.RangeInt(min = 16, max = Integer.MAX_VALUE)
+    public static int defaultMaxHeight = CubicChunks.MAX_SUPPORTED_BLOCK_Y;
 
     @Config.LangKey("cubicchunks.config.worldgen_watchdog_time_limit")
     @Config.Comment("Maximum amount of time (milliseconds) generating a single chunk can take in vanilla compatibility generator before forcing a "
@@ -186,6 +188,8 @@ public class CubicChunksConfig {
     }
 
     private static void validateConfigValues() {
+        defaultMinHeight = clampHeight("defaultMinHeight", defaultMinHeight);
+        defaultMaxHeight = clampHeight("defaultMaxHeight", defaultMaxHeight);
         if ((defaultMinHeight & 0xF) != 0) {
             CubicChunks.LOGGER.error(
                 "CubicChunksConfig: defaultMinHeight not a multiple of 16, got {}, setting to {}",
@@ -213,7 +217,7 @@ public class CubicChunksConfig {
 
             try {
                 int dimension = Integer.parseInt(entries[0]);
-                int height = Integer.parseInt(entries[2]);
+                int height = clampHeight("dimensional height override " + config, Integer.parseInt(entries[2]));
                 if ((height & 0xF) != 0) {
                     CubicChunks.LOGGER.error(
                         "CubicChunksConfig: dimensional height configured to a non multiple of 16, got {}, setting to {}",
@@ -293,6 +297,19 @@ public class CubicChunksConfig {
                 throw new ConfigException("Dimensional filler default configuration is malformed for entry: " + i);
             }
         }
+    }
+
+    private static int clampHeight(String name, int height) {
+        int clamped = CubicChunks.clampToSupportedY(height);
+        if (clamped != height) {
+            // Expected for older configs, which used +-2^30 to mean "no limit"
+            CubicChunks.LOGGER.info(
+                "CubicChunksConfig: {} is {}, beyond the supported range; using {}",
+                name,
+                height,
+                clamped);
+        }
+        return clamped;
     }
 
     public static void setVerticalViewDistance(int value) {

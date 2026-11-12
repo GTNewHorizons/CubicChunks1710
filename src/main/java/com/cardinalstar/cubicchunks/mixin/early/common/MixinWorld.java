@@ -314,9 +314,10 @@ public abstract class MixinWorld implements ICubicWorldInternal {
     }
 
     protected void initCubicWorld(IntRange heightRange, IntRange generationRange) {
-        // Set the world height boundaries to their highest and lowest values respectively
-        this.minHeight = heightRange.getMin();
-        this.maxHeight = heightRange.getMax();
+        // Set the world height boundaries to their highest and lowest values respectively. Older worlds may have
+        // saved bounds beyond what coordinates can now be packed with.
+        this.minHeight = CubicChunks.clampToSupportedY(heightRange.getMin());
+        this.maxHeight = CubicChunks.clampToSupportedY(heightRange.getMax());
         this.fakedMaxHeight = this.maxHeight;
 
         this.minGenerationHeight = generationRange.getMin();
@@ -460,6 +461,8 @@ public abstract class MixinWorld implements ICubicWorldInternal {
 
     @Override
     public void setHeightBounds(int minHeight, int maxHeight) {
+        minHeight = CubicChunks.clampToSupportedY(minHeight);
+        maxHeight = CubicChunks.clampToSupportedY(maxHeight);
         if (minHeight >= this.minGenerationHeight && maxHeight <= this.maxHeight) return;
 
         this.minHeight = minHeight;

@@ -48,6 +48,7 @@ import com.cardinalstar.cubicchunks.network.NetworkChannel;
 import com.cardinalstar.cubicchunks.server.ICubicChunksServer;
 import com.cardinalstar.cubicchunks.server.chunkio.RegionCubeStorage;
 import com.cardinalstar.cubicchunks.util.CompatHandler;
+import com.cardinalstar.cubicchunks.util.Coords;
 import com.cardinalstar.cubicchunks.util.SideUtils;
 import com.cardinalstar.cubicchunks.world.worldgen.WorldGenerators;
 import com.cardinalstar.cubicchunks.worldgen.WorldgenHangWatchdog;
@@ -90,8 +91,18 @@ public class CubicChunks {
         }
     }
 
-    public static final int MIN_SUPPORTED_BLOCK_Y = Integer.MIN_VALUE + 4096;
-    public static final int MAX_SUPPORTED_BLOCK_Y = Integer.MAX_VALUE - 4095;
+    /** Blocks kept free at each end of the packable range, for code that touches positions just past the edge. */
+    private static final int SUPPORTED_MARGIN = 256;
+
+    // World limits, from what Coords can pack (see Coords.Y_BITS)
+    public static final int MIN_SUPPORTED_BLOCK_Y = Coords.MIN_PACKED_Y + SUPPORTED_MARGIN;
+    public static final int MAX_SUPPORTED_BLOCK_Y = Coords.MAX_PACKED_Y + 1 - SUPPORTED_MARGIN;
+    public static final int MIN_SUPPORTED_BLOCK_XZ = Coords.MIN_PACKED_XZ + SUPPORTED_MARGIN;
+    public static final int MAX_SUPPORTED_BLOCK_XZ = Coords.MAX_PACKED_XZ + 1 - SUPPORTED_MARGIN;
+
+    public static int clampToSupportedY(int blockY) {
+        return Math.max(MIN_SUPPORTED_BLOCK_Y, Math.min(MAX_SUPPORTED_BLOCK_Y, blockY));
+    }
 
     public static final boolean DEBUG_ENABLED = System.getProperty("cubicchunks.debug", "false")
         .equalsIgnoreCase("true");

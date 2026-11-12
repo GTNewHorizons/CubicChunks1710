@@ -156,55 +156,82 @@ public class Coords {
         return new Random(coordsSeedHash(seed, x, y, z));
     }
 
-    public static final long MASK = 0b111111111111111111111;
-    public static final int SHIFT = 21;
-    public static final int X_SHIFT = SHIFT * 2;
-    public static final int Y_SHIFT = SHIFT;
-    public static final int Z_SHIFT = 0;
+    public static final String HEIGHT_BITS_PROPERTY = "cubicchunks.heightBits";
+    /** The layout before {@link #HEIGHT_BITS_PROPERTY} existed: 21 bits for every axis. */
+    public static final int DEFAULT_HEIGHT_BITS = 21;
 
-    private static long pack(long k, int shift) {
-        if (k < ~MASK || k > MASK) {
-            throw new IllegalArgumentException(
-                "Can only pack numbers between " + (~MASK) + ".." + MASK + " (inclusive): got " + k);
+    /**
+     * Bits for Y in a packed coordinate ({@link #key}); X and Z split the rest, and an odd bit left over is unused.
+     * The packed layout is also used for block positions by GTNHLib's CoordinatePacker and ChunkAPI's BlockPosUtil,
+     * so this bounds the whole world. Mods may store packed positions, so changing it breaks existing worlds.
+     */
+    public static final int Y_BITS = readHeightBits();
+    public static final int XZ_BITS = (64 - Y_BITS) / 2;
+
+    private static final int Z_SHIFT = 0;
+    private static final int Y_SHIFT = XZ_BITS;
+    private static final int X_SHIFT = XZ_BITS + Y_BITS;
+
+    /** Inclusive range each axis can be packed with. */
+    public static final int MIN_PACKED_Y = (int) -(1L << (Y_BITS - 1));
+    public static final int MAX_PACKED_Y = (int) ((1L << (Y_BITS - 1)) - 1);
+    public static final int MIN_PACKED_XZ = (int) -(1L << (XZ_BITS - 1));
+    public static final int MAX_PACKED_XZ = (int) ((1L << (XZ_BITS - 1)) - 1);
+
+    private static int readHeightBits() {
+        String value = System.getProperty(HEIGHT_BITS_PROPERTY);
+        if (value == null) return DEFAULT_HEIGHT_BITS;
+
+        int bits;
+        try {
+            bits = Integer.parseInt(value.trim());
+        } catch (NumberFormatException e) {
+            throw new IllegalStateException(HEIGHT_BITS_PROPERTY + " must be an integer, got '" + value + "'", e);
         }
-
-        // Trim off the upper bits, preserving the sign
-        k <<= Long.numberOfLeadingZeros(MASK);
-        // Shift back to the original position, but keep the sign bit on the left-most side of the long
-        k >>>= Long.numberOfLeadingZeros(MASK);
-        // Shift back up to where the long should be in the final packing
-        k <<= shift;
-
-        return k;
+        // 12 leaves X/Z 26 bits, enough for vanilla's +-30M; Y can't use more than an int
+        if (bits < 12 || bits > 32) {
+            throw new IllegalStateException(HEIGHT_BITS_PROPERTY + " must be between 12 and 32, got " + bits);
+        }
+        return bits;
     }
 
-    private static long unpack(long k, int shift) {
-        // Shift back to 0 offset
-        k >>>= shift;
-        // Only keep the good bits
-        k &= MASK;
-        // Shift the sign bit up
-        k <<= Long.numberOfLeadingZeros(MASK);
-        // Shift back to 0 offset, preserving the sign
-        k >>= Long.numberOfLeadingZeros(MASK);
+    public static boolean isPackable(long x, long y, long z) {
+        return x >= MIN_PACKED_XZ && x <= MAX_PACKED_XZ
+            && y >= MIN_PACKED_Y
+            && y <= MAX_PACKED_Y
+            && z >= MIN_PACKED_XZ
+            && z <= MAX_PACKED_XZ;
+    }
 
-        return k;
+    private static long pack(long value, int bits, int shift, long min, long max) {
+        if (value < min || value > max) {
+            throw new IllegalArgumentException(
+                "Can only pack numbers between " + min + ".." + max + " (inclusive): got " + value);
+        }
+        return (value & ((1L << bits) - 1)) << shift;
+    }
+
+    private static int unpack(long key, int bits, int shift) {
+        // Move the field to the top of the long, then shift it back down to sign-extend it
+        return (int) (key << (64 - bits - shift) >> (64 - bits));
     }
 
     public static long key(long x, long y, long z) {
-        return pack(x, X_SHIFT) | pack(y, Y_SHIFT) | pack(z, Z_SHIFT);
+        return pack(x, XZ_BITS, X_SHIFT, MIN_PACKED_XZ, MAX_PACKED_XZ)
+            | pack(y, Y_BITS, Y_SHIFT, MIN_PACKED_Y, MAX_PACKED_Y)
+            | pack(z, XZ_BITS, Z_SHIFT, MIN_PACKED_XZ, MAX_PACKED_XZ);
     }
 
     public static int x(long key) {
-        return (int) unpack(key, X_SHIFT);
+        return unpack(key, XZ_BITS, X_SHIFT);
     }
 
     public static int y(long key) {
-        return (int) unpack(key, Y_SHIFT);
+        return unpack(key, Y_BITS, Y_SHIFT);
     }
 
     public static int z(long key) {
-        return (int) unpack(key, Z_SHIFT);
+        return unpack(key, XZ_BITS, Z_SHIFT);
     }
 
     public static long packChunk(int x, int z) {
