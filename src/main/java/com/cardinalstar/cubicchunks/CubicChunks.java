@@ -51,6 +51,7 @@ import com.cardinalstar.cubicchunks.util.CompatHandler;
 import com.cardinalstar.cubicchunks.util.SideUtils;
 import com.cardinalstar.cubicchunks.world.worldgen.WorldGenerators;
 import com.cardinalstar.cubicchunks.worldgen.WorldgenHangWatchdog;
+import com.cardinalstar.cubicchunks.worldgen.config.WGConfigItems;
 import com.gtnewhorizon.gtnhlib.config.ConfigException;
 import com.gtnewhorizon.gtnhlib.config.ConfigurationManager;
 
@@ -163,6 +164,8 @@ public class CubicChunks {
         } catch (ConfigException ex) {
             throw new RuntimeException(ex);
         }
+
+        WGConfigItems.register();
 
         CommonEventHandler eventHandler = new CommonEventHandler();
         MinecraftForge.EVENT_BUS.register(eventHandler);
