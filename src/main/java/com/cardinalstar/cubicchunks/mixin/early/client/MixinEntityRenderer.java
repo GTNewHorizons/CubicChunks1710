@@ -14,8 +14,6 @@ import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 import com.cardinalstar.cubicchunks.util.MathUtil;
-import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
-import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.llamalad7.mixinextras.sugar.Local;
 
 @Mixin(EntityRenderer.class)
@@ -73,41 +71,5 @@ public class MixinEntityRenderer {
         at = @At(value = "INVOKE", target = "Lnet/minecraft/world/WorldProvider;getWorldHasVoidParticles()Z"))
     public boolean disableVoidFog(WorldProvider instance) {
         return false;
-    }
-
-    // Re-add custom void fog with a better curve below y=0
-    @WrapOperation(
-        method = "setupFog",
-        at = @At(
-            value = "FIELD",
-            target = "Lnet/minecraft/client/renderer/EntityRenderer;farPlaneDistance:F",
-            ordinal = 1))
-    public float modifyVoidFog(EntityRenderer instance, Operation<Float> original,
-        @Local(argsOnly = true) float partialTicks) {
-
-        return 1000f;
-        // Temporarily disable this - it breaks angelica
-        // float farPlaneDistance = original.call(instance);
-        //
-        // if (!this.mc.theWorld.provider.getWorldHasVoidParticles()) {
-        // return farPlaneDistance;
-        // }
-        //
-        // EntityLivingBase player = this.mc.renderViewEntity;
-        //
-        // int skylight = (player.getBrightnessForRender(partialTicks) & 0xf00000) >> 20;
-        // double playerY = player.lastTickPosY + (player.posY - player.lastTickPosY) * (double) partialTicks;
-        //
-        // double fogStrength = skylight / 16.0D + Math.max(playerY / 32.0D, 0.25);
-        //
-        // if (fogStrength < 1.0D) {
-        // if (fogStrength < 0.0D) {
-        // fogStrength = 0.0D;
-        // }
-        //
-        // farPlaneDistance *= (float) (fogStrength * fogStrength);
-        // }
-        //
-        // return farPlaneDistance;
     }
 }

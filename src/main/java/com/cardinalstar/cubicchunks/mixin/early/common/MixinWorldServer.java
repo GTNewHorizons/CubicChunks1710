@@ -20,6 +20,7 @@
  */
 package com.cardinalstar.cubicchunks.mixin.early.common;
 
+import static com.cardinalstar.cubicchunks.util.Coords.blockToCube;
 import static com.cardinalstar.cubicchunks.util.ReflectionUtil.cast;
 
 import java.io.File;
@@ -31,11 +32,14 @@ import java.util.TreeSet;
 
 import javax.annotation.ParametersAreNonnullByDefault;
 
+import net.minecraft.block.Block;
+import net.minecraft.init.Blocks;
 import net.minecraft.server.management.PlayerManager;
 import net.minecraft.world.ChunkCoordIntPair;
 import net.minecraft.world.NextTickListEntry;
 import net.minecraft.world.SpawnerAnimals;
 import net.minecraft.world.World;
+import net.minecraft.world.WorldProvider;
 import net.minecraft.world.WorldServer;
 import net.minecraft.world.WorldType;
 import net.minecraft.world.chunk.Chunk;
@@ -53,6 +57,7 @@ import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.Redirect;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 import com.cardinalstar.cubicchunks.CubicChunks;
@@ -74,10 +79,15 @@ import com.cardinalstar.cubicchunks.util.world.CubeSplitTicks;
 import com.cardinalstar.cubicchunks.world.CubeSpawnerAnimals;
 import com.cardinalstar.cubicchunks.world.ISpawnerAnimals;
 import com.cardinalstar.cubicchunks.world.chunkloader.CubicChunkManager;
+import com.cardinalstar.cubicchunks.world.cube.ICubeProvider;
 import com.cardinalstar.cubicchunks.world.savedata.WorldFormatSavedData;
 import com.cardinalstar.cubicchunks.worldgen.VanillaWorldGenerator;
+import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
+
+import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
+import it.unimi.dsi.fastutil.longs.LongSet;
 
 /**
  * Implementation of {@link ICubicWorldServer} interface.
@@ -94,6 +104,8 @@ public abstract class MixinWorldServer extends MixinWorld implements ICubicWorld
     private final XYZMap<ICube> cc$forcedCubes = new XYZMap<>();
     @Unique
     private final XZMap<IColumn> cc$forcedColumns = new XZMap<>();
+    @Unique
+    private final LongSet cc$forcedCubeOnlyColumns = new LongOpenHashSet();
     @Unique
     private SpawnCubes cc$spawnArea;
     @Unique
@@ -279,6 +291,50 @@ public abstract class MixinWorldServer extends MixinWorld implements ICubicWorld
         CubicChunkManager.unforceChunk(ticket, chunk);
     }
 
+    /// Forge stops updating the entities and tile entities of a world 1200 ticks after it has neither players nor
+    /// forced columns. Cubes forced by cube tickets keep it updating as well.
+    @ModifyExpressionValue(
+        method = "updateEntities",
+        at = @At(
+            value = "INVOKE",
+            target = "Lcom/google/common/collect/ImmutableSetMultimap;isEmpty()Z",
+            remap = false))
+    private boolean idleOnlyWithoutForcedCubes(boolean noForcedColumns) {
+        return noForcedColumns && cc$forcedCubes.getSize() == 0;
+    }
+
+    /// Forge random ticks the columns it forces; cube tickets force cubes, so their columns join the active set too.
+    /// {@link IColumn#getTickableStorages()} limits the block ticks there to ticketed and watched cubes.
+    @Inject(
+        method = "func_147456_g",
+        at = @At(value = "INVOKE", target = "Lnet/minecraft/world/World;func_147456_g()V", shift = At.Shift.AFTER))
+    private void addForcedCubeColumns(CallbackInfo ci) {
+        cc$forcedCubeOnlyColumns.clear();
+        for (IColumn column : cc$forcedColumns) {
+            if (activeChunkSet.add(new ChunkCoordIntPair(column.getX(), column.getZ()))) {
+                cc$forcedCubeOnlyColumns.add(ChunkCoordIntPair.chunkXZ2Int(column.getX(), column.getZ()));
+            }
+        }
+    }
+
+    /// Weather works at the surface, which a cube ticket far above or below it does not hold, and would load or
+    /// generate cubes there. Skip it in columns that are active only for cube tickets.
+    @WrapOperation(
+        method = "func_147456_g",
+        at = {
+            @At(
+                value = "INVOKE",
+                target = "Lnet/minecraft/world/WorldProvider;canDoLightning(Lnet/minecraft/world/chunk/Chunk;)Z",
+                remap = false),
+            @At(
+                value = "INVOKE",
+                target = "Lnet/minecraft/world/WorldProvider;canDoRainSnowIce(Lnet/minecraft/world/chunk/Chunk;)Z",
+                remap = false) })
+    private boolean skipWeatherInForcedCubeColumns(WorldProvider provider, Chunk column, Operation<Boolean> original) {
+        return !cc$forcedCubeOnlyColumns.contains(ChunkCoordIntPair.chunkXZ2Int(column.xPosition, column.zPosition))
+            && original.call(provider, column);
+    }
+
     @WrapOperation(
         method = "func_147456_g",
         at = @At(
@@ -286,6 +342,61 @@ public abstract class MixinWorldServer extends MixinWorld implements ICubicWorld
             target = "Lnet/minecraft/world/chunk/Chunk;getBlockStorageArray()[Lnet/minecraft/world/chunk/storage/ExtendedBlockStorage;"))
     private ExtendedBlockStorage[] getTickableStorages(Chunk column, Operation<ExtendedBlockStorage[]> original) {
         return ((IColumn) column).getTickableStorages();
+    }
+
+    // The precipitation height can point at a roof in an unloaded cube. The weather effects below would read or change
+    // blocks there and load the cube, so skip them unless their target cube is loaded.
+
+    @Unique
+    private boolean cc$isCubeUnloaded(int blockX, int blockY, int blockZ) {
+        return this.chunkProvider instanceof ICubeProvider cubes
+            && cubes.getLoadedCube(blockToCube(blockX), blockToCube(blockY), blockToCube(blockZ)) == null;
+    }
+
+    @WrapOperation(
+        method = "func_147456_g",
+        at = @At(value = "INVOKE", target = "Lnet/minecraft/world/WorldServer;canLightningStrikeAt(III)Z"),
+        require = 1)
+    private boolean skipLightningInUnloadedCubes(WorldServer world, int x, int y, int z, Operation<Boolean> original) {
+        // The bolt sets fire at its position and needs a block below it
+        if (cc$isCubeUnloaded(x, y, z) || cc$isCubeUnloaded(x, y - 1, z)) {
+            return false;
+        }
+
+        return original.call(world, x, y, z);
+    }
+
+    @WrapOperation(
+        method = "func_147456_g",
+        at = @At(value = "INVOKE", target = "Lnet/minecraft/world/WorldServer;isBlockFreezableNaturally(III)Z"),
+        require = 1)
+    private boolean skipFreezingInUnloadedCubes(WorldServer world, int x, int y, int z, Operation<Boolean> original) {
+        return !cc$isCubeUnloaded(x, y, z) && original.call(world, x, y, z);
+    }
+
+    @WrapOperation(
+        method = "func_147456_g",
+        at = @At(value = "INVOKE", target = "Lnet/minecraft/world/WorldServer;func_147478_e(IIIZ)Z"),
+        require = 1)
+    private boolean skipSnowInUnloadedCubes(WorldServer world, int x, int y, int z, boolean checkLight,
+        Operation<Boolean> original) {
+        // Snow layers also check the block they would rest on
+        if (cc$isCubeUnloaded(x, y, z) || cc$isCubeUnloaded(x, y - 1, z)) {
+            return false;
+        }
+
+        return original.call(world, x, y, z, checkLight);
+    }
+
+    @WrapOperation(
+        method = "func_147456_g",
+        at = @At(
+            value = "INVOKE",
+            target = "Lnet/minecraft/world/WorldServer;getBlock(III)Lnet/minecraft/block/Block;"),
+        require = 1)
+    private Block skipRainFillInUnloadedCubes(WorldServer world, int x, int y, int z, Operation<Block> original) {
+        // Only used to let cauldrons fill with rain; air does nothing
+        return cc$isCubeUnloaded(x, y, z) ? Blocks.air : original.call(world, x, y, z);
     }
 
     /// Immediate block updates rarely work well in CC. Vanilla expects there to be a hard limit to the number of steps

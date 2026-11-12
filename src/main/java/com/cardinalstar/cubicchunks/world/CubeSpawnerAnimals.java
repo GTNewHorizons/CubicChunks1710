@@ -235,21 +235,17 @@ public class CubeSpawnerAnimals implements ISpawnerAnimals {
                     toSpawn.setLocationAndAngles(entityX, entityY, entityZ, rand.nextFloat() * 360.0F, 0.0F);
 
                     Event.Result canSpawn = ForgeEventFactory.canEntitySpawn(toSpawn, world, entityX, entityY, entityZ);
-                    if (canSpawn == Event.Result.ALLOW || (canSpawn == Event.Result.DEFAULT && toSpawn.getCanSpawnHere()
-                        && toSpawn.getCanSpawnHere())) {
-                        if (!ForgeEventFactory.doSpecialSpawn(toSpawn, world, entityX, entityY, entityZ)) {
-                            entityData = toSpawn.onSpawnWithEgg(entityData);
-                        }
+                    // getCanSpawnHere includes random rolls (ghasts, slimes, mob light level), so call it once
+                    // like vanilla, then spawn before onSpawnWithEgg adds equipment and riders.
+                    if (canSpawn == Event.Result.ALLOW
+                        || (canSpawn == Event.Result.DEFAULT && toSpawn.getCanSpawnHere())) {
+                        if (world.spawnEntityInWorld(toSpawn)) {
+                            currentPackSize++;
+                            totalSpawned++;
 
-                        if (toSpawn.getCanSpawnHere()) {
-                            if (world.spawnEntityInWorld(toSpawn)) {
-                                currentPackSize++;
-                                totalSpawned++;
-                            } else {
-                                toSpawn.setDead();
+                            if (!ForgeEventFactory.doSpecialSpawn(toSpawn, world, entityX, entityY, entityZ)) {
+                                entityData = toSpawn.onSpawnWithEgg(entityData);
                             }
-                        } else {
-                            toSpawn.setDead();
                         }
 
                         if (currentPackSize >= ForgeEventFactory.getMaxSpawnPackSize(toSpawn)) {

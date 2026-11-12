@@ -82,7 +82,5 @@ public interface ILightingManager {
 
     void onHeightUpdate(int x, int y, int z);
 
-    void onTrackCubeSurface(ICube cube);
-
     void doFirstLight(ICube cube);
 }

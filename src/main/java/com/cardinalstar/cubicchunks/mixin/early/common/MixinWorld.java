@@ -148,6 +148,8 @@ public abstract class MixinWorld implements ICubicWorldInternal {
     protected WorldInfo worldInfo;
     @Shadow
     protected int updateLCG;
+    @Shadow
+    protected Set<ChunkCoordIntPair> activeChunkSet;
 
     @Shadow
     protected abstract boolean chunkExists(int i, int i1);
