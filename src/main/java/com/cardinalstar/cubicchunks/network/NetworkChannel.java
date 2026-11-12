@@ -19,6 +19,7 @@ import cpw.mods.fml.common.network.internal.FMLProxyPacket;
 import cpw.mods.fml.relauncher.Side;
 import cpw.mods.fml.relauncher.SideOnly;
 import io.netty.buffer.ByteBuf;
+import io.netty.buffer.PooledByteBufAllocator;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
@@ -66,17 +67,26 @@ public class NetworkChannel extends MessageToMessageCodec<FMLProxyPacket, CCPack
 
     @Override
     protected void encode(ChannelHandlerContext context, CCPacket packet, List<Object> output) {
-        ByteBuf buffer = Unpooled.buffer()
-            .writeByte(packet.getPacketID());
-        CCPacketEncoder<CCPacket> encoder = this.encoders[packet.getPacketID()];
-        encoder.writePacket(new CCPacketBuffer(buffer), packet);
+        // FMLProxyPacket sends the whole backing array of its buffer and never releases it, so it gets a new array of
+        // only the written bytes (Unpooled.copiedBuffer would allocate the copy from the pool as well); the pooled
+        // buffer the packet is encoded into is released here
+        ByteBuf buffer = PooledByteBufAllocator.DEFAULT.buffer();
+        try {
+            buffer.writeByte(packet.getPacketID());
+            CCPacketEncoder<CCPacket> encoder = this.encoders[packet.getPacketID()];
+            encoder.writePacket(new CCPacketBuffer(buffer), packet);
 
-        output.add(
-            new FMLProxyPacket(
-                buffer,
-                context.channel()
-                    .attr(NetworkRegistry.FML_CHANNEL)
-                    .get()));
+            byte[] data = new byte[buffer.readableBytes()];
+            buffer.readBytes(data);
+            output.add(
+                new FMLProxyPacket(
+                    Unpooled.wrappedBuffer(data),
+                    context.channel()
+                        .attr(NetworkRegistry.FML_CHANNEL)
+                        .get()));
+        } finally {
+            buffer.release();
+        }
     }
 
     @Override

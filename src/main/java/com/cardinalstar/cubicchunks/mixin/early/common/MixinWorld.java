@@ -32,9 +32,11 @@ import javax.annotation.Nullable;
 import javax.annotation.ParametersAreNonnullByDefault;
 
 import net.minecraft.block.Block;
+import net.minecraft.client.multiplayer.WorldClient;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.player.EntityPlayerMP;
+import net.minecraft.init.Blocks;
 import net.minecraft.profiler.Profiler;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.AxisAlignedBB;
@@ -66,13 +68,14 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Constant;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.ModifyConstant;
-import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 import com.cardinalstar.cubicchunks.CubicChunks;
 import com.cardinalstar.cubicchunks.api.ICube;
 import com.cardinalstar.cubicchunks.api.IntRange;
+import com.cardinalstar.cubicchunks.api.util.NotCubicChunksWorldException;
+import com.cardinalstar.cubicchunks.api.world.ICubicWorldProvider;
 import com.cardinalstar.cubicchunks.api.world.ICubicWorldType;
 import com.cardinalstar.cubicchunks.lighting.LightingManager;
 import com.cardinalstar.cubicchunks.mixin.api.ICubicWorldInternal;
@@ -83,7 +86,6 @@ import com.cardinalstar.cubicchunks.util.CubePos;
 import com.cardinalstar.cubicchunks.util.ReflectionUtil;
 import com.cardinalstar.cubicchunks.world.CubicChunksSavedData;
 import com.cardinalstar.cubicchunks.world.ICubicWorld;
-import com.cardinalstar.cubicchunks.world.ICubicWorldProvider;
 import com.cardinalstar.cubicchunks.world.cube.Cube;
 import com.cardinalstar.cubicchunks.world.cube.ICubeProvider;
 import com.cardinalstar.cubicchunks.world.cube.ICubeProviderInternal;
@@ -93,12 +95,15 @@ import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.llamalad7.mixinextras.sugar.Local;
 
+import cpw.mods.fml.common.FMLCommonHandler;
+
 /**
  * Contains implementation of {@link ICubicWorld} interface.
  */
 @ParametersAreNonnullByDefault
 @Mixin(World.class)
 @Implements(@Interface(iface = ICubicWorld.class, prefix = "world$"))
+@SuppressWarnings({ "AddedMixinMembersNamePattern" })
 public abstract class MixinWorld implements ICubicWorldInternal {
 
     // these have to be here because of mixin limitation, they are used by MixinWorldServer
@@ -143,6 +148,8 @@ public abstract class MixinWorld implements ICubicWorldInternal {
     protected WorldInfo worldInfo;
     @Shadow
     protected int updateLCG;
+    @Shadow
+    protected Set<ChunkCoordIntPair> activeChunkSet;
 
     @Shadow
     protected abstract boolean chunkExists(int i, int i1);
@@ -221,14 +228,28 @@ public abstract class MixinWorld implements ICubicWorldInternal {
     @Shadow
     protected abstract IChunkProvider createChunkProvider();
 
-    @Redirect(
+    @WrapOperation(
         method = "<init>(Lnet/minecraft/world/storage/ISaveHandler;Ljava/lang/String;Lnet/minecraft/world/WorldSettings;Lnet/minecraft/world/WorldProvider;Lnet/minecraft/profiler/Profiler;)V",
         at = @At(
             value = "INVOKE",
             target = "Lnet/minecraft/world/World;createChunkProvider()Lnet/minecraft/world/chunk/IChunkProvider;"))
-    public IChunkProvider noopCreateProvider(World instance) {
-        // Done below manually
-        return null;
+    public IChunkProvider noopCreateProvider(World instance, Operation<IChunkProvider> original) {
+        boolean isServer = (Object) this instanceof WorldServer;
+        boolean isClient = false;
+
+        if (FMLCommonHandler.instance()
+            .getSide()
+            .isClient()) {
+            if ((Object) this instanceof WorldClient) {
+                isClient = true;
+            }
+        }
+
+        if (!isServer && !isClient) {
+            return original.call(instance);
+        } else {
+            return null;
+        }
     }
 
     @Inject(
@@ -237,35 +258,57 @@ public abstract class MixinWorld implements ICubicWorldInternal {
     public void initWorld(ISaveHandler p_i45369_1_, String p_i45369_2_, WorldSettings p_i45369_3_,
         WorldProvider p_i45369_4_, Profiler p_i45369_5_, CallbackInfo ci) {
 
-        // Some other world instantiation that we don't care about (fake dummy worlds, for instance)
-        // noinspection ConstantValue
-        if (!((Object) this instanceof WorldServer worldServer)) return;
+        boolean isServer = (Object) this instanceof WorldServer;
+        boolean isClient = false;
 
-        ((ICubicWorldInternal.Server) this).initCubicWorldServer();
-
-        if (shouldSkipWorld(worldServer)) {
-            CubicChunks.LOGGER.info(
-                "Skipping world {} with type {} due to potential compatibility issues",
-                this,
-                this.worldInfo.getTerrainType());
-            return;
+        if (FMLCommonHandler.instance()
+            .getSide()
+            .isClient()) {
+            if ((Object) this instanceof WorldClient) {
+                isClient = true;
+            }
         }
 
-        CubicChunks.LOGGER.info("Initializing world {} with type {}", this, this.worldInfo.getTerrainType());
+        // If this is some other World subclass that we don't care about, skip its CC init
+        // This is usually the case for dummy worlds, and we can't control the lifecycle of those at all so we leave
+        // them non-cubic
+        // noinspection ConstantValue
+        if (!isServer && !isClient) return;
 
-        IntRange generationRange = new IntRange(0, ((ICubicWorldProvider) this.provider).getOriginalActualHeight());
+        IntRange generationRange, heightRange;
 
         WorldType type = this.worldInfo.getTerrainType();
 
-        if (type instanceof ICubicWorldType && ((ICubicWorldType) type).hasCubicGeneratorForWorld(worldServer)) {
-            generationRange = ((ICubicWorldType) type).calculateGenerationHeightRange(worldServer);
+        World world = (World) (Object) this;
+
+        if (type instanceof ICubicWorldType cubicWorldType && cubicWorldType.hasCubicGeneratorForWorld(world)) {
+            generationRange = cubicWorldType.getGenerationRange(world);
+        } else if (this.provider instanceof ICubicWorldProvider cubicWorldProvider) {
+            generationRange = cubicWorldProvider.getGenerationRange();
+        } else {
+            generationRange = new IntRange(0, this.provider.getActualHeight());
         }
+
+        if ((Object) this instanceof WorldServer worldServer) {
+            CubicChunksSavedData savedData = CubicChunksSavedData.get(worldServer);
+
+            heightRange = new IntRange(savedData.minHeight, savedData.maxHeight);
+        } else {
+            // Client world, just set some defaults and let the packets update these properly
+            heightRange = new IntRange(Integer.MIN_VALUE, Integer.MAX_VALUE);
+        }
+
+        this.initCubicWorld(heightRange, generationRange);
 
         this.chunkProvider = createChunkProvider();
 
-        CubicChunksSavedData savedData = CubicChunksSavedData.get(worldServer);
-
-        this.initCubicWorld(new IntRange(savedData.minHeight, savedData.maxHeight), generationRange);
+        CubicChunks.LOGGER.info(
+            "Initialized world {} with type {} (generation range: {}, height: {}, provider: {})",
+            this,
+            this.worldInfo.getTerrainType(),
+            generationRange,
+            heightRange,
+            chunkProvider);
 
         this.lightingManager = new LightingManager((World) (Object) this);
     }
@@ -302,12 +345,15 @@ public abstract class MixinWorld implements ICubicWorldInternal {
 
     @Override
     public ICubeProviderInternal getCubeCache() {
+        if (!(this.chunkProvider instanceof ICubeProviderInternal)) {
+            throw new NotCubicChunksWorldException();
+        }
+
         return (ICubeProviderInternal) this.chunkProvider;
     }
 
     @Override
     public LightingManager getLightingManager() {
-        assert this.lightingManager != null;
         return this.lightingManager;
     }
 
@@ -434,7 +480,8 @@ public abstract class MixinWorld implements ICubicWorldInternal {
 
     @Inject(method = "updateLightByType", at = @At("HEAD"), cancellable = true)
     private void updateLightByType(EnumSkyBlock lightType, int x, int y, int z, CallbackInfoReturnable<Boolean> ci) {
-        ci.setReturnValue(getLightingManager() != null && getLightingManager().checkLightFor(lightType, x, y, z));
+        if (this.lightingManager == null) return;
+        ci.setReturnValue(this.lightingManager.checkLightFor(lightType, x, y, z));
     }
 
     /**
@@ -453,6 +500,7 @@ public abstract class MixinWorld implements ICubicWorldInternal {
      */
     @Inject(method = "markTileEntityChunkModified", at = @At("HEAD"), cancellable = true)
     private void onMarkChunkDirty(int x, int y, int z, TileEntity unusedTileEntity, CallbackInfo ci) {
+        if (!(this.chunkProvider instanceof ICubeProviderInternal)) return;
         Cube cube = this.getCubeCache()
             .getLoadedCube(CubePos.fromBlockCoords(x, y, z));
         if (cube != null) {
@@ -466,6 +514,7 @@ public abstract class MixinWorld implements ICubicWorldInternal {
 
     @Inject(method = "getTopSolidOrLiquidBlock", at = @At("HEAD"), cancellable = true)
     private void getTopSolidOrLiquidBlockCubicChunks(int x, int z, CallbackInfoReturnable<Integer> cir) {
+        if (!(this.chunkProvider instanceof ICubeProviderInternal)) return;
         Chunk chunk = this.getChunkFromBlockCoords(x, z);
         int currentY = getPrecipitationHeight(x, z);
         int minY = currentY - 64;
@@ -490,7 +539,7 @@ public abstract class MixinWorld implements ICubicWorldInternal {
 
     @Override
     public boolean cubeExists(int x, int y, int z) {
-        return ((ICubeProvider) this.chunkProvider).cubeExists(x, y, z);
+        return getCubeCache().cubeExists(x, y, z);
     }
 
     @ModifyConstant(method = "getCollidingBoundingBoxes", constant = @Constant(intValue = 64), require = 1)
@@ -519,6 +568,24 @@ public abstract class MixinWorld implements ICubicWorldInternal {
 
     private boolean shouldSkipWorld(World world) {
         return !allowedServerWorldClasses.contains(world.getClass());
+    }
+
+    @WrapOperation(
+        method = "func_147467_a",
+        at = @At(
+            value = "INVOKE",
+            target = "Lnet/minecraft/world/chunk/Chunk;getBlock(III)Lnet/minecraft/block/Block;"),
+        require = 1)
+    private Block getLoadedBlockForCaveAmbience(Chunk chunk, int x, int y, int z, Operation<Block> original) {
+        if (this.chunkProvider instanceof ICubeProvider
+            && ((ICubeProvider) this.chunkProvider).getLoadedCube(chunk.xPosition, blockToCube(y), chunk.zPosition)
+                == null) {
+            // A non-air result skips this sound candidate without loading terrain. Do not cancel the whole
+            // method: the lighting work after the ambience check must still run.
+            return Blocks.stone;
+        }
+
+        return original.call(chunk, x, y, z);
     }
 
     @WrapOperation(

@@ -1,0 +1,39 @@
+#################################
+###        general gui        ###
+#################################
+
+cubicchunks.gui.worldmenu.cc_disable=CubicChunks: 無効
+cubicchunks.gui.worldmenu.cc_default=CubicChunks: デフォルト
+
+#################################
+###          options          ###
+#################################
+
+cubicchunks.gui.vertical_cube_load_distance=Vertical Distance: %d キューブ
+
+#################################
+###         commands          ###
+#################################
+
+cubicchunks.command.usage.cubicchunks=/cubicchunks subcommand
+cubicchunks.command.usage.config=/cubicchunks config subcommand
+cubicchunks.command.usage.config.set=/cubicchunks config set configOption value
+cubicchunks.command.usage.config.set_option=/cubicchunks config set %s value
+cubicchunks.command.usage.config.reload=/cubicchunks config reload
+cubicchunks.command.config.set.failed=設定オプション %s の設定に失敗しました！
+cubicchunks.command.config.set.done=設定オプション %s が "%s" に設定されました
+cubicchunks.command.config.set.requires_restart=設定オプション %s を変更するには、ワールドの再起動が必要です！
+cubicchunks.command.usage.config.set.primitive=設定オプション %s の型は %s で、1 つの引数が必要です
+cubicchunks.command.config.reload.done=Cubic Chunksの設定はリロードされました
+cubicchunks.config.enable_chunk_debugging=チャンクステータスのデバッグを有効化
+
+cubicchunks.config.optimizations=最適化
+cubicchunks.config.optimizations.background_threads=バックグラウンドスレッド
+
+generator.VanillaCubic=バニラ+キューブ
+
+#################################
+###          misc             ###
+#################################
+
+cubicchunks.build.too.low=建物の最小奥行に達しました

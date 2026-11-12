@@ -43,6 +43,7 @@ import net.minecraft.world.ChunkCoordIntPair;
 import net.minecraft.world.WorldServer;
 import net.minecraft.world.biome.BiomeGenBase;
 import net.minecraft.world.chunk.Chunk;
+import net.minecraft.world.chunk.IChunkProvider;
 import net.minecraft.world.chunk.storage.IChunkLoader;
 import net.minecraft.world.gen.ChunkProviderServer;
 
@@ -116,12 +117,9 @@ public class CubeProviderServer extends ChunkProviderServer
 
     private final ObjectLinkedOpenHashSet<CubeLoaderCallback> callbacks = new ObjectLinkedOpenHashSet<>();
 
-    public CubeProviderServer(WorldServer worldServer, IChunkLoader chunkLoader, IWorldGenerator worldGenerator) {
-        super(
-            worldServer,
-            chunkLoader, // forge uses this in
-            worldServer.provider.createChunkGenerator()); // let's create the chunk generator, for now the vanilla one
-                                                          // may be enough
+    public CubeProviderServer(WorldServer worldServer, IChunkLoader chunkLoader, IWorldGenerator worldGenerator,
+        IChunkProvider chunkGenerator) {
+        super(worldServer, chunkLoader, chunkGenerator);
 
         this.worldGenerator = worldGenerator;
         this.worldServer = worldServer;

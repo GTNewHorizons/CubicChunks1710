@@ -40,6 +40,7 @@ import org.joml.Vector3ic;
 import com.cardinalstar.cubicchunks.CubicChunks;
 import com.cardinalstar.cubicchunks.api.XYZMap;
 import com.cardinalstar.cubicchunks.api.util.Box;
+import com.cardinalstar.cubicchunks.entity.ICubicEntityTracker;
 import com.cardinalstar.cubicchunks.mixin.api.ICubicWorldInternal;
 import com.cardinalstar.cubicchunks.mixin.api.ICubicWorldInternal.Server;
 import com.cardinalstar.cubicchunks.server.CubeProviderServer.EagerCubeLoadRequest;
@@ -49,7 +50,7 @@ import com.cardinalstar.cubicchunks.util.CubePos;
 import com.cardinalstar.cubicchunks.util.CubeStatusVisualizer;
 import com.cardinalstar.cubicchunks.util.CubeStatusVisualizer.CubeStatus;
 import com.cardinalstar.cubicchunks.util.HashSet2D;
-import com.cardinalstar.cubicchunks.visibility.CuboidalCubeSelector;
+import com.cardinalstar.cubicchunks.visibility.EllipsoidalCubeSelector;
 import com.cardinalstar.cubicchunks.visibility.WorldVisibilityChange;
 import com.cardinalstar.cubicchunks.world.api.ICubeProviderServer.Requirement;
 import com.cardinalstar.cubicchunks.world.cube.Cube;
@@ -76,6 +77,7 @@ public class CubicPlayerManager extends PlayerManager implements CubeLoaderCallb
     private int verticalViewDistance;
 
     private long lastChunkInhabitedUpdate;
+    private long lastCubeGc;
 
     // these player adds will be processed on the next tick
     // this exists as temporary workaround to player respawn code calling addPlayer() before spawning
@@ -151,7 +153,7 @@ public class CubicPlayerManager extends PlayerManager implements CubeLoaderCallb
             HashSet2D viewedColumns = new HashSet2D();
 
             for (var player : players.getPlayerArray()) {
-                CuboidalCubeSelector.INSTANCE.forAllVisibleColumns(
+                EllipsoidalCubeSelector.INSTANCE.forAllVisibleColumns(
                     player.getManagedCubePos(),
                     horizontalViewDistance,
                     verticalViewDistance,
@@ -170,6 +172,19 @@ public class CubicPlayerManager extends PlayerManager implements CubeLoaderCallb
         getWorldServer().theProfiler.endStartSection("tickEntries");
 
         getWorldServer().theProfiler.endStartSection("unload");
+
+        // updatePlayerPertinentChunks only runs the GC when a player moves into a new cube, so cubes loaded while
+        // players stand still (e.g. by LOD generators) would never be unloaded without this
+        if (now - this.lastCubeGc >= 20 * 30) {
+            this.lastCubeGc = now;
+
+            provider.getCubeLoader()
+                .doGC();
+
+            // unloading cubes above saves them, which fills CubeIO's caches, so trim them afterwards
+            provider.getCubeLoader()
+                .trimCaches();
+        }
 
         // if there are no players - unload everything
         if (this.players.isEmpty()) {
@@ -294,7 +309,7 @@ public class CubicPlayerManager extends PlayerManager implements CubeLoaderCallb
 
         this.players.addPlayer(watchingPlayer);
 
-        CuboidalCubeSelector.INSTANCE.forAllVisibleCubes(
+        EllipsoidalCubeSelector.INSTANCE.forAllVisibleCubes(
             watchingPlayer.getManagedCubePos(),
             horizontalViewDistance,
             verticalViewDistance,
@@ -316,7 +331,7 @@ public class CubicPlayerManager extends PlayerManager implements CubeLoaderCallb
         // so we need to use managedPosition there
         CubePos playerCubePos = watchingPlayer.getManagedCubePos();
 
-        CuboidalCubeSelector.INSTANCE.forAllVisibleCubes(
+        EllipsoidalCubeSelector.INSTANCE.forAllVisibleCubes(
             playerCubePos,
             horizontalViewDistance,
             verticalViewDistance,
@@ -351,7 +366,7 @@ public class CubicPlayerManager extends PlayerManager implements CubeLoaderCallb
         watchingPlayer.updateManagedPos();
         CubePos newPos = watchingPlayer.getManagedCubePos();
 
-        var delta = CuboidalCubeSelector.INSTANCE.findChanged(
+        var delta = EllipsoidalCubeSelector.INSTANCE.findChanged(
             oldPos,
             newPos,
             horizontalViewDistance,
@@ -460,7 +475,12 @@ public class CubicPlayerManager extends PlayerManager implements CubeLoaderCallb
     @Override
     @Deprecated
     public final void func_152622_a(int newHorizontalViewDistance) {
-        this.setPlayerViewDistance(newHorizontalViewDistance, verticalViewDistance);
+        if (this.players == null) return;
+        ICubicPlayerList playerList = (ICubicPlayerList) getWorldServer().func_73046_m()
+            .getConfigurationManager();
+        int vertical = playerList.getRawVerticalViewDistance() < 0 ? newHorizontalViewDistance
+            : playerList.getVerticalViewDistance();
+        this.setPlayerViewDistance(newHorizontalViewDistance, vertical);
     }
 
     public final void setPlayerViewDistance(int newHorizontalViewDistance, int newVerticalViewDistance) {
@@ -482,10 +502,17 @@ public class CubicPlayerManager extends PlayerManager implements CubeLoaderCallb
         int oldHorizontalViewDistance = this.horizontalViewDistance;
         int oldVerticalViewDistance = this.verticalViewDistance;
 
+        // Publish both radii before callbacks consult the union of every player's watch set.
+        this.horizontalViewDistance = newHorizontalViewDistance;
+        this.verticalViewDistance = newVerticalViewDistance;
+        if (getWorldServer().getEntityTracker() != null) {
+            ((ICubicEntityTracker) getWorldServer().getEntityTracker()).setVertViewDistance(newVerticalViewDistance);
+        }
+
         for (WatchingPlayer player : this.players.getPlayerArray()) {
             CubePos playerPos = player.getManagedCubePos();
 
-            var delta = CuboidalCubeSelector.INSTANCE.findChanged(
+            var delta = EllipsoidalCubeSelector.INSTANCE.findChanged(
                 playerPos,
                 playerPos,
                 oldHorizontalViewDistance,
@@ -496,8 +523,6 @@ public class CubicPlayerManager extends PlayerManager implements CubeLoaderCallb
             applyWorldVisibilityChanges(player, delta);
         }
 
-        this.horizontalViewDistance = newHorizontalViewDistance;
-        this.verticalViewDistance = newVerticalViewDistance;
     }
 
     private void applyWorldVisibilityChanges(WatchingPlayer player, WorldVisibilityChange delta) {
@@ -522,11 +547,11 @@ public class CubicPlayerManager extends PlayerManager implements CubeLoaderCallb
         }
 
         public boolean isWatchingColumn(int x, int z) {
-            return CuboidalCubeSelector.INSTANCE.contains(managedCubePos, horizontalViewDistance, x, z);
+            return EllipsoidalCubeSelector.INSTANCE.contains(managedCubePos, horizontalViewDistance, x, z);
         }
 
         public boolean isWatchingCube(int x, int y, int z) {
-            return CuboidalCubeSelector.INSTANCE
+            return EllipsoidalCubeSelector.INSTANCE
                 .contains(managedCubePos, horizontalViewDistance, verticalViewDistance, x, y, z);
         }
 

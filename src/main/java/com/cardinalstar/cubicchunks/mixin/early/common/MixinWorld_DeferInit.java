@@ -36,14 +36,14 @@ public abstract class MixinWorld_DeferInit implements WorldExt {
     public abstract CrashReportCategory addWorldInfoToCrashReport(CrashReport report);
 
     @Unique
-    private WorldSettings settings;
+    private WorldSettings cc$settings;
 
     @Override
     public void cc$initialize() {
         if (!this.worldInfo.isInitialized()) {
             try {
-                this.initialize(this.settings);
-                this.settings = null;
+                this.initialize(this.cc$settings);
+                this.cc$settings = null;
             } catch (Throwable throwable1) {
                 CrashReport crashreport = CrashReport.makeCrashReport(throwable1, "Exception initializing level");
 
@@ -65,7 +65,7 @@ public abstract class MixinWorld_DeferInit implements WorldExt {
         at = @At(value = "INVOKE", target = "Lnet/minecraft/world/storage/WorldInfo;isInitialized()Z"))
     public boolean deferInit(WorldInfo instance, Operation<Boolean> original,
         @Local(argsOnly = true) WorldSettings settings) {
-        this.settings = settings;
+        this.cc$settings = settings;
         // isInitialized(): false -> inverted to disable init
         return true;
     }

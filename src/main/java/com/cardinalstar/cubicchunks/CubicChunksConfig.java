@@ -29,6 +29,7 @@ import javax.annotation.ParametersAreNonnullByDefault;
 
 import net.minecraft.block.Block;
 
+import com.cardinalstar.cubicchunks.server.chunkio.CCNBTUtils.TagCompression;
 import com.cardinalstar.cubicchunks.worldgen.FillerInfo;
 import com.cardinalstar.cubicchunks.worldgen.HeightInfo;
 import com.gtnewhorizon.gtnhlib.config.Config;
@@ -77,8 +78,8 @@ public class CubicChunksConfig {
     public static String[] dimensional_height_overrides = { "0:bottom:-64" };
 
     @Config.LangKey("cubicchunks.config.vert_view_distance")
-    @Config.Comment("Similar to Minecraft's view distance, only for vertical chunks. Automatically adjusted by vertical view distance slider on the"
-        + " client. Does not affect rendering, only what chunks are sent to client.")
+    @Config.Comment("Client vertical render distance and integrated-server vertical loading radius, adjusted by the vertical view distance slider."
+        + " Dedicated servers use vertical-view-distance in server.properties instead.")
     public static int verticalCubeLoadDistance = 8;
 
     @Config.LangKey("cubicchunks.config.enable_chunk_debugging")
@@ -142,6 +143,10 @@ public class CubicChunksConfig {
     @Config.Comment("Disables all light propagation")
     public static boolean disableLighting = false;
 
+    @Config.LangKey("cubicchunks.config.chunk_compression")
+    @Config.Comment("Controls the default compression algorithm used for chunks and cubes. Can be changed arbitrarily without corrupting worlds.")
+    public static TagCompression chunkCompression = TagCompression.LZ4;
+
     @Config.Ignore
     public static int defaultMaxCubesPerChunkloadingTicket = 25 * 16;
 
@@ -155,9 +160,19 @@ public class CubicChunksConfig {
     public static final class Optimizations {
 
         @Config.LangKey("cubicchunks.config.optimizations.background_threads")
-        @Config.Comment("Maximum number of threads to use for background tasks (world I/O, noise generation, etc).")
-        public int backgroundThreads = ManagementFactory.getOperatingSystemMXBean()
-            .getAvailableProcessors() / 2;
+        @Config.Comment("Maximum number of threads to use for background tasks (world I/O, noise generation, etc)."
+            + " At least one is always used.")
+        public int backgroundThreads = Math.max(
+            1,
+            ManagementFactory.getOperatingSystemMXBean()
+                .getAvailableProcessors() / 2);
+
+        @Config.LangKey("cubicchunks.config.optimizations.save_cache_megabytes")
+        @Config.Comment("Memory per cubic dimension for recently unloaded cubes, kept compressed so that reloading them"
+            + " soon does not read the disk. Columns get an eighth of this on top. Saves that are still being written"
+            + " are always kept. 0 disables it.")
+        @Config.RangeInt(min = 0, max = 4096)
+        public int saveCacheMegabytes = 32;
 
     }
 

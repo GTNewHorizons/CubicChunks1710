@@ -22,6 +22,7 @@ package com.cardinalstar.cubicchunks.network;
 
 import javax.annotation.ParametersAreNonnullByDefault;
 
+import net.jpountz.lz4.LZ4Factory;
 import net.minecraft.world.World;
 
 import com.cardinalstar.cubicchunks.CubicChunks;
@@ -34,6 +35,7 @@ import com.cardinalstar.cubicchunks.world.cube.Cube;
 import com.github.bsideup.jabel.Desugar;
 
 import io.netty.buffer.ByteBuf;
+import io.netty.buffer.PooledByteBufAllocator;
 import io.netty.buffer.Unpooled;
 
 @ParametersAreNonnullByDefault
@@ -53,15 +55,18 @@ public class PacketEncoderCube extends CCPacketEncoder<PacketCube> {
     public static PacketCube createPacket(Cube cube) {
         CubeStatusVisualizer.put(cube.getCoords(), CubeStatus.Synced);
 
-        ByteBuf cubeData = Unpooled.buffer();
+        // only the written bytes are copied out, so the pooled buffer is released right away
+        ByteBuf cubeData = PooledByteBufAllocator.DEFAULT.buffer();
+        try {
+            WorldEncoder.encodeCube(new CCPacketBuffer(cubeData), cube);
 
-        WorldEncoder.encodeCube(new CCPacketBuffer(cubeData), cube);
+            byte[] data = new byte[cubeData.readableBytes()];
+            cubeData.readBytes(data);
 
-        byte[] data = new byte[cubeData.writerIndex()];
-
-        cubeData.readBytes(data);
-
-        return new PacketCube(cube.getCoords(), data);
+            return new PacketCube(cube.getCoords(), data);
+        } finally {
+            cubeData.release();
+        }
     }
 
     @Override
@@ -73,16 +78,25 @@ public class PacketEncoderCube extends CCPacketEncoder<PacketCube> {
     public void writePacket(CCPacketBuffer buffer, PacketCube packet) {
         buffer.writeCubePos(packet.cubePos);
 
-        buffer.writeByteArray(packet.data);
+        buffer.writeVarIntToBuffer(packet.data.length);
+        buffer.writeByteArray(
+            LZ4Factory.fastestInstance()
+                .fastCompressor()
+                .compress(packet.data));
     }
 
     @Override
     public PacketCube readPacket(CCPacketBuffer buf) {
         CubePos pos = buf.readCubePos();
 
+        byte[] decompressed = new byte[buf.readVarIntFromBuffer()];
         byte[] data = buf.readByteArray();
 
-        return new PacketCube(pos, data);
+        LZ4Factory.fastestInstance()
+            .fastDecompressor()
+            .decompress(data, decompressed);
+
+        return new PacketCube(pos, decompressed);
     }
 
     @Override
