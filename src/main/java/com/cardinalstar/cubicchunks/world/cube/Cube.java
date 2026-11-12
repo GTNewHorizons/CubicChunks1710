@@ -172,6 +172,11 @@ public class Cube implements ICube {
      */
     private boolean isCubeLoaded;
 
+    /// When true, this cube has been inserted into the height map and does not need to on the next load.
+    @Getter
+    @Setter
+    private boolean isInHeightMap;
+
     private boolean ticked = false;
 
     // private final CapabilityDispatcher capabilities;
@@ -619,7 +624,10 @@ public class Cube implements ICube {
         this.world.func_147448_a(this.cubeTileEntityMap.values());
         this.world.addLoadedEntities(this.entities);
 
-        this.updateHeightMap();
+        if (!this.isInHeightMap) {
+            this.updateHeightMap();
+            this.isInHeightMap = true;
+        }
 
         ((ICubicWorldInternal) world).getLightingManager()
             .onCubeLoad(this);

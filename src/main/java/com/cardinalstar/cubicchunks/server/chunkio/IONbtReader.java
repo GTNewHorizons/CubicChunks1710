@@ -199,6 +199,7 @@ public class IONbtReader {
 
         // this status will get unset again in readLightingInfo() if the lighting engine is changed (LightingInfoType).
         cube.setInitialLightingDone(level.getBoolean("initLightDone"));
+        cube.setInHeightMap(level.getBoolean("isInHeightMap"));
 
         NBTTagList sections = level.getTagList("Sections", NBT.TAG_COMPOUND);
 

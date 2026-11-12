@@ -152,6 +152,7 @@ class IONbtWriter {
         cubeNbt.setShort("population", cube.getPopulationStatus());
 
         cubeNbt.setBoolean("initLightDone", cube.isInitialLightingDone());
+        cubeNbt.setBoolean("isInHeightMap", cube.isInHeightMap());
     }
 
     private static void writeBlocks(Cube cube, NBTTagCompound section) {
