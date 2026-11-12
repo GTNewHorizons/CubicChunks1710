@@ -79,9 +79,13 @@ import com.cardinalstar.cubicchunks.world.ICubicWorld;
 import com.cardinalstar.cubicchunks.world.core.IColumnInternal;
 import com.cardinalstar.cubicchunks.world.core.ICubicTicketInternal;
 import com.cardinalstar.cubicchunks.world.cube.blockview.IBlockView;
+import com.cardinalstar.cubicchunks.world.heightmap.HeightMap3D;
+import com.cardinalstar.cubicchunks.world.heightmap.PrecipitationHeightMap;
 import com.gtnewhorizon.gtnhlib.blockpos.BlockPos;
 
 import it.unimi.dsi.fastutil.objects.Reference2ReferenceArrayMap;
+import lombok.Getter;
+import lombok.Setter;
 
 /**
  * A cube is our extension of minecraft's chunk system to three dimensions. Each cube encloses a cubic area in the world
@@ -96,6 +100,7 @@ public class Cube implements ICube {
     @Nullable
     private DynamicBiomeArray biomes3d = null;
 
+    @Getter
     @Nonnull
     private final TicketList tickets; // tickets prevent this Cube from being unloaded
     /**
@@ -112,6 +117,8 @@ public class Cube implements ICube {
     // public static final short POP_011 = 0b1000000;
     // public static final short POP_111 = 0b10000000;
     public static final short POP_ALL = 0b11111111;
+    @Setter
+    @Getter
     private short populationStatus = 0;
 
     /**
@@ -157,6 +164,7 @@ public class Cube implements ICube {
     @Nonnull
     public Map<ChunkPosition, TileEntity> cubeTileEntityMap;
 
+    @Getter
     private final ICubeLightTrackingInfo cubeLightData;
 
     /**
@@ -164,10 +172,6 @@ public class Cube implements ICube {
      */
     private boolean isCubeLoaded;
 
-    /**
-     * True only if all the blocks have been added to server height map. Always true clientside.
-     */
-    private boolean isSurfaceTracked = false;
     private boolean ticked = false;
 
     // private final CapabilityDispatcher capabilities;
@@ -203,7 +207,7 @@ public class Cube implements ICube {
      * @param cubeY  cube y position
      * @param blocks primer containing the blocks for this cube
      */
-    @SuppressWarnings("deprecation") // when a block is generated, does it really have any extra
+    // when a block is generated, does it really have any extra
     // information it could give us about its opacity by knowing its location?
     public Cube(Chunk column, int cubeY, Block[] blocks) {
         this(column, cubeY);
@@ -615,35 +619,90 @@ public class Cube implements ICube {
         this.world.func_147448_a(this.cubeTileEntityMap.values());
         this.world.addLoadedEntities(this.entities);
 
-        if (!isSurfaceTracked) {
-            ((IColumnInternal) getColumn()).addToStagingHeightmap(this);
-        }
+        this.updateHeightMap();
+
         ((ICubicWorldInternal) world).getLightingManager()
             .onCubeLoad(this);
         CompatHandler.onCubeLoad(new ChunkEvent.Load(getColumn()));
         EVENT_BUS.post(new CubeEvent.Load(world, this));
     }
 
-    @SuppressWarnings("deprecation")
-    public void trackSurface() {
-        IHeightMap opindex = ((IColumn) column).getOpacityIndex();
+    /// Update the chunk's height maps with the data stored in this cube.
+    /// We never remove the data from the height maps - we only upsert it to match this cube's contents.
+    /// This is so that skylight calculations and precipitation are correct even when high-up cubes have been unloaded.
+    public void updateHeightMap() {
+        IHeightMap opacityIndex = ((IColumn) column).getOpacityIndex();
+        PrecipitationHeightMap precipitationIndex = ((IColumnInternal) column).getPrecipitationIndex();
         int miny = getCoords().getMinBlockY();
 
-        for (int x = 0; x < Cube.SIZE; x++) {
+        int[] opaque = new int[Cube.SIZE * Cube.SIZE];
+        int[] stopsPrecipitation = new int[Cube.SIZE * Cube.SIZE];
+        collectHeightMapBits(opaque, stopsPrecipitation);
+
+        boolean changed = false;
+        for (int z = 0; z < Cube.SIZE; z++) {
+            for (int x = 0; x < Cube.SIZE; x++) {
+                int i = z << 4 | x;
+
+                if (opacityIndex instanceof HeightMap3D heightMap) {
+                    changed |= heightMap.setBits(x, z, miny, Cube.SIZE, opaque[i]);
+                } else {
+                    for (int y = 0; y < Cube.SIZE; y++) {
+                        opacityIndex.onOpacityChange(x, miny + y, z, (opaque[i] >>> y & 1) != 0);
+                    }
+                    changed = true;
+                }
+
+                changed |= precipitationIndex.setBits(x, z, miny, Cube.SIZE, stopsPrecipitation[i]);
+            }
+        }
+
+        // This marks every loaded cube of the column dirty, so only do it when a height map has to be saved
+        if (changed) {
+            column.setChunkModified();
+        }
+    }
+
+    /// Update the column's precipitation height map with the data stored in this cube. Clients also call this when the
+    /// server resends a loaded cube, because those block changes never pass through the column's setBlock.
+    public void updatePrecipitationHeightMap() {
+        PrecipitationHeightMap precipitationIndex = ((IColumnInternal) column).getPrecipitationIndex();
+        int miny = getCoords().getMinBlockY();
+
+        int[] stopsPrecipitation = new int[Cube.SIZE * Cube.SIZE];
+        collectHeightMapBits(null, stopsPrecipitation);
+
+        for (int z = 0; z < Cube.SIZE; z++) {
+            for (int x = 0; x < Cube.SIZE; x++) {
+                precipitationIndex.setBits(x, z, miny, Cube.SIZE, stopsPrecipitation[z << 4 | x]);
+            }
+        }
+    }
+
+    /// For each block column ({@code z << 4 | x}), sets bit y in {@code opaque} when the block at local y blocks light,
+    /// and in {@code stopsPrecipitation} when it stops rain. Either array may be null.
+    private void collectHeightMapBits(@Nullable int[] opaque, @Nullable int[] stopsPrecipitation) {
+        if (storage == null) {
+            return; // all air
+        }
+
+        for (int y = 0; y < Cube.SIZE; y++) {
+            int bit = 1 << y;
+
             for (int z = 0; z < Cube.SIZE; z++) {
+                for (int x = 0; x < Cube.SIZE; x++) {
+                    Block block = this.getBlock(x, y, z);
+                    int i = z << 4 | x;
 
-                for (int y = Cube.SIZE - 1; y >= 0; y--) {
-                    Block newBlock = this.getBlock(x, y, z);
-
-                    column.setChunkModified(); // TODO: maybe ServerHeightMap needs its own isModified?
-                    opindex.onOpacityChange(x, miny + y, z, newBlock.getLightOpacity());
+                    if (opaque != null && block.getLightOpacity() > 0) {
+                        opaque[i] |= bit;
+                    }
+                    if (stopsPrecipitation != null && PrecipitationHeightMap.blocksPrecipitation(block)) {
+                        stopsPrecipitation[i] |= bit;
+                    }
                 }
             }
         }
-        isSurfaceTracked = true;
-        ((IColumnInternal) getColumn()).removeFromStagingHeightmap(this);
-        ((ICubicWorldInternal) world).getLightingManager()
-            .onTrackCubeSurface(this);
     }
 
     /**
@@ -677,7 +736,6 @@ public class Cube implements ICube {
         for (TileEntity tileEntity : this.cubeTileEntityMap.values()) {
             this.world.func_147457_a(tileEntity);
         }
-        ((IColumnInternal) getColumn()).removeFromStagingHeightmap(this);
     }
 
     @Override
@@ -708,15 +766,6 @@ public class Cube implements ICube {
         this.isModified = true;
     }
 
-    /**
-     * Retrieve a list of tickets currently holding this cube loaded
-     *
-     * @return the list of tickets
-     */
-    public TicketList getTickets() {
-        return tickets;
-    }
-
     public void markForRenderUpdate() {
         this.world.markBlockRangeForRenderUpdate(
             cubeToMinBlock(this.coords.getX()),
@@ -727,10 +776,6 @@ public class Cube implements ICube {
             cubeToMaxBlock(this.coords.getZ()));
     }
 
-    public ICubeLightTrackingInfo getCubeLightData() {
-        return this.cubeLightData;
-    }
-
     /**
      * Mark this cube as a client side cube. Less work is done in this case, as we expect to receive updates from the
      * server
@@ -738,16 +783,7 @@ public class Cube implements ICube {
     public void setClientCube() {
         this.populationStatus = POP_ALL;
         this.isInitialLightingDone = true;
-        this.isSurfaceTracked = true;
         this.ticked = true;
-    }
-
-    public short getPopulationStatus() {
-        return populationStatus;
-    }
-
-    public void setPopulationStatus(short populationStatus) {
-        this.populationStatus = populationStatus;
     }
 
     public void markPopulated(@MagicConstant(flagsFromClass = Cube.class) short flag) {
@@ -763,20 +799,6 @@ public class Cube implements ICube {
     @Override
     public boolean isFullyPopulated() {
         return (populationStatus & POP_ALL) == POP_ALL;
-    }
-
-    /**
-     * Sets internal isSurfaceTracked value. Intended to be used only for deserialization.
-     *
-     * @param value true if surface is already tracked
-     */
-    public void setSurfaceTracked(boolean value) {
-        this.isSurfaceTracked = value;
-    }
-
-    @Override
-    public boolean isSurfaceTracked() {
-        return this.isSurfaceTracked;
     }
 
     @Override
