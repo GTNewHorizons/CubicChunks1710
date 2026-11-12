@@ -36,7 +36,7 @@ import com.cardinalstar.cubicchunks.server.ICubicChunksServer;
 import com.cardinalstar.cubicchunks.server.SpawnCubes;
 
 @Mixin(MinecraftServer.class)
-public class MixinMinecraftServer implements ICubicChunksServer {
+public abstract class MixinMinecraftServer implements ICubicChunksServer {
 
     @Shadow
     protected abstract void setUserMessage(String message);
