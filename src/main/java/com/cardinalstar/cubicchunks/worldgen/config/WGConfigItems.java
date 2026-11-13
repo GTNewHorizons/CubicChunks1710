@@ -26,18 +26,15 @@ public final class WGConfigItems {
      * World height. Either end may be unbounded, and bounded ends are rounded out to whole cubes. Defaults come from
      * the global config, like CubicChunksSavedData.
      */
-    public static final WGConfigItem<IntRange> HEIGHT = WGConfigItem.perDimension(
-        id("height"),
-        dimensionId -> {
-            HeightInfo info = CubicChunksConfig.configuredDimensionalHeightMap.get(dimensionId);
-            if (info != null) return new IntRange(info.minHeight, info.maxHeight);
-            return new IntRange(CubicChunksConfig.defaultMinHeight, CubicChunksConfig.defaultMaxHeight);
-        },
-        WGConfigItemTypes
-            .intRange(
-                new IntRange(CubicChunks.MIN_SUPPORTED_BLOCK_Y, CubicChunks.MAX_SUPPORTED_BLOCK_Y),
-                true,
-                ICube.SIZE));
+    public static final WGConfigItem<IntRange> HEIGHT = WGConfigItem.perDimension(id("height"), dimensionId -> {
+        HeightInfo info = CubicChunksConfig.configuredDimensionalHeightMap.get(dimensionId);
+        if (info != null) return new IntRange(info.minHeight, info.maxHeight);
+        return new IntRange(CubicChunksConfig.defaultMinHeight, CubicChunksConfig.defaultMaxHeight);
+    },
+        WGConfigItemTypes.intRange(
+            new IntRange(CubicChunks.MIN_SUPPORTED_BLOCK_Y, CubicChunks.MAX_SUPPORTED_BLOCK_Y),
+            true,
+            ICube.SIZE));
 
     /** Strata layers. Placeholder defaults until the generator uses them. */
     public static final WGConfigItem<List<Stratum>> STRATA = WGConfigItem.of(

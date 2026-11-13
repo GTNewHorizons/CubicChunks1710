@@ -180,16 +180,13 @@ class WorldgenConfigTest {
     @Test
     void readsHandWrittenStrataAndBlocks() throws IOException {
         write(
-            "dimensions { \"0\" { cctest {\n"
-                + "  strata = [ { block = \"minecraft:sand\", full = 5, none = 9 } ]\n"
+            "dimensions { \"0\" { cctest {\n" + "  strata = [ { block = \"minecraft:sand\", full = 5, none = 9 } ]\n"
                 + "  nested { block { block = \"othermod:missing\" } }\n"
                 + "} } }");
 
         WGDimensionConfig dim = WorldgenConfig.load(worldDir, SOURCE)
             .get(0);
-        assertEquals(
-            Collections.singletonList(new Stratum(new BlockRef("minecraft:sand", 0), 5, 9)),
-            dim.get(STRATA));
+        assertEquals(Collections.singletonList(new Stratum(new BlockRef("minecraft:sand", 0), 5, 9)), dim.get(STRATA));
         // Unknown blocks load; whatever uses the setting decides what to do with them
         assertEquals(new BlockRef("othermod:missing", 0), dim.get(BLOCK));
     }
@@ -225,7 +222,8 @@ class WorldgenConfigTest {
 
     @Test
     void autoBlockRoundTrip() throws IOException {
-        write("dimensions { \"0\" { cctest { filler = auto } }, \"1\" { cctest { filler { block = \"minecraft:dirt\" } } } }");
+        write(
+            "dimensions { \"0\" { cctest { filler = auto } }, \"1\" { cctest { filler { block = \"minecraft:dirt\" } } } }");
 
         WorldgenConfig config = WorldgenConfig.load(worldDir, SOURCE);
         assertNull(

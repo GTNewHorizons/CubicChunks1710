@@ -22,7 +22,8 @@ public class StrataSerializer implements TypeSerializer<List<Stratum>> {
 
         List<Stratum> strata = new ArrayList<>();
         for (ConfigurationNode child : node.childrenList()) {
-            strata.add(new Stratum(BlockRefSerializer.read(child), readY(child.node("full")), readY(child.node("none"))));
+            strata
+                .add(new Stratum(BlockRefSerializer.read(child), readY(child.node("full")), readY(child.node("none"))));
         }
         return strata;
     }
