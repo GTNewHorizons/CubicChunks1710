@@ -35,7 +35,6 @@ import net.minecraft.block.Block;
 import net.minecraft.client.multiplayer.WorldClient;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.player.EntityPlayer;
-import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.init.Blocks;
 import net.minecraft.profiler.Profiler;
 import net.minecraft.tileentity.TileEntity;
@@ -79,16 +78,15 @@ import com.cardinalstar.cubicchunks.api.world.ICubicWorldProvider;
 import com.cardinalstar.cubicchunks.api.world.ICubicWorldType;
 import com.cardinalstar.cubicchunks.lighting.LightingManager;
 import com.cardinalstar.cubicchunks.mixin.api.ICubicWorldInternal;
-import com.cardinalstar.cubicchunks.network.PacketEncoderWorldHeight;
-import com.cardinalstar.cubicchunks.network.PacketEncoderWorldHeight.PacketWorldHeight;
 import com.cardinalstar.cubicchunks.util.Coords;
 import com.cardinalstar.cubicchunks.util.CubePos;
 import com.cardinalstar.cubicchunks.util.ReflectionUtil;
-import com.cardinalstar.cubicchunks.world.CubicChunksSavedData;
 import com.cardinalstar.cubicchunks.world.ICubicWorld;
 import com.cardinalstar.cubicchunks.world.cube.Cube;
 import com.cardinalstar.cubicchunks.world.cube.ICubeProvider;
 import com.cardinalstar.cubicchunks.world.cube.ICubeProviderInternal;
+import com.cardinalstar.cubicchunks.worldgen.config.ServerWorldgenConfig;
+import com.cardinalstar.cubicchunks.worldgen.config.WGConfigItems;
 import com.google.common.collect.ImmutableList;
 import com.gtnewhorizon.gtnhlib.blockpos.BlockPos;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
@@ -290,9 +288,13 @@ public abstract class MixinWorld implements ICubicWorldInternal {
         }
 
         if ((Object) this instanceof WorldServer worldServer) {
-            CubicChunksSavedData savedData = CubicChunksSavedData.get(worldServer);
+            IntRange configured = ServerWorldgenConfig.forWorld(worldServer)
+                .get(WGConfigItems.HEIGHT);
 
-            heightRange = new IntRange(savedData.minHeight, savedData.maxHeight);
+            // Players can always reach everything the generator produces
+            heightRange = new IntRange(
+                Math.min(configured.getMin(), generationRange.getMin()),
+                Math.max(configured.getMax(), generationRange.getMax()));
         } else {
             // Client world, just set some defaults and let the packets update these properly
             heightRange = new IntRange(Integer.MIN_VALUE, Integer.MAX_VALUE);
@@ -456,26 +458,6 @@ public abstract class MixinWorld implements ICubicWorldInternal {
             return fakedMaxHeight;
         }
         return this.provider.getHeight();
-    }
-
-    @Override
-    public void setHeightBounds(int minHeight, int maxHeight) {
-        if (minHeight >= this.minGenerationHeight && maxHeight <= this.maxHeight) return;
-
-        this.minHeight = minHeight;
-        this.maxHeight = maxHeight;
-
-        if (!this.isRemote) {
-            CubicChunksSavedData savedData = CubicChunksSavedData.get((World) (Object) this);
-            savedData.minHeight = minHeight;
-            savedData.maxHeight = maxHeight;
-
-            PacketWorldHeight packet = PacketEncoderWorldHeight.create(minHeight, maxHeight);
-
-            for (EntityPlayer player : this.playerEntities) {
-                packet.sendToPlayer((EntityPlayerMP) player);
-            }
-        }
     }
 
     @Inject(method = "updateLightByType", at = @At("HEAD"), cancellable = true)

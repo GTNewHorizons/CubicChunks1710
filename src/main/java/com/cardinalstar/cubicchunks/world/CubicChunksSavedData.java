@@ -1,23 +1,3 @@
-/*
- * This file is part of Cubic Chunks Mod, licensed under the MIT License (MIT).
- * Copyright (c) 2015-2021 OpenCubicChunks
- * Copyright (c) 2015-2021 contributors
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
- */
 package com.cardinalstar.cubicchunks.world;
 
 import net.minecraft.block.Block;
@@ -25,71 +5,29 @@ import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.world.World;
 import net.minecraft.world.WorldSavedData;
 
-import com.cardinalstar.cubicchunks.CubicChunksConfig;
-import com.cardinalstar.cubicchunks.worldgen.FillerInfo;
-import com.cardinalstar.cubicchunks.worldgen.HeightInfo;
-import com.gtnewhorizon.gtnhlib.util.data.BlockMeta;
-import com.gtnewhorizon.gtnhlib.util.data.ImmutableBlockMeta;
+import com.cardinalstar.cubicchunks.worldgen.config.BlockRef;
+import com.cardinalstar.cubicchunks.worldgen.config.ServerWorldgenConfig;
 
+/**
+ * Per-dimension world data from before worldgen settings existed: the height range and the vanilla generator's
+ * filler blocks. Only read, to seed a dimension's settings the first time they're created (see
+ * {@link ServerWorldgenConfig}). It's left on disk unchanged.
+ */
 public class CubicChunksSavedData extends WorldSavedData {
 
-    public int minHeight = 0, maxHeight = 256;
-    private FillerInfo fillerInfo;
-    private World world;
+    private static final String NAME = "cubicChunksData";
+
+    public int minHeight, maxHeight;
+    /** Null if none was saved. */
+    public BlockRef bottomFiller, topFiller;
 
     public CubicChunksSavedData(String name) {
         super(name);
     }
 
-    public CubicChunksSavedData(int dimensionId, World world) {
-        this("cubicChunksData");
-
-        HeightInfo heightInfo = CubicChunksConfig.configuredDimensionalHeightMap.get(dimensionId);
-        if (heightInfo != null) {
-            this.minHeight = heightInfo.minHeight;
-            this.maxHeight = heightInfo.maxHeight;
-        } else {
-            this.minHeight = CubicChunksConfig.defaultMinHeight;
-            this.maxHeight = CubicChunksConfig.defaultMaxHeight;
-        }
-
-        this.fillerInfo = CubicChunksConfig.configuredDimensionalFillerMap.get(dimensionId);
-        if (this.fillerInfo == null) {
-            fillerInfo = new FillerInfo();
-        }
-    }
-
-    public static CubicChunksSavedData get(World world) {
-        var data = (CubicChunksSavedData) world.perWorldStorage.loadData(CubicChunksSavedData.class, "cubicChunksData");
-        if (data == null) {
-            data = new CubicChunksSavedData(world.provider.dimensionId, world);
-            data.markDirty();
-
-            world.perWorldStorage.setData(data.mapName, data);
-            world.perWorldStorage.saveAllData();
-        }
-        data.world = world;
-        return data;
-    }
-
-    public FillerInfo getFillerInfo() {
-        return fillerInfo;
-    }
-
-    public void setBottomFiller(ImmutableBlockMeta block) {
-        fillerInfo.bottomFiller = block;
-        this.markDirty();
-
-        world.perWorldStorage.setData(this.mapName, this);
-        world.perWorldStorage.saveAllData();
-    }
-
-    public void setTopFiller(ImmutableBlockMeta block) {
-        fillerInfo.topFiller = block;
-        this.markDirty();
-
-        world.perWorldStorage.setData(this.mapName, this);
-        world.perWorldStorage.saveAllData();
+    /** The world's saved data, or null if it has none (the world was created after it was replaced). */
+    public static CubicChunksSavedData load(World world) {
+        return (CubicChunksSavedData) world.perWorldStorage.loadData(CubicChunksSavedData.class, NAME);
     }
 
     @Override
@@ -98,43 +36,35 @@ public class CubicChunksSavedData extends WorldSavedData {
         minHeight = nbt.getInteger("minHeight") & ~0xF;
         maxHeight = nbt.getInteger("maxHeight") & ~0xF;
 
-        if (fillerInfo == null) {
-            fillerInfo = new FillerInfo();
-        }
-
-        NBTTagCompound fillerCompound = nbt.getCompoundTag("fillerBlocks");
-
-        if (fillerCompound.hasKey("topId")) {
-            int topBlock = fillerCompound.getInteger("topId");
-            short topMeta = fillerCompound.getShort("topMeta");
-            fillerInfo.topFiller = new BlockMeta(Block.getBlockById(topBlock), topMeta);
-        }
-
-        if (fillerCompound.hasKey("bottomId")) {
-            int bottomBlock = fillerCompound.getInteger("bottomId");
-            short bottomMeta = fillerCompound.getShort("bottomMeta");
-            fillerInfo.bottomFiller = new BlockMeta(Block.getBlockById(bottomBlock), bottomMeta);
-        }
-
+        NBTTagCompound filler = nbt.getCompoundTag("fillerBlocks");
+        bottomFiller = readFiller(filler, "bottomId", "bottomMeta");
+        topFiller = readFiller(filler, "topId", "topMeta");
     }
 
+    private static BlockRef readFiller(NBTTagCompound filler, String idKey, String metaKey) {
+        if (!filler.hasKey(idKey)) return null;
+        Block block = Block.getBlockById(filler.getInteger(idKey));
+        String id = Block.blockRegistry.getNameForObject(block);
+        int meta = filler.getShort(metaKey);
+        return id == null || meta < 0 || meta > 15 ? null : new BlockRef(id, meta);
+    }
+
+    // Never marked dirty, so never written; this keeps the data unchanged if something else saves it
     @Override
     public void writeToNBT(NBTTagCompound compound) {
         compound.setInteger("minHeight", minHeight);
         compound.setInteger("maxHeight", maxHeight);
 
         NBTTagCompound filler = new NBTTagCompound();
-
-        if (fillerInfo.bottomFiller != null) {
-            filler.setInteger("bottomId", Block.getIdFromBlock(fillerInfo.bottomFiller.getBlock()));
-            filler.setShort("bottomMeta", (short) fillerInfo.bottomFiller.getBlockMeta());
-        }
-
-        if (fillerInfo.topFiller != null) {
-            filler.setInteger("topId", Block.getIdFromBlock(fillerInfo.topFiller.getBlock()));
-            filler.setShort("topMeta", (short) fillerInfo.topFiller.getBlockMeta());
-        }
-
+        writeFiller(filler, bottomFiller, "bottomId", "bottomMeta");
+        writeFiller(filler, topFiller, "topId", "topMeta");
         compound.setTag("fillerBlocks", filler);
+    }
+
+    private static void writeFiller(NBTTagCompound filler, BlockRef ref, String idKey, String metaKey) {
+        Block block = ref == null ? null : ref.resolve();
+        if (block == null) return;
+        filler.setInteger(idKey, Block.getIdFromBlock(block));
+        filler.setShort(metaKey, (short) ref.meta);
     }
 }
