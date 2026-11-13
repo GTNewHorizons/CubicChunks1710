@@ -54,8 +54,11 @@ public class BlockRefSerializer implements TypeSerializer<BlockRef> {
 
         ConfigurationNode metaNode = node.node("meta");
         int meta = metaNode.get(Integer.class, 0);
-        if (meta < 0 || meta > 15) {
-            throw new SerializationException(metaNode, Integer.class, "expected a meta value in [0, 15], got " + meta);
+        if (meta < 0) {
+            throw new SerializationException(
+                metaNode,
+                Integer.class,
+                "expected a non-negative meta value, got " + meta);
         }
         return new BlockRef(id.trim(), meta);
     }

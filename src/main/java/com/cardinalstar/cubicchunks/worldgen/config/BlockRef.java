@@ -15,7 +15,7 @@ public final class BlockRef {
     public final int meta;
 
     public BlockRef(String id, int meta) {
-        if (meta < 0 || meta > 15) throw new IllegalArgumentException("Block meta must be 0-15, got " + meta);
+        if (meta < 0) throw new IllegalArgumentException("Block meta must not be negative, got " + meta);
         this.id = id;
         this.meta = meta;
     }
