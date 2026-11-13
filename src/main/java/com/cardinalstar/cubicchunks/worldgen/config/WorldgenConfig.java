@@ -49,8 +49,7 @@ public class WorldgenConfig {
     }
 
     public WGDimensionConfig getOrCreate(int dimensionId) {
-        return dimensions
-            .computeIfAbsent(dimensionId, id -> new WGDimensionConfig(id, itemSource.getItems(id)));
+        return dimensions.computeIfAbsent(dimensionId, id -> new WGDimensionConfig(id, itemSource.getItems(id)));
     }
 
     /** Null if this world has no settings for the dimension. */
@@ -90,7 +89,9 @@ public class WorldgenConfig {
                     entry.getKey()
                         .toString());
             } catch (NumberFormatException e) {
-                throw new ConfigurateException(entry.getValue(), "expected a dimension id, got '" + entry.getKey() + "'");
+                throw new ConfigurateException(
+                    entry.getValue(),
+                    "expected a dimension id, got '" + entry.getKey() + "'");
             }
 
             WGDimensionConfig dim = config.getOrCreate(dimensionId);
