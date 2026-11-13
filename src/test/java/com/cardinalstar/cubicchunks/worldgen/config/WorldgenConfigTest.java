@@ -196,8 +196,17 @@ class WorldgenConfigTest {
         write("dimensions { \"0\" { cctest { strata = [ { block = \"minecraft:sand\", full = 5 } ] } } }");
         assertThrows(ConfigurateException.class, () -> WorldgenConfig.load(worldDir, SOURCE));
 
-        write("dimensions { \"0\" { cctest { nested { block { block = \"minecraft:wool\", meta = 16 } } } } }");
+        write("dimensions { \"0\" { cctest { nested { block { block = \"minecraft:wool\", meta = -1 } } } } }");
         assertThrows(ConfigurateException.class, () -> WorldgenConfig.load(worldDir, SOURCE));
+    }
+
+    @Test
+    void extendedMetaLoads() throws IOException {
+        // Metadata extenders allow more than 4 bits of block meta
+        write("dimensions { \"0\" { cctest { nested { block { block = \"minecraft:wool\", meta = 1000000 } } } } }");
+        WGDimensionConfig dim = WorldgenConfig.load(worldDir, SOURCE)
+            .getOrCreate(0);
+        assertEquals(new BlockRef("minecraft:wool", 1000000), dim.get(BLOCK));
     }
 
     @Test
