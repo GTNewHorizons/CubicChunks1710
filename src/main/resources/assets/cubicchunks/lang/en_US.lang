@@ -34,6 +34,34 @@ cubicchunks.config.optimizations.save_cache_megabytes=Save Cache Size (MiB)
 generator.VanillaCubic=Vanilla + Cubic
 
 #################################
+###     worldgen settings     ###
+#################################
+
+cubicchunks.wgconfig.create_world_button=Cubic Chunks Worldgen...
+cubicchunks.wgconfig.list_title=Cubic Chunks World Generation
+cubicchunks.wgconfig.title=Cubic Chunks World Generation
+cubicchunks.wgconfig.dim_subtitle=Dimension %d
+cubicchunks.wgconfig.dimension.tooltip=World generation settings for this dimension.
+cubicchunks.wgconfig.save_failed=Could not save the world generation settings
+cubicchunks.wgconfig.block_search.title=Select Block
+
+cubicchunks.wgconfig.height=World Height
+cubicchunks.wgconfig.height.tooltip=Lowest and highest block Y in this dimension. Press ∞ to extend an end to the engine's limit (set by the cubicchunks.heightBits system property). Other values are rounded out to whole cubes (multiples of 16). The height is also extended to fit everything the world generator produces.
+cubicchunks.wgconfig.strata=Strata
+cubicchunks.wgconfig.strata.tooltip=Block layers that fade in with depth. Each layer's block is fully present at its "100%% at Y" level and absent at its "0%% at Y" level, blending in between.
+cubicchunks.wgconfig.strata.count=%d layers
+cubicchunks.wgconfig.strata.title=Strata
+cubicchunks.wgconfig.strata.block=Block
+cubicchunks.wgconfig.strata.full=100%% at Y
+cubicchunks.wgconfig.strata.none=0%% at Y
+cubicchunks.wgconfig.strata.add=Add Layer
+cubicchunks.wgconfig.strata.empty=No layers
+cubicchunks.wgconfig.block.missing=(missing)
+cubicchunks.wgconfig.block.auto=Auto-detect
+cubicchunks.wgconfig.example_block=Example Block
+cubicchunks.wgconfig.example_block.tooltip=Placeholder block setting.
+
+#################################
 ###          misc             ###
 #################################
 
