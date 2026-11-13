@@ -26,11 +26,13 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.function.Function;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import javax.annotation.ParametersAreNonnullByDefault;
 
+import net.minecraft.block.Block;
 import net.minecraft.entity.EnumCreatureType;
 import net.minecraft.init.Blocks;
 import net.minecraft.world.ChunkCoordIntPair;
@@ -59,7 +61,6 @@ import com.cardinalstar.cubicchunks.server.chunkio.ICubeLoader;
 import com.cardinalstar.cubicchunks.server.chunkio.IPreloadFailureDelegate;
 import com.cardinalstar.cubicchunks.util.Coords;
 import com.cardinalstar.cubicchunks.util.CubePos;
-import com.cardinalstar.cubicchunks.world.CubicChunksSavedData;
 import com.cardinalstar.cubicchunks.world.ICubicWorld;
 import com.cardinalstar.cubicchunks.world.api.ICubeProviderServer.Requirement;
 import com.cardinalstar.cubicchunks.world.core.IColumnInternal;
@@ -67,6 +68,11 @@ import com.cardinalstar.cubicchunks.world.cube.Cube;
 import com.cardinalstar.cubicchunks.world.cube.blockview.ChunkBlockView;
 import com.cardinalstar.cubicchunks.world.cube.blockview.IBlockView;
 import com.cardinalstar.cubicchunks.world.cube.blockview.UniformBlockView;
+import com.cardinalstar.cubicchunks.worldgen.config.BlockRef;
+import com.cardinalstar.cubicchunks.worldgen.config.ServerWorldgenConfig;
+import com.cardinalstar.cubicchunks.worldgen.config.WGConfigItem;
+import com.cardinalstar.cubicchunks.worldgen.config.WGConfigItems;
+import com.cardinalstar.cubicchunks.worldgen.config.WGDimensionConfig;
 import com.gtnewhorizon.gtnhlib.util.data.BlockMeta;
 import com.gtnewhorizon.gtnhlib.util.data.ImmutableBlockMeta;
 
@@ -91,7 +97,9 @@ public class VanillaWorldGenerator implements IWorldGenerator, IPreloadFailureDe
     private final int vanillaGenerationHeight;
     private final int vanillaGenerationHeightCubes;
 
-    private FillerInfo fillerInfo;
+    private final WGDimensionConfig settings;
+    /** Resolved lazily, since auto-detection generates a vanilla chunk. */
+    private ImmutableBlockMeta bottomFiller, topFiller;
 
     /**
      * Create a new VanillaCompatibilityGenerator
@@ -100,8 +108,7 @@ public class VanillaWorldGenerator implements IWorldGenerator, IPreloadFailureDe
      * @param world   The world in which cubes are being generated
      */
     public VanillaWorldGenerator(IChunkProvider vanilla, World world, IWorldDecorator decorator) {
-        this.fillerInfo = CubicChunksSavedData.get(world)
-            .getFillerInfo();
+        this.settings = ServerWorldgenConfig.forWorld(world);
 
         this.vanilla = vanilla;
         this.world = world;
@@ -119,19 +126,49 @@ public class VanillaWorldGenerator implements IWorldGenerator, IPreloadFailureDe
         return ((ICubicWorldInternal.Server) world).getCubeCache();
     }
 
-    private ImmutableBlockMeta getBottomFillerInfo() {
-        if (fillerInfo.bottomFiller != null) return fillerInfo.bottomFiller;
+    private synchronized ImmutableBlockMeta getBottomFiller() {
+        if (bottomFiller == null) {
+            bottomFiller = resolveFiller(WGConfigItems.VANILLA_BOTTOM_FILLER, this::analyzeBottomFiller);
+        }
+        return bottomFiller;
+    }
+
+    private synchronized ImmutableBlockMeta getTopFiller() {
+        if (topFiller == null) {
+            topFiller = resolveFiller(WGConfigItems.VANILLA_TOP_FILLER, this::analyzeTopFiller);
+        }
+        return topFiller;
+    }
+
+    /**
+     * The configured filler, or one detected from the world's first chunk if it's set to auto. A detected filler is
+     * stored in the settings so it can't change later, e.g. if that chunk's bottom layers turn out different.
+     */
+    private ImmutableBlockMeta resolveFiller(WGConfigItem<BlockRef> item,
+        Function<IBlockView, ImmutableBlockMeta> analyzer) {
+        BlockRef configured = settings.get(item);
+        if (configured != null) {
+            Block block = configured.resolve();
+            if (block != null) return new BlockMeta(block, configured.meta);
+            CubicChunks.LOGGER.error(
+                "Filler block {} for dimension {} doesn't exist; detecting one instead",
+                configured,
+                settings.dimensionId);
+        }
 
         Chunk chunk = vanilla.provideChunk(0, 0);
 
         ((IColumnInternal) chunk).setColumn(false);
 
-        fillerInfo.bottomFiller = analyzeBottomFiller(new ChunkBlockView(chunk));
+        ImmutableBlockMeta detected = analyzer.apply(new ChunkBlockView(chunk));
 
-        CubicChunksSavedData saveData = CubicChunksSavedData.get(world);
-        saveData.setBottomFiller(fillerInfo.bottomFiller);
+        if (configured == null) {
+            String id = Block.blockRegistry.getNameForObject(detected.getBlock());
+            settings.set(item, new BlockRef(id, detected.getBlockMeta()));
+            ServerWorldgenConfig.save();
+        }
 
-        return fillerInfo.bottomFiller;
+        return detected;
     }
 
     private ImmutableBlockMeta analyzeBottomFiller(IBlockView blockView) {
@@ -163,21 +200,6 @@ public class VanillaWorldGenerator implements IWorldGenerator, IPreloadFailureDe
 
         return bottomBlock.map(Map.Entry::getKey)
             .orElse(new BlockMeta(Blocks.air, 0));
-    }
-
-    private ImmutableBlockMeta getTopFillerInfo() {
-        if (fillerInfo.topFiller != null) return fillerInfo.topFiller;
-
-        Chunk chunk = vanilla.provideChunk(0, 0);
-
-        ((IColumnInternal) chunk).setColumn(false);
-
-        fillerInfo.topFiller = analyzeTopFiller(new ChunkBlockView(chunk));
-
-        CubicChunksSavedData saveData = CubicChunksSavedData.get(world);
-        saveData.setTopFiller(fillerInfo.topFiller);
-
-        return fillerInfo.topFiller;
     }
 
     private ImmutableBlockMeta analyzeTopFiller(IBlockView blockView) {
@@ -307,7 +329,7 @@ public class VanillaWorldGenerator implements IWorldGenerator, IPreloadFailureDe
             }
 
             if (cubeY < 0 || cubeY >= 16) {
-                ImmutableBlockMeta filler = cubeY < 0 ? getBottomFillerInfo() : getTopFillerInfo();
+                ImmutableBlockMeta filler = cubeY < 0 ? getBottomFiller() : getTopFiller();
                 IBlockView cubeData = new UniformBlockView(filler);
 
                 Cube cube = new Cube(chunk, cubeY, cubeData);
