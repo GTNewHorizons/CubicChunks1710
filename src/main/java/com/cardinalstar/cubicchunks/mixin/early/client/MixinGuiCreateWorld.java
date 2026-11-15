@@ -17,6 +17,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.configurate.ConfigurateException;
 
 import com.cardinalstar.cubicchunks.CubicChunks;
+import com.cardinalstar.cubicchunks.api.DimensionNames;
 import com.cardinalstar.cubicchunks.worldgen.config.WGConfigItemSource;
 import com.cardinalstar.cubicchunks.worldgen.config.WorldgenConfig;
 import com.cardinalstar.cubicchunks.worldgen.config.gui.WGDimensionListScreen;
@@ -45,7 +46,9 @@ public abstract class MixinGuiCreateWorld extends GuiScreen {
     private GuiButton field_146324_A;
 
     @Unique
-    private final WorldgenConfig cc$worldgenConfig = new WorldgenConfig(WGConfigItemSource.EVENT);
+    private final WorldgenConfig cc$worldgenConfig = new WorldgenConfig(
+        WGConfigItemSource.EVENT,
+        DimensionNames.INSTANCE);
 
     @Unique
     private GuiButton cc$worldgenButton;

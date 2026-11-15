@@ -11,6 +11,8 @@ import java.util.concurrent.ConcurrentHashMap;
 
 import net.minecraft.util.ResourceLocation;
 
+import org.jetbrains.annotations.Nullable;
+
 /**
  * One dimension's worldgen settings: the items gathered for it (see {@link GatherWorldgenConfigEvent}) and their
  * values. Only values that differ from the item's default are stored here, but {@link WorldgenConfig#save} writes
@@ -21,12 +23,16 @@ import net.minecraft.util.ResourceLocation;
 public class WGDimensionConfig {
 
     public final int dimensionId;
+    /** Null if the dimension has no name. */
+    @Nullable
+    public final ResourceLocation dimensionName;
     private final List<WGConfigItem<?>> items;
     private final Set<ResourceLocation> itemIds = new HashSet<>();
     private final Map<ResourceLocation, Object> values = new ConcurrentHashMap<>();
 
-    public WGDimensionConfig(int dimensionId, List<WGConfigItem<?>> items) {
+    public WGDimensionConfig(int dimensionId, @Nullable ResourceLocation dimensionName, List<WGConfigItem<?>> items) {
         this.dimensionId = dimensionId;
+        this.dimensionName = dimensionName;
         this.items = Collections.unmodifiableList(new ArrayList<>(items));
         for (WGConfigItem<?> item : items) {
             itemIds.add(item.getId());
@@ -46,7 +52,7 @@ public class WGDimensionConfig {
     public <T> T get(WGConfigItem<T> item) {
         checkItem(item);
         Object val = values.get(item.getId());
-        if (val == null) return item.getDefaultValue(dimensionId);
+        if (val == null) return item.getDefaultValue(dimensionName);
         return (T) val;
     }
 
@@ -57,7 +63,7 @@ public class WGDimensionConfig {
             value = item.getConfigItemType()
                 .normalize(value);
         }
-        if (value == null || Objects.deepEquals(value, item.getDefaultValue(dimensionId))) {
+        if (value == null || Objects.deepEquals(value, item.getDefaultValue(dimensionName))) {
             values.remove(item.getId());
         } else {
             values.put(item.getId(), value);
@@ -77,11 +83,17 @@ public class WGDimensionConfig {
         values.clear();
     }
 
+    /** The dimension's name and id, for messages. */
+    @Override
+    public String toString() {
+        return dimensionName != null ? dimensionName + " (" + dimensionId + ")" : String.valueOf(dimensionId);
+    }
+
     /** Catches reads and writes of settings this dimension doesn't have, which would otherwise never be saved. */
     private void checkItem(WGConfigItem<?> item) {
         if (!hasItem(item)) {
             throw new IllegalArgumentException(
-                "Worldgen config item " + item.getId() + " wasn't gathered for dimension " + dimensionId);
+                "Worldgen config item " + item.getId() + " wasn't gathered for dimension " + this);
         }
     }
 }

@@ -11,10 +11,12 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
+import net.minecraft.util.ChatComponentText;
 import net.minecraft.util.ResourceLocation;
 
 import org.junit.jupiter.api.Test;
@@ -23,6 +25,7 @@ import org.spongepowered.configurate.CommentedConfigurationNode;
 import org.spongepowered.configurate.ConfigurateException;
 import org.spongepowered.configurate.hocon.HoconConfigurationLoader;
 
+import com.cardinalstar.cubicchunks.api.DimensionNames;
 import com.cardinalstar.cubicchunks.api.IntRange;
 
 class WorldgenConfigTest {
@@ -55,14 +58,21 @@ class WorldgenConfigTest {
         .of(new ResourceLocation("cctest", "list"), new String[] { "x" }, WGConfigItemTypes.stringList());
 
     private static final List<WGConfigItem<?>> ITEMS = Arrays.asList(RANGE, ALIGNED, BLOCK, FILLER, STRATA, LIST);
-    private static final WGConfigItemSource SOURCE = dimensionId -> ITEMS;
+    private static final WGConfigItemSource SOURCE = (dimensionId, dimensionName) -> ITEMS;
 
     @TempDir
     File worldDir;
 
+    /** The vanilla dimensions; tests name others as they need. */
+    private final DimensionNames names = new DimensionNames();
+
+    WorldgenConfigTest() {
+        names.registerVanilla();
+    }
+
     @Test
     void missingFileLoadsEmpty() throws ConfigurateException {
-        WorldgenConfig config = WorldgenConfig.load(worldDir, SOURCE);
+        WorldgenConfig config = WorldgenConfig.load(worldDir, SOURCE, names);
         assertTrue(
             config.getDimensionIds()
                 .isEmpty());
@@ -71,7 +81,7 @@ class WorldgenConfigTest {
 
     @Test
     void roundTrip() throws ConfigurateException {
-        WorldgenConfig config = new WorldgenConfig(SOURCE);
+        WorldgenConfig config = new WorldgenConfig(SOURCE, names);
         WGDimensionConfig overworld = config.getOrCreate(0);
         overworld.set(RANGE, new IntRange(-64, 1000));
         overworld.set(BLOCK, new BlockRef("minecraft:dirt", 1));
@@ -79,7 +89,7 @@ class WorldgenConfigTest {
             .set(LIST, new String[] { "a", "b" });
         config.save(worldDir);
 
-        WorldgenConfig loaded = WorldgenConfig.load(worldDir, SOURCE);
+        WorldgenConfig loaded = WorldgenConfig.load(worldDir, SOURCE, names);
         assertEquals(
             new IntRange(-64, 1000),
             loaded.get(0)
@@ -104,30 +114,30 @@ class WorldgenConfigTest {
 
     @Test
     void savePinsDefaults() throws IOException {
-        WorldgenConfig config = new WorldgenConfig(SOURCE);
+        WorldgenConfig config = new WorldgenConfig(SOURCE, names);
         config.getOrCreate(0);
         config.save(worldDir);
 
         CommentedConfigurationNode root = readRaw();
         assertEquals(
             256,
-            root.node("dimensions", "0", "cctest", "range", "max")
+            root.node("dimensions", "minecraft:overworld", "cctest", "range", "max")
                 .getInt());
         assertEquals(
             "minecraft:stone",
-            root.node("dimensions", "0", "cctest", "nested", "block", "block")
+            root.node("dimensions", "minecraft:overworld", "cctest", "nested", "block", "block")
                 .getString());
         assertEquals(
             -50,
-            root.node("dimensions", "0", "cctest", "strata", 0, "full")
+            root.node("dimensions", "minecraft:overworld", "cctest", "strata", 0, "full")
                 .getInt());
     }
 
     @Test
     void readsHandWrittenFile() throws IOException {
-        write("dimensions { \"0\" { cctest { range { min = -10, max = unbounded } } } }");
+        write("dimensions { \"minecraft:overworld\" { cctest { range { min = -10, max = unbounded } } } }");
 
-        WorldgenConfig config = WorldgenConfig.load(worldDir, SOURCE);
+        WorldgenConfig config = WorldgenConfig.load(worldDir, SOURCE, names);
         assertEquals(
             new IntRange(-10, 1000),
             config.get(0)
@@ -136,9 +146,9 @@ class WorldgenConfigTest {
 
     @Test
     void roundsOutwardToAlignment() throws IOException {
-        write("dimensions { \"0\" { cctest { aligned { min = -70, max = 70 } } } }");
+        write("dimensions { \"minecraft:overworld\" { cctest { aligned { min = -70, max = 70 } } } }");
 
-        WorldgenConfig config = WorldgenConfig.load(worldDir, SOURCE);
+        WorldgenConfig config = WorldgenConfig.load(worldDir, SOURCE, names);
         WGDimensionConfig dim = config.get(0);
         assertEquals(new IntRange(-80, 80), dim.get(ALIGNED));
 
@@ -158,14 +168,14 @@ class WorldgenConfigTest {
             new Stratum(new BlockRef("minecraft:dirt", 0), 10, 20),
             new Stratum(new BlockRef("othermod:rock", 3), -100, -60));
 
-        WorldgenConfig config = new WorldgenConfig(SOURCE);
+        WorldgenConfig config = new WorldgenConfig(SOURCE, names);
         config.getOrCreate(0)
             .set(STRATA, strata);
         config.getOrCreate(1)
             .set(STRATA, Collections.emptyList());
         config.save(worldDir);
 
-        WorldgenConfig loaded = WorldgenConfig.load(worldDir, SOURCE);
+        WorldgenConfig loaded = WorldgenConfig.load(worldDir, SOURCE, names);
         assertEquals(
             strata,
             loaded.get(0)
@@ -180,11 +190,12 @@ class WorldgenConfigTest {
     @Test
     void readsHandWrittenStrataAndBlocks() throws IOException {
         write(
-            "dimensions { \"0\" { cctest {\n" + "  strata = [ { block = \"minecraft:sand\", full = 5, none = 9 } ]\n"
+            "dimensions { \"minecraft:overworld\" { cctest {\n"
+                + "  strata = [ { block = \"minecraft:sand\", full = 5, none = 9 } ]\n"
                 + "  nested { block { block = \"othermod:missing\" } }\n"
                 + "} } }");
 
-        WGDimensionConfig dim = WorldgenConfig.load(worldDir, SOURCE)
+        WGDimensionConfig dim = WorldgenConfig.load(worldDir, SOURCE, names)
             .get(0);
         assertEquals(Collections.singletonList(new Stratum(new BlockRef("minecraft:sand", 0), 5, 9)), dim.get(STRATA));
         // Unknown blocks load; whatever uses the setting decides what to do with them
@@ -193,25 +204,28 @@ class WorldgenConfigTest {
 
     @Test
     void badStrataFail() throws IOException {
-        write("dimensions { \"0\" { cctest { strata = [ { block = \"minecraft:sand\", full = 5 } ] } } }");
-        assertThrows(ConfigurateException.class, () -> WorldgenConfig.load(worldDir, SOURCE));
+        write(
+            "dimensions { \"minecraft:overworld\" { cctest { strata = [ { block = \"minecraft:sand\", full = 5 } ] } } }");
+        assertThrows(ConfigurateException.class, () -> WorldgenConfig.load(worldDir, SOURCE, names));
 
-        write("dimensions { \"0\" { cctest { nested { block { block = \"minecraft:wool\", meta = -1 } } } } }");
-        assertThrows(ConfigurateException.class, () -> WorldgenConfig.load(worldDir, SOURCE));
+        write(
+            "dimensions { \"minecraft:overworld\" { cctest { nested { block { block = \"minecraft:wool\", meta = -1 } } } } }");
+        assertThrows(ConfigurateException.class, () -> WorldgenConfig.load(worldDir, SOURCE, names));
     }
 
     @Test
     void extendedMetaLoads() throws IOException {
         // Metadata extenders allow more than 4 bits of block meta
-        write("dimensions { \"0\" { cctest { nested { block { block = \"minecraft:wool\", meta = 1000000 } } } } }");
-        WGDimensionConfig dim = WorldgenConfig.load(worldDir, SOURCE)
+        write(
+            "dimensions { \"minecraft:overworld\" { cctest { nested { block { block = \"minecraft:wool\", meta = 1000000 } } } } }");
+        WGDimensionConfig dim = WorldgenConfig.load(worldDir, SOURCE, names)
             .getOrCreate(0);
         assertEquals(new BlockRef("minecraft:wool", 1000000), dim.get(BLOCK));
     }
 
     @Test
     void unboundedIsTheLimit() throws IOException {
-        WorldgenConfig config = new WorldgenConfig(SOURCE);
+        WorldgenConfig config = new WorldgenConfig(SOURCE, names);
         WGDimensionConfig dim = config.getOrCreate(0);
         // Anything past the limits is clamped to them
         dim.set(RANGE, new IntRange(Integer.MIN_VALUE, 5000));
@@ -221,20 +235,20 @@ class WorldgenConfigTest {
         CommentedConfigurationNode root = readRaw();
         assertEquals(
             IntRangeSerializer.UNBOUNDED,
-            root.node("dimensions", "0", "cctest", "range", "min")
+            root.node("dimensions", "minecraft:overworld", "cctest", "range", "min")
                 .getString());
         assertEquals(
             IntRangeSerializer.UNBOUNDED,
-            root.node("dimensions", "0", "cctest", "range", "max")
+            root.node("dimensions", "minecraft:overworld", "cctest", "range", "max")
                 .getString());
     }
 
     @Test
     void autoBlockRoundTrip() throws IOException {
         write(
-            "dimensions { \"0\" { cctest { filler = auto } }, \"1\" { cctest { filler { block = \"minecraft:dirt\" } } } }");
+            "dimensions { \"minecraft:overworld\" { cctest { filler = auto } }, \"minecraft:the_end\" { cctest { filler { block = \"minecraft:dirt\" } } } }");
 
-        WorldgenConfig config = WorldgenConfig.load(worldDir, SOURCE);
+        WorldgenConfig config = WorldgenConfig.load(worldDir, SOURCE, names);
         assertNull(
             config.get(0)
                 .get(FILLER));
@@ -253,21 +267,22 @@ class WorldgenConfigTest {
         CommentedConfigurationNode root = readRaw();
         assertEquals(
             "minecraft:stone",
-            root.node("dimensions", "0", "cctest", "filler", "block")
+            root.node("dimensions", "minecraft:overworld", "cctest", "filler", "block")
                 .getString());
         assertEquals(
             BlockRefSerializer.AUTO,
-            root.node("dimensions", "1", "cctest", "filler")
+            root.node("dimensions", "minecraft:the_end", "cctest", "filler")
                 .getString());
     }
 
     @Test
     void dimensionsOnlyHaveGatheredItems() throws IOException {
         // Dimension 1 doesn't use RANGE, e.g. because its generator ignores it
-        WGConfigItemSource source = dimensionId -> dimensionId == 1 ? Collections.singletonList(BLOCK) : ITEMS;
-        write("dimensions { \"1\" { cctest { range { min = 1, max = 2 } } } }");
+        WGConfigItemSource source = (dimensionId, dimensionName) -> dimensionId == 1 ? Collections.singletonList(BLOCK)
+            : ITEMS;
+        write("dimensions { \"minecraft:the_end\" { cctest { range { min = 1, max = 2 } } } }");
 
-        WorldgenConfig config = WorldgenConfig.load(worldDir, source);
+        WorldgenConfig config = WorldgenConfig.load(worldDir, source, names);
         WGDimensionConfig dim = config.get(1);
         assertEquals(Collections.singletonList(BLOCK), dim.getItems());
         assertFalse(dim.hasItem(RANGE));
@@ -279,16 +294,16 @@ class WorldgenConfigTest {
         CommentedConfigurationNode root = readRaw();
         assertEquals(
             2,
-            root.node("dimensions", "1", "cctest", "range", "max")
+            root.node("dimensions", "minecraft:the_end", "cctest", "range", "max")
                 .getInt());
         assertTrue(
-            root.node("dimensions", "1", "cctest", "nested", "block", "block")
+            root.node("dimensions", "minecraft:the_end", "cctest", "nested", "block", "block")
                 .getString() != null);
     }
 
     @Test
     void gatherRejectsDuplicates() {
-        GatherWorldgenConfigEvent event = new GatherWorldgenConfigEvent(0);
+        GatherWorldgenConfigEvent event = new GatherWorldgenConfigEvent(0, null);
         event.add(RANGE);
         event.add(BLOCK);
         assertThrows(IllegalArgumentException.class, () -> event.add(RANGE));
@@ -297,9 +312,9 @@ class WorldgenConfigTest {
 
     @Test
     void preservesUnknownKeys() throws IOException {
-        write("dimensions { \"0\" { othermod { foo = 1 }, cctest { range { min = 1, max = 2 } } } }");
+        write("dimensions { \"minecraft:overworld\" { othermod { foo = 1 }, cctest { range { min = 1, max = 2 } } } }");
 
-        WorldgenConfig config = WorldgenConfig.load(worldDir, SOURCE);
+        WorldgenConfig config = WorldgenConfig.load(worldDir, SOURCE, names);
         config.get(0)
             .set(RANGE, new IntRange(3, 4));
         config.save(worldDir);
@@ -307,19 +322,21 @@ class WorldgenConfigTest {
         CommentedConfigurationNode root = readRaw();
         assertEquals(
             1,
-            root.node("dimensions", "0", "othermod", "foo")
+            root.node("dimensions", "minecraft:overworld", "othermod", "foo")
                 .getInt());
         assertEquals(
             4,
-            root.node("dimensions", "0", "cctest", "range", "max")
+            root.node("dimensions", "minecraft:overworld", "cctest", "range", "max")
                 .getInt());
     }
 
     @Test
     void outOfLimitsFailsWithPath() throws IOException {
-        write("dimensions { \"0\" { cctest { range { min = 5000, max = unbounded } } } }");
+        write("dimensions { \"minecraft:overworld\" { cctest { range { min = 5000, max = unbounded } } } }");
 
-        ConfigurateException e = assertThrows(ConfigurateException.class, () -> WorldgenConfig.load(worldDir, SOURCE));
+        ConfigurateException e = assertThrows(
+            ConfigurateException.class,
+            () -> WorldgenConfig.load(worldDir, SOURCE, names));
         assertTrue(
             e.getMessage()
                 .contains("min"),
@@ -328,23 +345,136 @@ class WorldgenConfigTest {
 
     @Test
     void minAboveMaxFails() throws IOException {
-        write("dimensions { \"0\" { cctest { range { min = 10, max = 5 } } } }");
+        write("dimensions { \"minecraft:overworld\" { cctest { range { min = 10, max = 5 } } } }");
 
-        assertThrows(ConfigurateException.class, () -> WorldgenConfig.load(worldDir, SOURCE));
+        assertThrows(ConfigurateException.class, () -> WorldgenConfig.load(worldDir, SOURCE, names));
     }
 
     @Test
-    void badDimensionKeyFails() throws IOException {
-        write("dimensions { overworld { } }");
+    void savedUnderName() throws IOException {
+        WorldgenConfig config = new WorldgenConfig(SOURCE, names);
+        config.getOrCreate(-1)
+            .set(RANGE, new IntRange(1, 2));
+        config.save(worldDir);
 
-        assertThrows(ConfigurateException.class, () -> WorldgenConfig.load(worldDir, SOURCE));
+        CommentedConfigurationNode root = readRaw();
+        assertEquals(
+            2,
+            root.node("dimensions", "minecraft:the_nether", "cctest", "range", "max")
+                .getInt());
+
+        WorldgenConfig loaded = WorldgenConfig.load(worldDir, SOURCE, names);
+        assertEquals(
+            new IntRange(1, 2),
+            loaded.get(-1)
+                .get(RANGE));
+    }
+
+    @Test
+    void unnamedDimensionsAreNotSaved() throws IOException {
+        WorldgenConfig config = new WorldgenConfig(SOURCE, names);
+        WGDimensionConfig dim = config.getOrCreate(5);
+        // They still have settings while the game runs
+        dim.set(RANGE, new IntRange(1, 2));
+        assertEquals(new IntRange(1, 2), dim.get(RANGE));
+        config.save(worldDir);
+
+        assertTrue(
+            readRaw().node("dimensions")
+                .childrenMap()
+                .isEmpty());
+    }
+
+    @Test
+    void shortNamesFail() throws IOException {
+        // Would be saved under minecraft:the_nether, leaving this key behind
+        write("dimensions { the_nether { } }");
+
+        assertThrows(ConfigurateException.class, () -> WorldgenConfig.load(worldDir, SOURCE, names));
+    }
+
+    @Test
+    void nameFollowsItsDimensionToANewId() throws IOException {
+        write("dimensions { \"othermod:moon\" { cctest { range { min = 1, max = 2 } } } }");
+        // e.g. the modpack moved the dimension from id 7 to id 20
+        names.register(20, new ResourceLocation("othermod", "moon"), null);
+
+        WorldgenConfig config = WorldgenConfig.load(worldDir, SOURCE, names);
+        assertEquals(Collections.singleton(20), config.getDimensionIds());
+        assertEquals(
+            new IntRange(1, 2),
+            config.get(20)
+                .get(RANGE));
+    }
+
+    @Test
+    void unregisteredNamesAreKept() throws IOException {
+        write(
+            "dimensions { \"othermod:gone\" { cctest { range { min = 1, max = 2 } } }, \"minecraft:overworld\" { } }");
+
+        WorldgenConfig config = WorldgenConfig.load(worldDir, SOURCE, names);
+        assertEquals(Collections.singleton(0), config.getDimensionIds());
+        config.save(worldDir);
+
+        assertEquals(
+            2,
+            readRaw().node("dimensions", "othermod:gone", "cctest", "range", "max")
+                .getInt());
+    }
+
+    @Test
+    void sourceGetsDimensionName() {
+        names.register(-1, DimensionNames.THE_NETHER, null);
+        List<ResourceLocation> gathered = new ArrayList<>();
+        WGConfigItemSource source = (dimensionId, dimensionName) -> {
+            gathered.add(dimensionName);
+            return ITEMS;
+        };
+
+        WorldgenConfig config = new WorldgenConfig(source, names);
+        assertEquals(DimensionNames.THE_NETHER, config.getOrCreate(-1).dimensionName);
+        assertNull(config.getOrCreate(5).dimensionName);
+        assertEquals(Arrays.asList(DimensionNames.THE_NETHER, null), gathered);
+    }
+
+    @Test
+    void reregisteringReplacesDisplayName() {
+        ResourceLocation station = new ResourceLocation("othermod", "space_station_12");
+        names.register(12, station, new ChatComponentText("Space Station 12"));
+        names.register(12, station, new ChatComponentText("Home"));
+        assertEquals(
+            "Home",
+            names.getDisplayName(12)
+                .getUnformattedText());
+
+        // Callers get a copy, so they can't change the registered name
+        names.getDisplayName(12)
+            .appendText("!");
+        assertEquals(
+            "Home",
+            names.getDisplayName(12)
+                .getUnformattedText());
+
+        names.register(12, station, null);
+        assertNull(names.getDisplayName(12));
+    }
+
+    @Test
+    void conflictingDimensionNamesFail() {
+        names.register(-1, DimensionNames.THE_NETHER, null);
+        // Registering the same pair again is fine
+        names.register(-1, DimensionNames.THE_NETHER, null);
+        assertThrows(IllegalArgumentException.class, () -> names.register(-1, DimensionNames.THE_END, null));
+        assertThrows(IllegalArgumentException.class, () -> names.register(7, DimensionNames.THE_NETHER, null));
+        assertEquals(Integer.valueOf(-1), names.getId(DimensionNames.THE_NETHER));
+        assertNull(names.getName(7));
     }
 
     @Test
     void newerVersionFails() throws IOException {
         write("version = " + (WorldgenConfig.VERSION + 1));
 
-        assertThrows(ConfigurateException.class, () -> WorldgenConfig.load(worldDir, SOURCE));
+        assertThrows(ConfigurateException.class, () -> WorldgenConfig.load(worldDir, SOURCE, names));
     }
 
     private void write(String contents) throws IOException {
