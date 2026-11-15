@@ -33,10 +33,17 @@ public class NetworkChannel extends MessageToMessageCodec<FMLProxyPacket, CCPack
     private final EnumMap<Side, FMLEmbeddedChannel> channel;
     private final CCPacketEncoder<CCPacket>[] encoders;
 
+    /**
+     * The version of what this channel sends; part of the channel name, so that client and server with different
+     * versions never read each other's packets ({@link ProtocolCheck}).
+     */
+    public static final int PROTOCOL_VERSION = 2;
+
     public static final NetworkChannel CHANNEL = new NetworkChannel();
 
     public NetworkChannel() {
-        this.channel = NetworkRegistry.INSTANCE.newChannel(CubicChunks.MODID + "1", this, new HandlerShared());
+        this.channel = NetworkRegistry.INSTANCE
+            .newChannel(CubicChunks.MODID + PROTOCOL_VERSION, this, new HandlerShared());
 
         CCPacketEncoder<?>[] packetTypes = Arrays.stream(CCPacketEntry.values())
             .map(e -> e.encoder)
@@ -63,6 +70,7 @@ public class NetworkChannel extends MessageToMessageCodec<FMLProxyPacket, CCPack
 
     public static void init() {
         // forces this class to be loaded
+        ProtocolCheck.init();
     }
 
     @Override

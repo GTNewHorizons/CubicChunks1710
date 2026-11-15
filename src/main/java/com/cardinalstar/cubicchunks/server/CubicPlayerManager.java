@@ -23,8 +23,10 @@ package com.cardinalstar.cubicchunks.server;
 import static com.cardinalstar.cubicchunks.util.Coords.blockToCube;
 import static net.minecraft.util.MathHelper.clamp_int;
 
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import javax.annotation.ParametersAreNonnullByDefault;
 
@@ -43,6 +45,7 @@ import com.cardinalstar.cubicchunks.api.util.Box;
 import com.cardinalstar.cubicchunks.entity.ICubicEntityTracker;
 import com.cardinalstar.cubicchunks.mixin.api.ICubicWorldInternal;
 import com.cardinalstar.cubicchunks.mixin.api.ICubicWorldInternal.Server;
+import com.cardinalstar.cubicchunks.network.ProtocolCheck;
 import com.cardinalstar.cubicchunks.server.CubeProviderServer.EagerCubeLoadRequest;
 import com.cardinalstar.cubicchunks.server.chunkio.CubeInitLevel;
 import com.cardinalstar.cubicchunks.server.chunkio.CubeLoaderCallback;
@@ -115,6 +118,11 @@ public class CubicPlayerManager extends PlayerManager implements CubeLoaderCallb
         getWorldServer().theProfiler.endStartSection("playerCubeMapUpdatePlayerInstances");
 
         getWorldServer().theProfiler.startSection("addPendingPlayers");
+
+        ProtocolCheck.serverTick(
+            Arrays.stream(players.getPlayerArray())
+                .map(p -> p.player)
+                .collect(Collectors.toList()));
 
         for (EntityPlayerMP player : pendingPlayerAddToCubeMap) {
             if (player.addedToChunk) {
@@ -308,6 +316,8 @@ public class CubicPlayerManager extends PlayerManager implements CubeLoaderCallb
         watchingPlayer.updateManagedPos();
 
         this.players.addPlayer(watchingPlayer);
+
+        ProtocolCheck.onCubicJoin(player);
 
         EllipsoidalCubeSelector.INSTANCE.forAllVisibleCubes(
             watchingPlayer.getManagedCubePos(),

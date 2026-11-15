@@ -10,6 +10,7 @@ public enum CCPacketEntry {
     HeightMapUpdate(new PacketEncoderHeightMapUpdate()),
     CubeSkyLightUpdates(new PacketEncoderCubeSkyLightUpdates()),
     WorldHeight(new PacketEncoderWorldHeight()),
+    ProtocolHello(new PacketEncoderProtocolHello()),
     //
     ;
 
