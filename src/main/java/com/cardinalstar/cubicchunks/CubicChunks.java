@@ -68,6 +68,7 @@ import cpw.mods.fml.common.event.FMLServerStoppedEvent;
 import cpw.mods.fml.common.network.NetworkCheckHandler;
 import cpw.mods.fml.common.network.NetworkRegistry;
 import cpw.mods.fml.common.network.internal.NetworkModHolder;
+import cpw.mods.fml.common.registry.GameRegistry.UniqueIdentifier;
 import cpw.mods.fml.common.versioning.ArtifactVersion;
 import cpw.mods.fml.common.versioning.DefaultArtifactVersion;
 import cpw.mods.fml.common.versioning.InvalidVersionSpecificationException;
@@ -120,7 +121,7 @@ public class CubicChunks {
     public void preInit(FMLPreInitializationEvent e) {
         LOGGER = e.getModLog();
 
-        registerAnvil3dStorageFormatProvider();
+        registerStorageFormatProviders();
         VanillaCubicWorldType.init();
 
         LOGGER.debug("Registered world types");
@@ -209,8 +210,9 @@ public class CubicChunks {
         StartupRegionCompaction.finish();
     }
 
-    public static void registerAnvil3dStorageFormatProvider() {
-        StorageFormatFactory.REGISTRY.register(StorageFormatFactory.DEFAULT, new DefaultStorageFormatFactory());
+    public static void registerStorageFormatProviders() {
+        StorageFormatFactory.REGISTRY
+            .register(StorageFormatFactory.BUNDLES, new DefaultStorageFormatFactory(StorageFormatFactory.BUNDLES));
     }
 
     @NetworkCheckHandler
@@ -289,9 +291,9 @@ public class CubicChunks {
 
     private static class DefaultStorageFormatFactory extends StorageFormatFactory {
 
-        public DefaultStorageFormatFactory() {
-            setRegistryName(StorageFormatFactory.DEFAULT);
-            setUnlocalizedName("cubicchunks.gui.storagefmt.anvil3d");
+        public DefaultStorageFormatFactory(UniqueIdentifier format) {
+            setRegistryName(format);
+            setUnlocalizedName("cubicchunks.gui.storagefmt.bundles");
         }
 
         @Override

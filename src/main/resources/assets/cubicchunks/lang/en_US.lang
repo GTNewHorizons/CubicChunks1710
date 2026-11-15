@@ -10,6 +10,7 @@ cubicchunks.gui.worldmenu.cc_default=CubicChunks: Default
 #################################
 
 cubicchunks.gui.vertical_cube_load_distance=Vertical Distance: %d cubes
+cubicchunks.gui.storagefmt.bundles=Anvil3D with 2x2x2 cube bundles
 cubicchunks.config.chunk_compression=Chunk and cube compression
 cubicchunks.config.compact_regions_on_world_load=Compact region files at server startup
 
@@ -32,6 +33,7 @@ cubicchunks.config.enable_chunk_debugging=Enable Chunk Status Debugging
 cubicchunks.config.optimizations=Optimizations
 cubicchunks.config.optimizations.background_threads=Background Threads
 cubicchunks.config.optimizations.save_cache_megabytes=Save Cache Size (MiB)
+cubicchunks.config.optimizations.bundle_write_wait_seconds=Bundle Write Wait (seconds)
 
 generator.VanillaCubic=Vanilla + Cubic
 
