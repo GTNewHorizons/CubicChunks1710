@@ -1110,6 +1110,9 @@ public class RegionCubeStorage implements ICubicStorage, RecordingCubeStorage {
         return ys;
     }
 
+    // RegionLib's fallback (.ext) region provider lists every slot of a region file that has no .ext file, so only
+    // keys with an entry are reported
+
     @Override
     public void forEachColumn(Consumer<ChunkCoordIntPair> callback) throws IOException {
         Lock lock = open();
@@ -1124,8 +1127,11 @@ public class RegionCubeStorage implements ICubicStorage, RecordingCubeStorage {
     }
 
     private void listColumns(Consumer<ChunkCoordIntPair> callback) throws IOException {
-        this.save.getSaveSection2D()
-            .forAllKeys(pos -> callback.accept(new ChunkCoordIntPair(pos.getEntryX(), pos.getEntryZ())));
+        SaveSection2D section = this.save.getSaveSection2D();
+        section.forAllKeys(
+            pos -> {
+                if (section.hasEntry(pos)) callback.accept(new ChunkCoordIntPair(pos.getEntryX(), pos.getEntryZ()));
+            });
     }
 
     @Override
@@ -1134,8 +1140,12 @@ public class RegionCubeStorage implements ICubicStorage, RecordingCubeStorage {
         try {
             // a stable view: no record changes while listing
             synchronized (writeLock) {
-                this.save.getSaveSection3D()
-                    .forAllKeys(pos -> callback.accept(new CubePos(pos.getEntryX(), pos.getEntryY(), pos.getEntryZ())));
+                SaveSection3D section = this.save.getSaveSection3D();
+                section.forAllKeys(
+                    pos -> {
+                        if (section.hasEntry(pos))
+                            callback.accept(new CubePos(pos.getEntryX(), pos.getEntryY(), pos.getEntryZ()));
+                    });
                 // and the empty cubes stored as states, unless a full record wins over a stale state
                 List<ChunkCoordIntPair> columns = new ArrayList<>();
                 listColumns(columns::add);
