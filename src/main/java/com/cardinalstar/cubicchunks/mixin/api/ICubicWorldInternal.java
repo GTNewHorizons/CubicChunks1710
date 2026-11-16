@@ -26,6 +26,8 @@ import net.minecraft.block.Block;
 import net.minecraft.world.World;
 import net.minecraft.world.chunk.Chunk;
 
+import org.jetbrains.annotations.Nullable;
+
 import com.cardinalstar.cubicchunks.api.IColumn;
 import com.cardinalstar.cubicchunks.api.ICube;
 import com.cardinalstar.cubicchunks.api.ICubicWorldServer;
@@ -33,6 +35,7 @@ import com.cardinalstar.cubicchunks.api.IntRange;
 import com.cardinalstar.cubicchunks.api.XYZMap;
 import com.cardinalstar.cubicchunks.api.XZMap;
 import com.cardinalstar.cubicchunks.api.util.NotCubicChunksWorldException;
+import com.cardinalstar.cubicchunks.api.worldgen.IWorldGeneratorType;
 import com.cardinalstar.cubicchunks.client.CubeProviderClient;
 import com.cardinalstar.cubicchunks.lighting.ILightingManager;
 import com.cardinalstar.cubicchunks.server.CubeProviderServer;
@@ -115,6 +118,12 @@ public interface ICubicWorldInternal extends ICubicWorld {
         SpawnCubes getSpawnArea();
 
         void setSpawnArea(SpawnCubes spawn);
+
+        /** The generator selected for this world's dimension, or null before the world initializes. */
+        @Nullable
+        IWorldGeneratorType getWorldGeneratorType();
+
+        void setWorldGeneratorType(IWorldGeneratorType type);
     }
 
     interface Client extends ICubicWorldInternal {
