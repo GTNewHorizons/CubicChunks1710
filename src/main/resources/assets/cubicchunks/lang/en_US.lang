@@ -37,6 +37,10 @@ generator.VanillaCubic=Vanilla + Cubic
 ###     worldgen settings     ###
 #################################
 
+cubicchunks.dimension.overworld=Overworld
+cubicchunks.dimension.the_nether=The Nether
+cubicchunks.dimension.the_end=The End
+
 cubicchunks.wgconfig.create_world_button=Cubic Chunks Worldgen...
 cubicchunks.wgconfig.list_title=Cubic Chunks World Generation
 cubicchunks.wgconfig.title=Cubic Chunks World Generation

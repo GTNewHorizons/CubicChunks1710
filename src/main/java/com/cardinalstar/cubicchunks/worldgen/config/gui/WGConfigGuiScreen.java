@@ -30,7 +30,7 @@ public class WGConfigGuiScreen extends GuiConfig {
             false,
             false,
             I18n.format("cubicchunks.wgconfig.title"),
-            I18n.format("cubicchunks.wgconfig.dim_subtitle", dim.dimensionId));
+            WGDimensionListScreen.dimensionLabel(dim.dimensionId));
     }
 
     @SuppressWarnings({ "rawtypes", "unchecked" })

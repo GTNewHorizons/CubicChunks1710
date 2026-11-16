@@ -1,8 +1,10 @@
 package com.cardinalstar.cubicchunks.worldgen.config;
 
-import java.util.function.IntFunction;
+import java.util.function.Function;
 
 import net.minecraft.util.ResourceLocation;
+
+import org.jetbrains.annotations.Nullable;
 
 public interface WGConfigItem<T> {
 
@@ -16,15 +18,20 @@ public interface WGConfigItem<T> {
                 .replace('/', '.');
     }
 
-    T getDefaultValue(int dimensionId);
+    /**
+     * @param dimensionName null for dimensions without a name. Ids aren't passed: they can change between modpacks,
+     *                      and a mod that wants a default for its own dimension can name it.
+     */
+    T getDefaultValue(@Nullable ResourceLocation dimensionName);
 
     WGConfigItemType<T> getConfigItemType();
 
     static <T> WGConfigItem<T> of(ResourceLocation id, T defaultValue, WGConfigItemType<T> type) {
-        return perDimension(id, dimensionId -> defaultValue, type);
+        return perDimension(id, dimensionName -> defaultValue, type);
     }
 
-    static <T> WGConfigItem<T> perDimension(ResourceLocation id, IntFunction<T> defaultValue,
+    /** {@code defaultValue} gets the dimension's name, or null if it has none. */
+    static <T> WGConfigItem<T> perDimension(ResourceLocation id, Function<ResourceLocation, T> defaultValue,
         WGConfigItemType<T> type) {
         return new WGConfigItem<T>() {
 
@@ -34,8 +41,8 @@ public interface WGConfigItem<T> {
             }
 
             @Override
-            public T getDefaultValue(int dimensionId) {
-                return defaultValue.apply(dimensionId);
+            public T getDefaultValue(@Nullable ResourceLocation dimensionName) {
+                return defaultValue.apply(dimensionName);
             }
 
             @Override

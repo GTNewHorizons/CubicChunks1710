@@ -8,9 +8,12 @@ import java.util.TreeSet;
 
 import net.minecraft.client.gui.GuiScreen;
 import net.minecraft.client.resources.I18n;
+import net.minecraft.util.IChatComponent;
+import net.minecraft.util.ResourceLocation;
 import net.minecraftforge.common.DimensionManager;
 
 import com.cardinalstar.cubicchunks.CubicChunks;
+import com.cardinalstar.cubicchunks.api.DimensionNames;
 import com.cardinalstar.cubicchunks.worldgen.config.WorldgenConfig;
 
 import cpw.mods.fml.client.config.DummyConfigElement.DummyCategoryElement;
@@ -40,9 +43,11 @@ public class WGDimensionListScreen extends GuiConfig {
 
     @SuppressWarnings("rawtypes")
     private static List<IConfigElement> buildDimensionElements(WorldgenConfig config) {
-        // Registered dimensions, plus any the file has settings for (e.g. from a mod that isn't installed)
+        // Registered dimensions, plus any the file has settings for. Settings of dimensions without a name aren't
+        // saved.
         Set<Integer> ids = new TreeSet<>(Arrays.asList(DimensionManager.getStaticDimensionIDs()));
         ids.addAll(config.getDimensionIds());
+        ids.removeIf(id -> DimensionNames.INSTANCE.getName(id) == null);
 
         List<IConfigElement> out = new ArrayList<>(ids.size());
         for (int id : ids) {
@@ -51,15 +56,30 @@ public class WGDimensionListScreen extends GuiConfig {
         return out;
     }
 
-    private static String dimensionLabel(int id) {
+    /** The dimension's display name, registry name and id, as far as they're known. */
+    static String dimensionLabel(int id) {
+        ResourceLocation name = DimensionNames.INSTANCE.getName(id);
+        String displayName = displayName(id);
+        if (displayName != null && name != null) return String.format("%s (%s, dim %d)", displayName, name, id);
+        if (displayName != null) return String.format("%s (dim %d)", displayName, id);
+        if (name != null) return String.format("%s (dim %d)", name, id);
+        return I18n.format("cubicchunks.wgconfig.dim_subtitle", id);
+    }
+
+    /**
+     * From the name registered with {@link DimensionNames}, or else the dimension's provider. Null if neither has one.
+     */
+    private static String displayName(int id) {
+        IChatComponent registered = DimensionNames.INSTANCE.getDisplayName(id);
+        if (registered != null) return registered.getFormattedText();
         try {
             String name = DimensionManager.createProviderFor(id)
                 .getDimensionName();
-            if (name != null && !name.isEmpty()) return String.format("%s (dim %d)", name, id);
+            if (name != null && !name.isEmpty()) return name;
         } catch (Exception ignored) {
             // not registered, or the provider can't be created outside a world
         }
-        return String.format("Dimension %d", id);
+        return null;
     }
 
     @SuppressWarnings("rawtypes")

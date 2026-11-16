@@ -1,17 +1,22 @@
 package com.cardinalstar.cubicchunks.world;
 
+import java.io.File;
+
 import net.minecraft.block.Block;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.world.World;
 import net.minecraft.world.WorldSavedData;
+import net.minecraft.world.WorldServer;
 
+import com.cardinalstar.cubicchunks.CubicChunks;
 import com.cardinalstar.cubicchunks.worldgen.config.BlockRef;
 import com.cardinalstar.cubicchunks.worldgen.config.ServerWorldgenConfig;
 
 /**
  * Per-dimension world data from before worldgen settings existed: the height range and the vanilla generator's
  * filler blocks. Only read, to seed a dimension's settings the first time they're created (see
- * {@link ServerWorldgenConfig}). It's left on disk unchanged.
+ * {@link ServerWorldgenConfig}). Once they're saved, the file is renamed so it isn't copied again, e.g. if the
+ * settings file is deleted, and kept as a backup.
  */
 public class CubicChunksSavedData extends WorldSavedData {
 
@@ -28,6 +33,18 @@ public class CubicChunksSavedData extends WorldSavedData {
     /** The world's saved data, or null if it has none (the world was created after it was replaced). */
     public static CubicChunksSavedData load(World world) {
         return (CubicChunksSavedData) world.perWorldStorage.loadData(CubicChunksSavedData.class, NAME);
+    }
+
+    /**
+     * Renames the world's data file to {@code cubicChunksData.dat.migrated}, so {@link #load} doesn't find it again.
+     * Logs a warning if that fails.
+     */
+    public static void markMigrated(World world) {
+        File file = new File(((WorldServer) world).getChunkSaveLocation(), "data/" + NAME + ".dat");
+        File migrated = new File(file.getPath() + ".migrated");
+        if (!file.renameTo(migrated)) {
+            CubicChunks.LOGGER.warn("Could not rename {} to {}", file, migrated);
+        }
     }
 
     @Override
