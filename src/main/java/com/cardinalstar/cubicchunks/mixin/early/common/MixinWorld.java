@@ -159,6 +159,8 @@ public abstract class MixinWorld implements ICubicWorldInternal {
     private int minGenerationHeight = 0, maxGenerationHeight = 256;
     // @Shadow public abstract boolean isValid(BlockPos pos);
 
+    private boolean cc$removeNetherBedrock, cc$removeFloorBedrock;
+
     @Shadow
     public abstract GameRules getGameRules();
 
@@ -589,5 +591,25 @@ public abstract class MixinWorld implements ICubicWorldInternal {
         if (!this.chunkExists(coord.chunkXPos, coord.chunkZPos)) return false;
 
         return instance.add(coord);
+    }
+
+    @Override
+    public boolean cc$getRemoveNetherBedrock() {
+        return cc$removeNetherBedrock;
+    }
+
+    @Override
+    public void cc$setRemoveNetherBedrock(boolean cc$removeNetherBedrock) {
+        this.cc$removeNetherBedrock = cc$removeNetherBedrock;
+    }
+
+    @Override
+    public boolean cc$getRemoveFloorBedrock() {
+        return cc$removeFloorBedrock;
+    }
+
+    @Override
+    public void cc$setRemoveFloorBedrock(boolean cc$removeFloorBedrock) {
+        this.cc$removeFloorBedrock = cc$removeFloorBedrock;
     }
 }

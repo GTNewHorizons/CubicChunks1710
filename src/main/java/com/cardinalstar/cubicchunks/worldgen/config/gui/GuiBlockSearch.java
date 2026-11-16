@@ -34,16 +34,19 @@ public class GuiBlockSearch extends GuiScreen {
 
     private final GuiScreen parentScreen;
     private final Consumer<BlockRef> onSelect;
+    private final boolean showAuto;
 
     private BlockRef selected;
     private GuiTextField searchField;
     private BlockList blockList;
     private GuiButtonExt btnDone;
 
-    public GuiBlockSearch(GuiScreen parentScreen, BlockRef currentValue, Consumer<BlockRef> onSelect) {
+    public GuiBlockSearch(GuiScreen parentScreen, BlockRef currentValue, Consumer<BlockRef> onSelect,
+        boolean showAuto) {
         this.parentScreen = parentScreen;
         this.selected = currentValue;
         this.onSelect = onSelect;
+        this.showAuto = showAuto;
     }
 
     @Override
@@ -54,7 +57,7 @@ public class GuiBlockSearch extends GuiScreen {
         searchField.setText(query);
         searchField.setFocused(true);
 
-        blockList = new BlockList(mc, width, height, 46, height - 36, 20);
+        blockList = new BlockList(mc, width, height, 46, height - 36, 20, showAuto);
         blockList.refreshFilter(query);
 
         btnDone = new GuiButtonExt(0, width / 2 - 154, height - 28, 150, 20, I18n.format("gui.done"));
@@ -128,10 +131,12 @@ public class GuiBlockSearch extends GuiScreen {
     private class BlockList extends GuiListExtended {
 
         private final List<BlockRow> rows = new ArrayList<>();
+        private final boolean showAuto;
         private long lastClickTime;
 
-        BlockList(Minecraft mc, int width, int height, int top, int bottom, int slotHeight) {
+        BlockList(Minecraft mc, int width, int height, int top, int bottom, int slotHeight, boolean showAuto) {
             super(mc, width, height, top, bottom, slotHeight);
+            this.showAuto = showAuto;
         }
 
         void refreshFilter(String query) {
@@ -139,6 +144,8 @@ public class GuiBlockSearch extends GuiScreen {
             String q = query.toLowerCase()
                 .trim();
             for (Variant variant : BlockVariants.all()) {
+                if (variant.ref == BlockVariants.AUTO && !showAuto) continue;
+
                 if (q.isEmpty() || variant.matches(q)) rows.add(new BlockRow(variant));
             }
         }

@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
+import org.spongepowered.configurate.serialize.Scalars;
 import org.spongepowered.configurate.serialize.TypeSerializer;
 import org.spongepowered.configurate.serialize.TypeSerializerCollection;
 
@@ -11,6 +12,8 @@ import com.cardinalstar.cubicchunks.api.IntRange;
 import com.cardinalstar.cubicchunks.worldgen.config.gui.element.BlockConfigElement;
 import com.cardinalstar.cubicchunks.worldgen.config.gui.element.IntRangeConfigElement;
 import com.cardinalstar.cubicchunks.worldgen.config.gui.element.StrataConfigElement;
+import com.cardinalstar.cubicchunks.worldgen.config.gui.element.ToggleConfigElement;
+import com.cardinalstar.cubicchunks.worldgen.config.gui.element.ToggleType;
 import com.cardinalstar.cubicchunks.worldgen.config.gui.element.WGListConfigElement;
 
 import cpw.mods.fml.client.config.ConfigGuiType;
@@ -73,7 +76,7 @@ public final class WGConfigItemTypes {
 
     private static WGConfigItemType<BlockRef> block(boolean allowAuto) {
         TypeSerializer<BlockRef> serializer = new BlockRefSerializer(allowAuto);
-        return new WGConfigItemType<BlockRef>() {
+        return new WGConfigItemType<>() {
 
             @Override
             public Class<BlockRef> getType() {
@@ -88,7 +91,28 @@ public final class WGConfigItemTypes {
             @Override
             @SideOnly(Side.CLIENT)
             public IConfigElement<?> createConfigElement(WGConfigItem<BlockRef> item, WGDimensionConfig sandbox) {
-                return new BlockConfigElement(item, sandbox);
+                return new BlockConfigElement(item, sandbox, allowAuto);
+            }
+        };
+    }
+
+    public static WGConfigItemType<Boolean> toggle(ToggleType booleanType) {
+        return new WGConfigItemType<>() {
+
+            @Override
+            public Class<Boolean> getType() {
+                return Boolean.class;
+            }
+
+            @Override
+            public TypeSerializer<Boolean> getSerializer() {
+                return Scalars.BOOLEAN;
+            }
+
+            @Override
+            @SideOnly(Side.CLIENT)
+            public IConfigElement<?> createConfigElement(WGConfigItem<Boolean> item, WGDimensionConfig sandbox) {
+                return new ToggleConfigElement(item, sandbox, booleanType);
             }
         };
     }

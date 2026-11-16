@@ -38,6 +38,8 @@ import cpw.mods.fml.relauncher.SideOnly;
 @SideOnly(Side.CLIENT)
 public final class BlockVariants {
 
+    public static final BlockRef AUTO = new BlockRef(null, 0);
+
     public static final class Variant {
 
         public final BlockRef ref;
@@ -81,7 +83,7 @@ public final class BlockVariants {
 
     /** The variant's display name, or the raw id (marked if the block doesn't exist). Null is "auto-detect". */
     public static String label(BlockRef ref) {
-        if (ref == null) return I18n.format("cubicchunks.wgconfig.block.auto");
+        if (ref == null || ref == AUTO) return I18n.format("cubicchunks.wgconfig.block.auto");
         Variant variant = find(ref);
         if (variant != null) return variant.name;
         if (ref.resolve() == null) {
@@ -112,6 +114,9 @@ public final class BlockVariants {
     private static void build() {
         Map<BlockRef, Variant> found = new LinkedHashMap<>();
 
+        Variant autoVariant = new Variant(AUTO, null, I18n.format("cubicchunks.wgconfig.block.auto"));
+        found.put(AUTO, autoVariant);
+
         for (Object obj : Item.itemRegistry) {
             if (!(obj instanceof ItemBlock)) continue;
             ItemBlock item = (ItemBlock) obj;
@@ -137,9 +142,17 @@ public final class BlockVariants {
         }
 
         List<Variant> sorted = new ArrayList<>(found.values());
+
+        // don't sort AUTO because its BlockRef is null
+        sorted.remove(0);
+
         sorted.sort(
             Comparator.comparing((Variant v) -> v.ref.id)
                 .thenComparingInt(v -> v.ref.meta));
+
+        // put AUTO at the top of the list
+        sorted.add(0, autoVariant);
+
         variants = Collections.unmodifiableList(sorted);
         byRef = new HashMap<>(found);
     }

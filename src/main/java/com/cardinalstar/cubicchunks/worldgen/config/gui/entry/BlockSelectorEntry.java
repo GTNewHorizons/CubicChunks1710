@@ -7,6 +7,7 @@ import net.minecraft.client.renderer.Tessellator;
 import com.cardinalstar.cubicchunks.worldgen.config.BlockRef;
 import com.cardinalstar.cubicchunks.worldgen.config.gui.BlockVariants;
 import com.cardinalstar.cubicchunks.worldgen.config.gui.GuiBlockSearch;
+import com.cardinalstar.cubicchunks.worldgen.config.gui.element.BlockConfigElement;
 import com.cardinalstar.cubicchunks.worldgen.config.gui.element.WGConfigElement;
 
 import cpw.mods.fml.client.config.GuiConfig;
@@ -27,6 +28,7 @@ public class BlockSelectorEntry extends ButtonEntry {
     private final WGConfigElement<BlockRef> element;
     private final BlockRef beforeValue;
     private BlockRef currentValue;
+    private final boolean showAuto;
 
     @SuppressWarnings({ "rawtypes", "unchecked" })
     public BlockSelectorEntry(GuiConfig owningScreen, GuiConfigEntries owningEntryList, IConfigElement configElement) {
@@ -34,6 +36,8 @@ public class BlockSelectorEntry extends ButtonEntry {
         this.element = (WGConfigElement<BlockRef>) configElement;
         this.beforeValue = element.getValue();
         this.currentValue = beforeValue;
+        this.showAuto = configElement instanceof BlockConfigElement blockConfigElement
+            && blockConfigElement.getShowAuto();
         updateValueButtonText();
     }
 
@@ -44,7 +48,7 @@ public class BlockSelectorEntry extends ButtonEntry {
 
     @Override
     public void valueButtonPressed(int slotIndex) {
-        mc.displayGuiScreen(new GuiBlockSearch(owningScreen, currentValue, this::setBlockFromSearch));
+        mc.displayGuiScreen(new GuiBlockSearch(owningScreen, currentValue, this::setBlockFromSearch, showAuto));
     }
 
     private void setBlockFromSearch(BlockRef block) {
