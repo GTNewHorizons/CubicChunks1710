@@ -41,7 +41,6 @@ import net.minecraft.world.SpawnerAnimals;
 import net.minecraft.world.World;
 import net.minecraft.world.WorldProvider;
 import net.minecraft.world.WorldServer;
-import net.minecraft.world.WorldType;
 import net.minecraft.world.chunk.Chunk;
 import net.minecraft.world.chunk.IChunkProvider;
 import net.minecraft.world.chunk.storage.ExtendedBlockStorage;
@@ -66,10 +65,8 @@ import com.cardinalstar.cubicchunks.api.ICube;
 import com.cardinalstar.cubicchunks.api.ICubicWorldServer;
 import com.cardinalstar.cubicchunks.api.XYZMap;
 import com.cardinalstar.cubicchunks.api.XZMap;
-import com.cardinalstar.cubicchunks.api.world.ICubicWorldProvider;
-import com.cardinalstar.cubicchunks.api.world.ICubicWorldType;
-import com.cardinalstar.cubicchunks.api.worldgen.BuiltinWorldDecorators;
 import com.cardinalstar.cubicchunks.api.worldgen.IWorldGenerator;
+import com.cardinalstar.cubicchunks.api.worldgen.IWorldGeneratorType;
 import com.cardinalstar.cubicchunks.mixin.api.ICubicWorldInternal;
 import com.cardinalstar.cubicchunks.server.CubeProviderServer;
 import com.cardinalstar.cubicchunks.server.CubicPlayerManager;
@@ -81,7 +78,7 @@ import com.cardinalstar.cubicchunks.world.ISpawnerAnimals;
 import com.cardinalstar.cubicchunks.world.chunkloader.CubicChunkManager;
 import com.cardinalstar.cubicchunks.world.cube.ICubeProvider;
 import com.cardinalstar.cubicchunks.world.savedata.WorldFormatSavedData;
-import com.cardinalstar.cubicchunks.worldgen.VanillaWorldGenerator;
+import com.cardinalstar.cubicchunks.worldgen.config.ServerWorldgenConfig;
 import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
@@ -110,6 +107,8 @@ public abstract class MixinWorldServer extends MixinWorld implements ICubicWorld
     private SpawnCubes cc$spawnArea;
     @Unique
     private final CubeSplitTicks cc$cubeTicks = new CubeSplitTicks();
+    @Unique
+    private IWorldGeneratorType cc$generatorType;
 
     @Shadow
     public abstract PlayerManager getPlayerManager();
@@ -141,20 +140,11 @@ public abstract class MixinWorldServer extends MixinWorld implements ICubicWorld
     private void interceptChunkProvider(CallbackInfoReturnable<IChunkProvider> cir) {
         WorldServer self = (WorldServer) (Object) this;
 
-        WorldType terrainType = self.getWorldInfo()
-            .getTerrainType();
-
+        // Always created, even when the selected generator doesn't use it: mods keep references to it
         IChunkProvider chunkGenerator = self.provider.createChunkGenerator();
 
-        IWorldGenerator cubicGenerator;
-
-        if (terrainType instanceof ICubicWorldType cubicWorldType && cubicWorldType.hasCubicGeneratorForWorld(self)) {
-            cubicGenerator = cubicWorldType.createCubeGenerator(self, chunkGenerator);
-        } else if (self.provider instanceof ICubicWorldProvider cubicProvider) {
-            cubicGenerator = cubicProvider.createCubeGenerator(chunkGenerator);
-        } else {
-            cubicGenerator = new VanillaWorldGenerator(chunkGenerator, self, BuiltinWorldDecorators.VANILLA);
-        }
+        if (cc$generatorType == null) cc$generatorType = ServerWorldgenConfig.getGenerator(self);
+        IWorldGenerator cubicGenerator = cc$generatorType.create(self, chunkGenerator);
 
         IChunkLoader chunkLoader = this.saveHandler.getChunkLoader(this.provider);
 
@@ -200,6 +190,16 @@ public abstract class MixinWorldServer extends MixinWorld implements ICubicWorld
     @Override
     public SpawnCubes getSpawnArea() {
         return cc$spawnArea;
+    }
+
+    @Override
+    public IWorldGeneratorType getWorldGeneratorType() {
+        return cc$generatorType;
+    }
+
+    @Override
+    public void setWorldGeneratorType(IWorldGeneratorType type) {
+        this.cc$generatorType = type;
     }
 
     @Override

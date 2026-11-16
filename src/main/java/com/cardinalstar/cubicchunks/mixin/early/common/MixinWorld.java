@@ -48,13 +48,13 @@ import net.minecraft.world.WorldProvider;
 import net.minecraft.world.WorldServer;
 import net.minecraft.world.WorldServerMulti;
 import net.minecraft.world.WorldSettings;
-import net.minecraft.world.WorldType;
 import net.minecraft.world.biome.BiomeGenBase;
 import net.minecraft.world.chunk.Chunk;
 import net.minecraft.world.chunk.IChunkProvider;
 import net.minecraft.world.storage.ISaveHandler;
 import net.minecraft.world.storage.MapStorage;
 import net.minecraft.world.storage.WorldInfo;
+import net.minecraftforge.common.MinecraftForge;
 
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Implements;
@@ -75,7 +75,7 @@ import com.cardinalstar.cubicchunks.api.ICube;
 import com.cardinalstar.cubicchunks.api.IntRange;
 import com.cardinalstar.cubicchunks.api.util.NotCubicChunksWorldException;
 import com.cardinalstar.cubicchunks.api.world.ICubicWorldProvider;
-import com.cardinalstar.cubicchunks.api.world.ICubicWorldType;
+import com.cardinalstar.cubicchunks.api.worldgen.IWorldGeneratorType;
 import com.cardinalstar.cubicchunks.lighting.LightingManager;
 import com.cardinalstar.cubicchunks.mixin.api.ICubicWorldInternal;
 import com.cardinalstar.cubicchunks.util.Coords;
@@ -87,6 +87,7 @@ import com.cardinalstar.cubicchunks.world.cube.ICubeProvider;
 import com.cardinalstar.cubicchunks.world.cube.ICubeProviderInternal;
 import com.cardinalstar.cubicchunks.worldgen.config.ServerWorldgenConfig;
 import com.cardinalstar.cubicchunks.worldgen.config.WGConfigItems;
+import com.cardinalstar.cubicchunks.worldgen.config.WorldgenConfigLoadedEvent;
 import com.google.common.collect.ImmutableList;
 import com.gtnewhorizon.gtnhlib.blockpos.BlockPos;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
@@ -101,7 +102,7 @@ import cpw.mods.fml.common.FMLCommonHandler;
 @ParametersAreNonnullByDefault
 @Mixin(World.class)
 @Implements(@Interface(iface = ICubicWorld.class, prefix = "world$"))
-@SuppressWarnings({ "AddedMixinMembersNamePattern" })
+@SuppressWarnings({ "AddedMixinMembersNamePattern", "unused" })
 public abstract class MixinWorld implements ICubicWorldInternal {
 
     // these have to be here because of mixin limitation, they are used by MixinWorldServer
@@ -275,19 +276,11 @@ public abstract class MixinWorld implements ICubicWorldInternal {
 
         IntRange generationRange, heightRange;
 
-        WorldType type = this.worldInfo.getTerrainType();
-
-        World world = (World) (Object) this;
-
-        if (type instanceof ICubicWorldType cubicWorldType && cubicWorldType.hasCubicGeneratorForWorld(world)) {
-            generationRange = cubicWorldType.getGenerationRange(world);
-        } else if (this.provider instanceof ICubicWorldProvider cubicWorldProvider) {
-            generationRange = cubicWorldProvider.getGenerationRange();
-        } else {
-            generationRange = new IntRange(0, this.provider.getActualHeight());
-        }
-
         if ((Object) this instanceof WorldServer worldServer) {
+            IWorldGeneratorType generator = ServerWorldgenConfig.getGenerator(worldServer);
+            ((ICubicWorldInternal.Server) worldServer).setWorldGeneratorType(generator);
+            generationRange = generator.getGenerationRange(worldServer);
+
             IntRange configured = ServerWorldgenConfig.forWorld(worldServer)
                 .get(WGConfigItems.HEIGHT);
 
@@ -297,10 +290,27 @@ public abstract class MixinWorld implements ICubicWorldInternal {
                 Math.max(configured.getMax(), generationRange.getMax()));
         } else {
             // Client world, just set some defaults and let the packets update these properly
+            if (this.provider instanceof ICubicWorldProvider cubicWorldProvider) {
+                generationRange = cubicWorldProvider.getGenerationRange();
+            } else {
+                generationRange = new IntRange(0, this.provider.getActualHeight());
+            }
             heightRange = new IntRange(Integer.MIN_VALUE, Integer.MAX_VALUE);
         }
 
         this.initCubicWorld(heightRange, generationRange);
+
+        if ((Object) this instanceof WorldServer worldServer) {
+            MinecraftForge.EVENT_BUS.post(
+                new WorldgenConfigLoadedEvent(
+                    worldServer,
+                    ServerWorldgenConfig.forWorld(worldServer),
+                    ((ICubicWorldInternal.Server) worldServer).getWorldGeneratorType(),
+                    generationRange,
+                    heightRange));
+
+            ServerWorldgenConfig.save();
+        }
 
         this.chunkProvider = createChunkProvider();
 

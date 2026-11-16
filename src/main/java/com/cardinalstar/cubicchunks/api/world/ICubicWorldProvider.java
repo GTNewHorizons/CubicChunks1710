@@ -8,9 +8,10 @@ import org.jetbrains.annotations.NotNull;
 import com.cardinalstar.cubicchunks.api.IntRange;
 import com.cardinalstar.cubicchunks.api.worldgen.IWorldGenerator;
 
-/// Implemented on a [WorldProvider]. This is primarily used by mods to make their dimensions cubic. [ICubicWorldType]
-/// takes priority over this interface. When a [WorldProvider] does not implement this interface,
-/// [WorldProvider#createChunkGenerator()] is called and the result is wrapped by a [VanillaWorldGenerator].
+/// Implemented on a [WorldProvider]. This is primarily used by mods to make their dimensions cubic. This may be
+/// overridden by another generator in the world config.
+/// When a [WorldProvider] does not implement this interface, [WorldProvider#createChunkGenerator()] is called and the
+/// result is wrapped by a [VanillaWorldGenerator].
 public interface ICubicWorldProvider {
 
     /// @deprecated New parameter: implement [#createCubeGenerator(IChunkProvider)] instead.

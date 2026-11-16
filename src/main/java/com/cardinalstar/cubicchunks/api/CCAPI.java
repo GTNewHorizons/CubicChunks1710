@@ -11,6 +11,9 @@ import net.minecraft.world.chunk.storage.ExtendedBlockStorage;
 
 import org.jetbrains.annotations.Nullable;
 
+import com.cardinalstar.cubicchunks.api.worldgen.IWorldGeneratorType;
+import com.cardinalstar.cubicchunks.api.worldgen.WorldGeneratorTypes;
+import com.cardinalstar.cubicchunks.mixin.api.ICubicWorldInternal;
 import com.cardinalstar.cubicchunks.world.ICubicWorld;
 import com.cardinalstar.cubicchunks.world.api.ICubeProviderServer;
 import com.cardinalstar.cubicchunks.world.api.ICubeProviderServer.Requirement;
@@ -88,5 +91,27 @@ public final class CCAPI {
     /// @param displayName the dimension's display name, or null to show the registry name
     public static void registerDimensionName(int dimensionId, String name, @Nullable IChatComponent displayName) {
         DimensionNames.INSTANCE.register(dimensionId, new ResourceLocation(name), displayName);
+    }
+
+    /// Adds a world generator that dimensions can select. Call this during init. See [IWorldGeneratorType].
+    public static void registerWorldGenerator(IWorldGeneratorType type) {
+        WorldGeneratorTypes.INSTANCE.register(type);
+    }
+
+    /// Unlocks the given dimension's world generator, allowing the player to select alternate generators. Modded
+    /// dimensions start out locked, and well-behaved generators can unlock themselves if they want to provide variants.
+    public static void unlockDimensionGenerator(String name) {
+        WorldGeneratorTypes.INSTANCE.unlockDimension(new ResourceLocation(name));
+    }
+
+    /// Checks if the given dimension can use non-default world generators.
+    public static boolean isDimensionUnlocked(String name) {
+        return WorldGeneratorTypes.INSTANCE.isDimensionUnlocked(new ResourceLocation(name));
+    }
+
+    /// The generator selected for a server world's dimension. Null on the client, and for worlds that aren't cubic.
+    @Nullable
+    public static IWorldGeneratorType getWorldGenerator(World world) {
+        return world instanceof ICubicWorldInternal.Server server ? server.getWorldGeneratorType() : null;
     }
 }

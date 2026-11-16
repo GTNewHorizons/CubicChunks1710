@@ -14,6 +14,10 @@ public interface WGConfigItemSource {
 
     WGConfigItemSource EVENT = GatherWorldgenConfigEvent::gather;
 
-    /** @param dimensionName null if the dimension has no name */
-    List<WGConfigItem<?>> getItems(int dimensionId, @Nullable ResourceLocation dimensionName);
+    /**
+     * @param dimensionName null if the dimension has no name
+     * @param generator     null if the dimension's generator is Automatic and hasn't been resolved yet
+     */
+    List<WGConfigItem<?>> getItems(int dimensionId, @Nullable ResourceLocation dimensionName,
+        @Nullable ResourceLocation generator);
 }
