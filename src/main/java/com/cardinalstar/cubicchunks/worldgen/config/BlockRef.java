@@ -4,6 +4,8 @@ import java.util.Objects;
 
 import net.minecraft.block.Block;
 
+import com.cardinalstar.cubicchunks.worldgen.config.gui.BlockVariants;
+
 /**
  * A block and metadata, stored by registry name so settings can be loaded without the block being registered
  * (e.g. its mod was removed). Resolve it with {@link #resolve()} when it's used.
@@ -30,7 +32,7 @@ public final class BlockRef {
         if (this == o) return true;
         if (!(o instanceof BlockRef)) return false;
         BlockRef other = (BlockRef) o;
-        return meta == other.meta && id.equals(other.id);
+        return meta == other.meta && Objects.equals(id, other.id);
     }
 
     @Override
@@ -40,6 +42,6 @@ public final class BlockRef {
 
     @Override
     public String toString() {
-        return id + ":" + meta;
+        return this == BlockVariants.AUTO ? "AUTO" : id + ":" + meta;
     }
 }

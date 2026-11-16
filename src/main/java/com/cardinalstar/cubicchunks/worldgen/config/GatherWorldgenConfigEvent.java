@@ -52,6 +52,11 @@ public class GatherWorldgenConfigEvent extends Event {
         return generator == null || generator.equals(id);
     }
 
+    /// Whether the dimension currently has this generator selected. Does not include auto.
+    public boolean isGeneratorSelected(ResourceLocation id) {
+        return generator != null && generator.equals(id);
+    }
+
     /** Adds a setting to this dimension. Settings are shown in the order they're added. */
     public void add(WGConfigItem<?> item) {
         if (items.putIfAbsent(item.getId(), item) != null) {

@@ -19,7 +19,6 @@ import com.cardinalstar.cubicchunks.world.api.ICubeProviderServer;
 import com.cardinalstar.cubicchunks.world.api.ICubeProviderServer.Requirement;
 import com.cardinalstar.cubicchunks.world.column.EmptyEBS;
 import com.cardinalstar.cubicchunks.world.cube.Cube;
-import com.cardinalstar.cubicchunks.worldgen.VanillaWorldGenerator;
 import com.cardinalstar.cubicchunks.worldgen.config.BlockRef;
 import com.cardinalstar.cubicchunks.worldgen.config.WGConfigItems;
 import com.google.common.collect.AbstractIterator;
@@ -116,5 +115,17 @@ public final class CCAPI {
     @Nullable
     public static IWorldGeneratorType getWorldGenerator(World world) {
         return world instanceof ICubicWorldInternal.Server server ? server.getWorldGeneratorType() : null;
+    }
+
+    /// Sets the default top filler block for a dimension. This is only used by generators that respect
+    /// [WGConfigItems#VANILLA_TOP_FILLER] (which is likely only [VanillaWorldGenerator]).
+    public static void setDimensionTopFiller(String name, String blockId, int meta) {
+        WGConfigItems.setDimensionTopFiller(new ResourceLocation(name), new BlockRef(blockId, meta));
+    }
+
+    /// Sets the default bottom filler block for a dimension. This is only used by generators that respect
+    /// [WGConfigItems#VANILLA_BOTTOM_FILLER] (which is likely only [VanillaWorldGenerator]).
+    public static void setDimensionBottomFiller(String name, String blockId, int meta) {
+        WGConfigItems.setDimensionBottomFiller(new ResourceLocation(name), new BlockRef(blockId, meta));
     }
 }

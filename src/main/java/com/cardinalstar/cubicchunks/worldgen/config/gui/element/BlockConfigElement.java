@@ -13,9 +13,16 @@ import cpw.mods.fml.relauncher.SideOnly;
 @SideOnly(Side.CLIENT)
 public class BlockConfigElement extends WGConfigElement<BlockRef> {
 
-    public BlockConfigElement(WGConfigItem<BlockRef> item, WGDimensionConfig sandbox) {
+    private final boolean showAuto;
+
+    public BlockConfigElement(WGConfigItem<BlockRef> item, WGDimensionConfig sandbox, boolean showAuto) {
         super(item, sandbox, ConfigGuiType.STRING);
+        this.showAuto = showAuto;
         setCustomListEntryClass(BlockSelectorEntry.class);
+    }
+
+    public boolean getShowAuto() {
+        return showAuto;
     }
 
     @Override

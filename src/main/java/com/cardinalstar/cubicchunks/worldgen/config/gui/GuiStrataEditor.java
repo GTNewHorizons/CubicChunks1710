@@ -268,7 +268,7 @@ public class GuiStrataEditor extends GuiScreen {
         public boolean mousePressed(int index, int x, int y, int mouseEvent, int relativeX, int relativeY) {
             if (btnBlock.mousePressed(mc, x, y)) {
                 btnBlock.func_146113_a(mc.getSoundHandler());
-                mc.displayGuiScreen(new GuiBlockSearch(GuiStrataEditor.this, block, picked -> block = picked));
+                mc.displayGuiScreen(new GuiBlockSearch(GuiStrataEditor.this, block, picked -> block = picked, false));
                 return true;
             }
             if (btnRemove.mousePressed(mc, x, y)) {

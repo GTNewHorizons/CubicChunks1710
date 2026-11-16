@@ -73,6 +73,7 @@ import com.cardinalstar.cubicchunks.worldgen.config.ServerWorldgenConfig;
 import com.cardinalstar.cubicchunks.worldgen.config.WGConfigItem;
 import com.cardinalstar.cubicchunks.worldgen.config.WGConfigItems;
 import com.cardinalstar.cubicchunks.worldgen.config.WGDimensionConfig;
+import com.cardinalstar.cubicchunks.worldgen.config.gui.BlockVariants;
 import com.gtnewhorizon.gtnhlib.util.data.BlockMeta;
 import com.gtnewhorizon.gtnhlib.util.data.ImmutableBlockMeta;
 
@@ -143,13 +144,14 @@ public class VanillaWorldGenerator implements IWorldGenerator, IPreloadFailureDe
     /**
      * The configured filler, or one detected from the world's first chunk if it's set to auto. A detected filler is
      * stored in the settings so it can't change later, e.g. if that chunk's bottom layers turn out different.
-     * Dimensions
-     * without a name don't save it, so they detect it again on every server start.
+     * Dimensions without a name don't save it, so they detect it again on every server start, and so do generators
+     * that reuse this class without the filler settings.
      */
     private ImmutableBlockMeta resolveFiller(WGConfigItem<BlockRef> item,
         Function<IBlockView, ImmutableBlockMeta> analyzer) {
-        BlockRef configured = settings.get(item);
-        if (configured != null) {
+        boolean hasSetting = settings.hasItem(item);
+        BlockRef configured = hasSetting ? settings.get(item) : null;
+        if (configured != null && configured != BlockVariants.AUTO) {
             Block block = configured.resolve();
             if (block != null) return new BlockMeta(block, configured.meta);
             CubicChunks.LOGGER
@@ -162,7 +164,7 @@ public class VanillaWorldGenerator implements IWorldGenerator, IPreloadFailureDe
 
         ImmutableBlockMeta detected = analyzer.apply(new ChunkBlockView(chunk));
 
-        if (configured == null) {
+        if (hasSetting && (configured == null || configured == BlockVariants.AUTO)) {
             String id = Block.blockRegistry.getNameForObject(detected.getBlock());
             settings.set(item, new BlockRef(id, detected.getBlockMeta()));
             ServerWorldgenConfig.save();

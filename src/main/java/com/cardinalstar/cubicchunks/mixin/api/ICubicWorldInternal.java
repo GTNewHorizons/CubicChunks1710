@@ -58,6 +58,14 @@ public interface ICubicWorldInternal extends ICubicWorld {
      */
     void tickCubicWorld();
 
+    boolean cc$getRemoveNetherBedrock();
+
+    void cc$setRemoveNetherBedrock(boolean cc$removeNetherBedrock);
+
+    boolean cc$getRemoveFloorBedrock();
+
+    void cc$setRemoveFloorBedrock(boolean cc$removeFloorBedrock);
+
     /**
      * Returns the {@link ICubeProvider} for this world, or throws {@link NotCubicChunksWorldException}
      * if this is not a CubicChunks world.
