@@ -19,9 +19,6 @@ import com.cardinalstar.cubicchunks.world.api.ICubeProviderServer;
 import com.cardinalstar.cubicchunks.world.api.ICubeProviderServer.Requirement;
 import com.cardinalstar.cubicchunks.world.column.EmptyEBS;
 import com.cardinalstar.cubicchunks.world.cube.Cube;
-import com.cardinalstar.cubicchunks.worldgen.VanillaWorldGenerator;
-import com.cardinalstar.cubicchunks.worldgen.config.BlockRef;
-import com.cardinalstar.cubicchunks.worldgen.config.WGConfigItems;
 import com.google.common.collect.AbstractIterator;
 
 @SuppressWarnings("unused")
