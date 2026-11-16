@@ -82,7 +82,10 @@ public class CubeLoaderServer implements ICubeLoader {
     public CubeLoaderServer(WorldServer world, ICubicStorage storage, IWorldGenerator generator,
         CubeLoaderCallback callback) {
         this.world = world;
-        this.cubeIO = new CubeIO(storage, generator instanceof IPreloadFailureDelegate delegate ? delegate : null);
+        this.cubeIO = new CubeIO(
+            storage,
+            generator instanceof IPreloadFailureDelegate delegate ? delegate : null,
+            pos -> cubes.get(pos.getX(), pos.getY(), pos.getZ()) != null);
         this.generator = generator;
         this.callback = callback;
 
@@ -452,6 +455,11 @@ public class CubeLoaderServer implements ICubeLoader {
             startCubes,
             cubes.getSize(),
             startCols - autoCols);
+    }
+
+    @Override
+    public void tickIO() {
+        cubeIO.tick();
     }
 
     @Override

@@ -47,6 +47,7 @@ import com.cardinalstar.cubicchunks.event.handlers.CommonEventHandler;
 import com.cardinalstar.cubicchunks.network.NetworkChannel;
 import com.cardinalstar.cubicchunks.server.ICubicChunksServer;
 import com.cardinalstar.cubicchunks.server.chunkio.RegionCubeStorage;
+import com.cardinalstar.cubicchunks.server.chunkio.StartupRegionCompaction;
 import com.cardinalstar.cubicchunks.util.CompatHandler;
 import com.cardinalstar.cubicchunks.util.SideUtils;
 import com.cardinalstar.cubicchunks.world.worldgen.WorldGenerators;
@@ -62,9 +63,12 @@ import cpw.mods.fml.common.event.FMLInitializationEvent;
 import cpw.mods.fml.common.event.FMLPostInitializationEvent;
 import cpw.mods.fml.common.event.FMLPreInitializationEvent;
 import cpw.mods.fml.common.event.FMLServerAboutToStartEvent;
+import cpw.mods.fml.common.event.FMLServerStartedEvent;
+import cpw.mods.fml.common.event.FMLServerStoppedEvent;
 import cpw.mods.fml.common.network.NetworkCheckHandler;
 import cpw.mods.fml.common.network.NetworkRegistry;
 import cpw.mods.fml.common.network.internal.NetworkModHolder;
+import cpw.mods.fml.common.registry.GameRegistry.UniqueIdentifier;
 import cpw.mods.fml.common.versioning.ArtifactVersion;
 import cpw.mods.fml.common.versioning.DefaultArtifactVersion;
 import cpw.mods.fml.common.versioning.InvalidVersionSpecificationException;
@@ -117,7 +121,7 @@ public class CubicChunks {
     public void preInit(FMLPreInitializationEvent e) {
         LOGGER = e.getModLog();
 
-        registerAnvil3dStorageFormatProvider();
+        registerStorageFormatProviders();
         VanillaCubicWorldType.init();
 
         LOGGER.debug("Registered world types");
@@ -186,6 +190,7 @@ public class CubicChunks {
 
     @Mod.EventHandler
     public void onServerAboutToStart(FMLServerAboutToStartEvent event) {
+        StartupRegionCompaction.begin();
         SideUtils.runForSide(() -> () -> {
             MinecraftServer server = event.getServer();
             server.setBuildLimit(CubicChunks.MAX_SUPPORTED_BLOCK_Y);
@@ -195,8 +200,19 @@ public class CubicChunks {
         });
     }
 
-    public static void registerAnvil3dStorageFormatProvider() {
-        StorageFormatFactory.REGISTRY.register(StorageFormatFactory.DEFAULT, new DefaultStorageFormatFactory());
+    @Mod.EventHandler
+    public void onServerStarted(FMLServerStartedEvent event) {
+        StartupRegionCompaction.finish();
+    }
+
+    @Mod.EventHandler
+    public void onServerStopped(FMLServerStoppedEvent event) {
+        StartupRegionCompaction.finish();
+    }
+
+    public static void registerStorageFormatProviders() {
+        StorageFormatFactory.REGISTRY
+            .register(StorageFormatFactory.BUNDLES, new DefaultStorageFormatFactory(StorageFormatFactory.BUNDLES));
     }
 
     @NetworkCheckHandler
@@ -275,9 +291,9 @@ public class CubicChunks {
 
     private static class DefaultStorageFormatFactory extends StorageFormatFactory {
 
-        public DefaultStorageFormatFactory() {
-            setRegistryName(StorageFormatFactory.DEFAULT);
-            setUnlocalizedName("cubicchunks.gui.storagefmt.anvil3d");
+        public DefaultStorageFormatFactory(UniqueIdentifier format) {
+            setRegistryName(format);
+            setUnlocalizedName("cubicchunks.gui.storagefmt.bundles");
         }
 
         @Override
@@ -295,7 +311,11 @@ public class CubicChunks {
 
         @Override
         public ICubicStorage provideStorage(World world, Path path) throws IOException {
-            return new RegionCubeStorage(path);
+            return RegionCubeStorage.openForWorld(
+                world.getSaveHandler()
+                    .getWorldDirectory()
+                    .toPath(),
+                path);
         }
     }
 }
