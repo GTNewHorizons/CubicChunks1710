@@ -9,6 +9,8 @@ import net.minecraft.util.ResourceLocation;
 
 import org.jetbrains.annotations.Nullable;
 
+import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
+
 /**
  * Maps dimension ids to stable registry names, e.g. {@code -1} to {@code minecraft:the_nether}. Ids can differ between
  * modpack versions and servers, names don't, so anything saved per dimension should be keyed by name. Names match the
@@ -29,9 +31,9 @@ public final class DimensionNames {
     public static final ResourceLocation THE_NETHER = new ResourceLocation("minecraft", "the_nether");
     public static final ResourceLocation THE_END = new ResourceLocation("minecraft", "the_end");
 
-    private final Map<Integer, ResourceLocation> names = new HashMap<>();
+    private final Int2ObjectOpenHashMap<ResourceLocation> names = new Int2ObjectOpenHashMap<>();
     private final Map<ResourceLocation, Integer> ids = new HashMap<>();
-    private final Map<Integer, IChatComponent> displayNames = new HashMap<>();
+    private final Int2ObjectOpenHashMap<IChatComponent> displayNames = new Int2ObjectOpenHashMap<>();
 
     /** Not for mods: use {@link #INSTANCE}. Separate instances are for tests. */
     public DimensionNames() {}
