@@ -117,6 +117,10 @@ public enum Mixins implements IMixins {
         .addCommonMixins("common.worldgen.MixinChunkProviderGenerate")
         .setPhase(Phase.EARLY)
         .setApplyIf(() -> true)),
+    ACCESSOR_EXTENDED_BLOCK_STORAGE(new MixinBuilder("Accessors for the block counts of ExtendedBlockStorage")
+        .addCommonMixins("common.AccessorExtendedBlockStorage")
+        .setPhase(Phase.EARLY)
+        .setApplyIf(() -> true)),
     ACCESSOR_S23(new MixinBuilder("Accessors for X/Y/Z fields for S23PacketBlockChange")
         .addCommonMixins("common.AccessorS23PacketBlockChange")
         .setPhase(Phase.EARLY)

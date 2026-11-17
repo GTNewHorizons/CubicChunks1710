@@ -28,6 +28,7 @@ import static com.cardinalstar.cubicchunks.util.Coords.localToBlock;
 import static net.minecraftforge.common.MinecraftForge.EVENT_BUS;
 
 import java.util.ArrayList;
+import java.util.BitSet;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashMap;
@@ -624,7 +625,8 @@ public class Cube implements ICube {
         this.world.func_147448_a(this.cubeTileEntityMap.values());
         this.world.addLoadedEntities(this.entities);
 
-        if (!this.isInHeightMap) {
+        // Clients take the server's height maps: columns and height map updates carry them
+        if (!world.isRemote && !this.isInHeightMap) {
             this.updateHeightMap();
             this.isInHeightMap = true;
         }
@@ -647,49 +649,39 @@ public class Cube implements ICube {
         int[] stopsPrecipitation = new int[Cube.SIZE * Cube.SIZE];
         collectHeightMapBits(opaque, stopsPrecipitation);
 
-        boolean changed = false;
+        // block columns (z << 4 | x) whose opacity or precipitation index changed
+        BitSet changed = new BitSet(Cube.SIZE * Cube.SIZE);
         for (int z = 0; z < Cube.SIZE; z++) {
             for (int x = 0; x < Cube.SIZE; x++) {
                 int i = z << 4 | x;
 
                 if (opacityIndex instanceof HeightMap3D heightMap) {
-                    changed |= heightMap.setBits(x, z, miny, Cube.SIZE, opaque[i]);
+                    if (heightMap.setBits(x, z, miny, Cube.SIZE, opaque[i])) changed.set(i);
                 } else {
                     for (int y = 0; y < Cube.SIZE; y++) {
                         opacityIndex.onOpacityChange(x, miny + y, z, (opaque[i] >>> y & 1) != 0);
                     }
-                    changed = true;
+                    changed.set(i);
                 }
 
-                changed |= precipitationIndex.setBits(x, z, miny, Cube.SIZE, stopsPrecipitation[i]);
+                if (precipitationIndex.setBits(x, z, miny, Cube.SIZE, stopsPrecipitation[i])) changed.set(i);
             }
         }
 
         // This marks every loaded cube of the column dirty, so only do it when a height map has to be saved
-        if (changed) {
+        if (!changed.isEmpty()) {
             column.setChunkModified();
         }
-    }
 
-    /// Update the column's precipitation height map with the data stored in this cube. Clients also call this when the
-    /// server resends a loaded cube, because those block changes never pass through the column's setBlock.
-    public void updatePrecipitationHeightMap() {
-        PrecipitationHeightMap precipitationIndex = ((IColumnInternal) column).getPrecipitationIndex();
-        int miny = getCoords().getMinBlockY();
-
-        int[] stopsPrecipitation = new int[Cube.SIZE * Cube.SIZE];
-        collectHeightMapBits(null, stopsPrecipitation);
-
-        for (int z = 0; z < Cube.SIZE; z++) {
-            for (int x = 0; x < Cube.SIZE; x++) {
-                precipitationIndex.setBits(x, z, miny, Cube.SIZE, stopsPrecipitation[z << 4 | x]);
-            }
+        if (!changed.isEmpty() && world instanceof WorldServer server
+            && server.getPlayerManager() instanceof CubicPlayerManager playerManager) {
+            playerManager.onCubeHeightsLoaded(this, changed);
         }
     }
 
     /// For each block column ({@code z << 4 | x}), sets bit y in {@code opaque} when the block at local y blocks light,
-    /// and in {@code stopsPrecipitation} when it stops rain. Either array may be null.
-    private void collectHeightMapBits(@Nullable int[] opaque, @Nullable int[] stopsPrecipitation) {
+    /// and in {@code stopsPrecipitation} when it stops rain.
+    private void collectHeightMapBits(int[] opaque, int[] stopsPrecipitation) {
         if (storage == null) {
             return; // all air
         }
@@ -702,10 +694,10 @@ public class Cube implements ICube {
                     Block block = this.getBlock(x, y, z);
                     int i = z << 4 | x;
 
-                    if (opaque != null && block.getLightOpacity() > 0) {
+                    if (block.getLightOpacity() > 0) {
                         opaque[i] |= bit;
                     }
-                    if (stopsPrecipitation != null && PrecipitationHeightMap.blocksPrecipitation(block)) {
+                    if (PrecipitationHeightMap.blocksPrecipitation(block)) {
                         stopsPrecipitation[i] |= bit;
                     }
                 }

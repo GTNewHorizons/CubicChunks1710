@@ -492,8 +492,9 @@ public abstract class MixinChunk implements IColumn, IColumnInternal {
         markDirty(blockToCube(y));
 
         boolean heightMapChanged = setOpacity(blockToLocal(x), y, blockToLocal(z), block);
-        getPrecipitationIndex().onBlockChange(blockToLocal(x), y, blockToLocal(z), block);
-        if (heightMapChanged) {
+        boolean rainChanged = getPrecipitationIndex().onBlockChange(blockToLocal(x), y, blockToLocal(z), block);
+        // clients without this cube only learn about either map from the server
+        if (heightMapChanged || rainChanged) {
             getWorldObj().getLightingManager()
                 .onHeightUpdate(x + 16 * this.xPosition, y, z + 16 * this.zPosition);
         }
@@ -1095,17 +1096,14 @@ public abstract class MixinChunk implements IColumn, IColumnInternal {
 
     @Override
     public void writeHeightmapDataForClient(CCPacketBuffer out) {
-        ((HeightMap3D) this.opacityIndex).writeData(out);
+        ((HeightMap3D) this.opacityIndex).writeCompact(out);
+        getPrecipitationIndex().writeCompact(out);
     }
 
     @Override
     public void loadClientHeightmapData(CCPacketBuffer in) {
-        ((HeightMap3D) this.opacityIndex).readData(in);
-
-        // The server only sends the opacity index. Until the cubes arrive, assume their opaque blocks stop rain.
-        if (cubeMap.isEmpty()) {
-            getPrecipitationIndex().copyFrom((HeightMap3D) this.opacityIndex);
-        }
+        ((HeightMap3D) this.opacityIndex).readCompact(in);
+        getPrecipitationIndex().readCompact(in);
     }
 
     @Override

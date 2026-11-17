@@ -22,8 +22,9 @@ public class PrecipitationHeightMap extends HeightMap3D {
         return material.blocksMovement() || material.isLiquid();
     }
 
-    public void onBlockChange(int localX, int blockY, int localZ, Block block) {
-        onOpacityChange(localX, blockY, localZ, blocksPrecipitation(block));
+    /** Returns true when the height map changed. */
+    public boolean onBlockChange(int localX, int blockY, int localZ, Block block) {
+        return setOccluded(localX, blockY, localZ, blocksPrecipitation(block));
     }
 
     /**

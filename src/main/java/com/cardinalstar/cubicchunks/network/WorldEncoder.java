@@ -23,21 +23,22 @@ package com.cardinalstar.cubicchunks.network;
 import java.util.ArrayList;
 import java.util.List;
 
+import javax.annotation.Nullable;
 import javax.annotation.ParametersAreNonnullByDefault;
 
 import net.minecraft.block.Block;
+import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.world.ChunkPosition;
 import net.minecraft.world.World;
 import net.minecraft.world.chunk.Chunk;
-import net.minecraft.world.chunk.NibbleArray;
 import net.minecraft.world.chunk.storage.ExtendedBlockStorage;
 
 import org.jetbrains.annotations.NotNull;
 
-import com.cardinalstar.cubicchunks.CubicChunks;
 import com.cardinalstar.cubicchunks.lighting.ILightingManager;
 import com.cardinalstar.cubicchunks.mixin.api.ICubicWorldInternal;
+import com.cardinalstar.cubicchunks.server.chunkio.CubeClientData;
 import com.cardinalstar.cubicchunks.util.AddressTools;
 import com.cardinalstar.cubicchunks.util.Coords;
 import com.cardinalstar.cubicchunks.util.Mods;
@@ -100,56 +101,6 @@ class WorldEncoder {
         }
     }
 
-    static void encodeCube(CCPacketBuffer out, Cube cube) {
-        final boolean capi = Mods.ChunkAPI.isModLoaded();
-
-        byte[] buffer = null;
-
-        if (capi) {
-            buffer = getBuffer(DataRegistryImpl.maxPacketSizeCubic());
-        }
-
-        ExtendedBlockStorage storage = cube.getStorage();
-
-        boolean empty = storage == null || cube.isEmpty();
-
-        byte flags = 0;
-        if (empty) flags |= 0b1;
-
-        // 1. emptiness
-        out.writeByte(flags);
-
-        if (!empty && !capi) {
-            // 2. block IDs and metadata
-            out.writeBytes(storage.getBlockLSBArray());
-            NibbleArray msb = storage.getBlockMSBArray();
-
-            out.writeBoolean(msb != null);
-            if (msb != null) {
-                out.writeBytes(msb.data);
-            }
-
-            out.writeBytes(storage.getMetadataArray().data);
-
-            // 3. block light
-            out.writeBytes(storage.getBlocklightArray().data);
-
-            // 4. sky light
-            if (!cube.getWorld().provider.hasNoSky) {
-                out.writeBytes(storage.getSkylightArray().data);
-            }
-        }
-
-        // 6. biomes
-        cube.writeBiomeArray(out);
-
-        if (!empty && capi) {
-            int written = DataRegistryImpl.writeToBufferCubic(cube.getColumn(), storage, buffer);
-
-            out.writeByteArray(buffer, 0, written);
-        }
-    }
-
     private static byte @NotNull [] getBuffer(int maxSize) {
         byte[] buffer = BUFFER.get();
 
@@ -161,76 +112,20 @@ class WorldEncoder {
         return buffer;
     }
 
-    static void decodeCube(CCPacketBuffer in, Cube cube, World world) {
-        final boolean capi = Mods.ChunkAPI.isModLoaded();
-
+    /**
+     * Sets a client cube's blocks and biomes from decoded client data and creates its tile entities at the positions
+     * the server sent ({@code tiles}, local addresses).
+     */
+    static void applyCube(Cube cube, World world, @Nullable NBTTagCompound clientData, short[] tiles) {
         cacheTileEntityBlockData(cube);
 
-        byte[] buffer;
-        if (capi) {
-            buffer = getBuffer(DataRegistryImpl.maxPacketSizeCubic());
-        } else {
-            buffer = new byte[0];
-        }
-
-        byte flags = in.readByte();
-
-        boolean empty = (flags & 0b1) != 0;
-
-        ExtendedBlockStorage storage = null;
-
-        if (!empty) {
-            storage = new ExtendedBlockStorage(Coords.cubeToMinBlock(cube.getY()), !cube.getWorld().provider.hasNoSky);
-        }
-
-        cube.setStorageFromSave(storage);
-
-        if (!empty && !capi) {
-            // 2. Block IDs and metadata
-            byte[] lsbData = storage.getBlockLSBArray();
-            in.readBytes(lsbData);
-
-            boolean hasMsb = in.readBoolean();
-            if (hasMsb) {
-                if (storage.getBlockMSBArray() == null) {
-                    storage.createBlockMSBArray();
-                }
-
-                byte[] msbData = storage.getBlockMSBArray().data;
-                in.readBytes(msbData);
-            }
-            byte[] meta = storage.getMetadataArray().data;
-            in.readBytes(meta);
-
-            // 3. block light
-            in.readBytes(storage.getBlocklightArray().data);
-
-            // 4. sky light
-            if (!cube.getWorld().provider.hasNoSky) {
-                in.readBytes(storage.getSkylightArray().data);
-            }
-        }
-
-        // 6. biomes
-        cube.readBiomeArray(in);
-
-        if (!empty && capi) {
-            try {
-                DataRegistryImpl.readFromBufferCubic(cube.getColumn(), storage, in.readByteArray(buffer));
-            } catch (Throwable t) {
-                CubicChunks.LOGGER
-                    .error("Error decoding ChunkAPI data ({},{},{})", cube.getX(), cube.getY(), cube.getZ(), t);
-            }
-        }
-
-        if (!empty) {
-            storage.removeInvalidBlocks();
-        }
+        CubeClientData.apply(cube, clientData);
 
         refreshTileEntities(cube, world);
 
-        if (!empty) {
-            createTileEntities(cube, world, storage);
+        ExtendedBlockStorage storage = cube.getStorage();
+        if (storage != null) {
+            createTileEntities(cube, world, storage, tiles);
         }
     }
 
@@ -270,35 +165,35 @@ class WorldEncoder {
         }
     }
 
-    private static void createTileEntities(Cube cube, World world, ExtendedBlockStorage storage) {
+    private static void createTileEntities(Cube cube, World world, ExtendedBlockStorage storage, short[] tiles) {
         int minBlockX = Coords.cubeToMinBlock(cube.getX());
         int minBlockY = Coords.cubeToMinBlock(cube.getY());
         int minBlockZ = Coords.cubeToMinBlock(cube.getZ());
 
-        for (int y = 0; y < Cube.SIZE; y++) {
+        for (short address : tiles) {
+            int x = AddressTools.getLocalX(address);
+            int y = AddressTools.getLocalY(address);
+            int z = AddressTools.getLocalZ(address);
+
+            Block block = storage.getBlockByExtId(x, y, z);
+            int metadata = storage.getExtBlockMetadata(x, y, z);
+            if (!block.hasTileEntity(metadata)) {
+                continue;
+            }
+
             int worldY = minBlockY + y;
-            for (int z = 0; z < Cube.SIZE; z++) {
-                for (int x = 0; x < Cube.SIZE; x++) {
-                    Block block = storage.getBlockByExtId(x, y, z);
-                    int metadata = storage.getExtBlockMetadata(x, y, z);
-                    if (!block.hasTileEntity(metadata)) {
-                        continue;
-                    }
+            ChunkPosition pos = new ChunkPosition(x, worldY, z);
+            TileEntity existing = cube.cubeTileEntityMap.get(pos);
+            if (existing != null && !existing.isInvalid()) {
+                continue;
+            }
 
-                    ChunkPosition pos = new ChunkPosition(x, worldY, z);
-                    TileEntity existing = cube.cubeTileEntityMap.get(pos);
-                    if (existing != null && !existing.isInvalid()) {
-                        continue;
-                    }
-
-                    TileEntity tileEntity = block.createTileEntity(world, metadata);
-                    if (tileEntity != null) {
-                        tileEntity.xCoord = minBlockX + x;
-                        tileEntity.yCoord = worldY;
-                        tileEntity.zCoord = minBlockZ + z;
-                        cube.addTileEntity(tileEntity);
-                    }
-                }
+            TileEntity tileEntity = block.createTileEntity(world, metadata);
+            if (tileEntity != null) {
+                tileEntity.xCoord = minBlockX + x;
+                tileEntity.yCoord = worldY;
+                tileEntity.zCoord = minBlockZ + z;
+                cube.addTileEntity(tileEntity);
             }
         }
     }

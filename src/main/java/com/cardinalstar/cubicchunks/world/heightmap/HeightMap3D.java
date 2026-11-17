@@ -188,4 +188,32 @@ public class HeightMap3D implements IHeightMap {
             }
         }
     }
+
+    /** Writes one block column in the compact form sent to clients ({@link YIntervalTree#writeCompact}). */
+    public void writeCompact(int localX, int localZ, CCPacketBuffer buffer) {
+        this.heightmap.data()[localZ << 4 | localX].writeCompact(buffer);
+    }
+
+    public void writeCompact(CCPacketBuffer buffer) {
+        for (int lZ = 0; lZ < 16; lZ++) {
+            for (int lX = 0; lX < 16; lX++) {
+                writeCompact(lX, lZ, buffer);
+            }
+        }
+    }
+
+    public void readCompact(int localX, int localZ, CCPacketBuffer buffer) {
+        YIntervalTree tree = this.heightmap.data()[localZ << 4 | localX];
+        tree.readCompact(buffer);
+
+        updateVanilla(localX, localZ, tree);
+    }
+
+    public void readCompact(CCPacketBuffer buffer) {
+        for (int lZ = 0; lZ < 16; lZ++) {
+            for (int lX = 0; lX < 16; lX++) {
+                readCompact(lX, lZ, buffer);
+            }
+        }
+    }
 }

@@ -6,12 +6,15 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.function.IntFunction;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
 
 import net.jpountz.lz4.LZ4Compressor;
 import net.jpountz.lz4.LZ4Exception;
 import net.jpountz.lz4.LZ4Factory;
+import net.minecraft.block.Block;
+import net.minecraft.init.Blocks;
 import net.minecraft.nbt.CompressedStreamTools;
 import net.minecraft.nbt.NBTSizeTracker;
 import net.minecraft.nbt.NBTTagByteArray;
@@ -57,6 +60,11 @@ final class CubeBundleCodec {
     static final int[] LENGTHS = { 4096, 2048, 2048, 2048, 2048, 4096, 4096 };
     private static final int B3 = 6;
     static final String ARRAYS_PRESENT = "ccb:arrays", INDICES = "ccb:indices";
+    /**
+     * A restored client section's block counts ({@code removeInvalidBlocks}): blocks that are not air and those that
+     * tick randomly, counted from the palette while restoring.
+     */
+    static final String BLOCK_REFS = "ccb:blockRefs", TICK_REFS = "ccb:tickRefs";
 
     private static final int CODEC_NONE = 0, CODEC_GZIP = 1, CODEC_LZ4 = 2, CODEC_ZSTD = 3;
 
@@ -111,6 +119,18 @@ final class CubeBundleCodec {
             if (members[slot] == null) return null;
             NBTTagCompound root = parse(members[slot]);
             if ((palettized & 1 << slot) != 0) restore(section(root), this);
+            return root;
+        }
+
+        /** As {@link #member}, for a client: a palettized section also gets its block counts. */
+        @Nullable
+        NBTTagCompound clientMember(int slot) throws IOException {
+            if (members[slot] == null) return null;
+            NBTTagCompound root = parse(members[slot]);
+            if ((palettized & 1 << slot) != 0) {
+                int[] uses = restore(section(root), this);
+                setBlockCounts(section(root), this, uses, Block::getBlockById, Blocks.air);
+            }
             return root;
         }
     }
@@ -296,17 +316,22 @@ final class CubeBundleCodec {
         return keys;
     }
 
-    /** Restores the block arrays of a palettized section in place and removes the bundle keys. */
-    private static void restore(NBTTagCompound section, Stored stored) throws IOException {
+    /**
+     * Restores the block arrays of a palettized section in place and removes the bundle keys; returns how many blocks
+     * use each palette entry.
+     */
+    private static int[] restore(NBTTagCompound section, Stored stored) throws IOException {
         int mask = section.getInteger(ARRAYS_PRESENT);
         byte[] indices = section.getByteArray(INDICES);
         int bits = stored.bits();
         if ((mask & ~127) != 0 || indices.length != 4096 * bits / 8) throw new IOException("Invalid bundle indices");
         byte[][] arrays = new byte[ARRAYS.length][];
         for (int k = 0; k < ARRAYS.length; k++) if ((mask & 1 << k) != 0) arrays[k] = new byte[LENGTHS[k]];
+        int[] uses = new int[stored.count];
         for (int i = 0; i < 4096; i++) {
             int index = bits == 8 ? indices[i] & 255 : (indices[2 * i] & 255) << 8 | indices[2 * i + 1] & 255;
             if (index >= stored.count) throw new IOException("Bundle palette index out of range");
+            uses[index]++;
             int key = stored.states[index], id = key & 65535, meta = key >>> 16, shift = (i & 1) << 2;
             if (arrays[0] != null) arrays[0][i] = (byte) id;
             if (arrays[1] != null) arrays[1][i >> 1] |= (byte) ((id >> 8 & 15) << shift);
@@ -318,6 +343,23 @@ final class CubeBundleCodec {
         section.removeTag(ARRAYS_PRESENT);
         section.removeTag(INDICES);
         for (int k = 0; k < ARRAYS.length; k++) if (arrays[k] != null) section.setByteArray(ARRAYS[k], arrays[k]);
+        return uses;
+    }
+
+    /** Stores a client section's block counts from how many blocks use each palette entry. */
+    static void setBlockCounts(NBTTagCompound section, Stored stored, int[] uses, IntFunction<Block> blocks,
+        Block air) {
+        int blockRefs = 0, tickRefs = 0;
+        for (int index = 0; index < uses.length; index++) {
+            if (uses[index] == 0) continue;
+            Block block = blocks.apply(stored.states[index] & 65535);
+            if (block == null) return;
+            if (block == air) continue;
+            blockRefs += uses[index];
+            if (block.getTickRandomly()) tickRefs += uses[index];
+        }
+        section.setInteger(BLOCK_REFS, blockRefs);
+        section.setInteger(TICK_REFS, tickRefs);
     }
 
     private static NBTTagCompound shallowCopy(NBTTagCompound tag) {
