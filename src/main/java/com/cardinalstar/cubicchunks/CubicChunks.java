@@ -22,10 +22,8 @@ package com.cardinalstar.cubicchunks;
 
 import java.io.IOException;
 import java.nio.file.Path;
-import java.util.Map;
 
 import javax.annotation.Nonnull;
-import javax.annotation.Nullable;
 import javax.annotation.ParametersAreNonnullByDefault;
 
 import net.minecraft.server.MinecraftServer;
@@ -65,35 +63,15 @@ import cpw.mods.fml.common.event.FMLPreInitializationEvent;
 import cpw.mods.fml.common.event.FMLServerAboutToStartEvent;
 import cpw.mods.fml.common.event.FMLServerStartedEvent;
 import cpw.mods.fml.common.event.FMLServerStoppedEvent;
-import cpw.mods.fml.common.network.NetworkCheckHandler;
 import cpw.mods.fml.common.network.NetworkRegistry;
 import cpw.mods.fml.common.network.internal.NetworkModHolder;
 import cpw.mods.fml.common.registry.GameRegistry.UniqueIdentifier;
-import cpw.mods.fml.common.versioning.ArtifactVersion;
-import cpw.mods.fml.common.versioning.DefaultArtifactVersion;
-import cpw.mods.fml.common.versioning.InvalidVersionSpecificationException;
-import cpw.mods.fml.common.versioning.VersionRange;
-import cpw.mods.fml.relauncher.Side;
 
 @ParametersAreNonnullByDefault
 @Mod(modid = CubicChunks.MODID, useMetadata = true, dependencies = "required-after:RegionLib;")
 public class CubicChunks {
 
     public static final int MAX_RENDER_DISTANCE = 64;
-    public static final VersionRange SUPPORTED_SERVER_VERSIONS;
-    public static final VersionRange SUPPORTED_CLIENT_VERSIONS;
-
-    static {
-        try {
-            // Versions newer than current will be only checked on the other side
-            // (I know this can be hard to actually fully understand)
-            SUPPORTED_SERVER_VERSIONS = VersionRange.createFromVersionSpec("[1.12.2-0.0.887.0,)");
-            SUPPORTED_CLIENT_VERSIONS = VersionRange.createFromVersionSpec("[1.12.2-0.0.887.0,)");
-        } catch (InvalidVersionSpecificationException e) {
-            throw new Error(e);
-        }
-    }
-
     public static final int MIN_SUPPORTED_BLOCK_Y = Integer.MIN_VALUE + 4096;
     public static final int MAX_SUPPORTED_BLOCK_Y = Integer.MAX_VALUE - 4095;
 
@@ -104,18 +82,6 @@ public class CubicChunks {
     @Nonnull
     public static Logger LOGGER = LogManager.getLogger("EarlyCubicChunks");// use some logger even before it's set.
                                                                            // useful for unit tests
-
-    private static final String MOD_VERSION;
-
-    static {
-        String implementationVersion = CubicChunks.class.getPackage()
-            .getImplementationVersion();
-        if (implementationVersion == null) {
-            LOGGER.error("No implementation version! If this is dev environment, this is normal");
-            implementationVersion = "9999.9999.9999.9";
-        }
-        MOD_VERSION = implementationVersion;
-    }
 
     @Mod.EventHandler
     public void preInit(FMLPreInitializationEvent e) {
@@ -213,68 +179,6 @@ public class CubicChunks {
     public static void registerStorageFormatProviders() {
         StorageFormatFactory.REGISTRY
             .register(StorageFormatFactory.BUNDLES, new DefaultStorageFormatFactory(StorageFormatFactory.BUNDLES));
-    }
-
-    @NetworkCheckHandler
-    public static boolean checkCanConnectWithMods(Map<String, String> modVersions, Side remoteSide) {
-        String remoteFullVersion = modVersions.get(MODID);
-        if (remoteFullVersion == null) {
-            return !remoteSide.isClient(); // don't allow client without CC to connect
-        }
-        if (!checkVersionFormat(MOD_VERSION, remoteSide.isClient() ? Side.SERVER : Side.CLIENT)) {
-            return true;
-        }
-        if (!checkVersionFormat(remoteFullVersion, remoteSide)) {
-            return true;
-        }
-
-        ArtifactVersion version = new DefaultArtifactVersion(remoteFullVersion);
-        ArtifactVersion currentVersion = new DefaultArtifactVersion(MOD_VERSION);
-        if (currentVersion.compareTo(version) < 0) {
-            return true; // allow connection if this version is older, let newer one decide
-        }
-        return (remoteSide.isClient() ? SUPPORTED_CLIENT_VERSIONS : SUPPORTED_SERVER_VERSIONS).containsVersion(version);
-    }
-
-    // returns true if version format is known. Side can be null if not logging connection attempt
-    private static boolean checkVersionFormat(String version, @Nullable Side remoteSide) {
-        int mcVersionSplit = version.indexOf('-');
-        if (mcVersionSplit < 0) {
-            LOGGER.warn(
-                "Connection attempt with unexpected " + remoteSide
-                    + " version string: "
-                    + version
-                    + ". Cannot split into MC "
-                    + "version and mod version. Assuming dev environment or special/unknown version, connection will be allowed.");
-            return false;
-        }
-
-        String modVersion = version.substring(mcVersionSplit + 1);
-
-        if (modVersion.isEmpty()) {
-            LOGGER.warn(
-                "Connection attempt with unexpected " + remoteSide
-                    + " version string: "
-                    + version
-                    + ". Mod version part not "
-                    + "found. Assuming dev environment or special/unknown version,, connection will be allowed");
-            return false;
-        }
-
-        final String versionRegex = "\\d+\\." + "\\d+\\." + "\\d+\\." + "\\d+" + "(-.+)?";// "MAJORMOD.MAJORAPI.MINOR.PATCH(-final/rcX/betaX)"
-
-        if (!modVersion.matches(versionRegex)) {
-            LOGGER.warn(
-                "Connection attempt with unexpected " + remoteSide
-                    + " version string: "
-                    + version
-                    + ". Mod version part ("
-                    + modVersion
-                    + ") does not match expected format ('MAJORMOD.MAJORAPI.MINOR.PATCH(-optionalText)'). Assuming dev "
-                    + "environment or special/unknown version, connection will be allowed");
-            return false;
-        }
-        return true;
     }
 
     // essentially a copy of FMLLog.bigWarning, with more lines of stacktrace

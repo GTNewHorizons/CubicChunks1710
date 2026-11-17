@@ -15,7 +15,6 @@ import javax.annotation.Nullable;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.network.NetworkManager;
 
-import com.cardinalstar.cubicchunks.CubicChunks;
 import com.cardinalstar.cubicchunks.network.PacketEncoderCube.PacketCube;
 import com.cardinalstar.cubicchunks.server.chunkio.CubeClientData;
 
@@ -49,7 +48,7 @@ public final class CubePredecoder extends ChannelInboundHandlerAdapter {
 
     private static final PacketEncoderCube CUBES = new PacketEncoderCube();
 
-    private final String channel = CubicChunks.MODID + NetworkChannel.PROTOCOL_VERSION;
+    private final String channel = NetworkChannel.NAME;
 
     /** Adds the decoder to a client connection, once. */
     public static void install(NetworkManager manager) {
