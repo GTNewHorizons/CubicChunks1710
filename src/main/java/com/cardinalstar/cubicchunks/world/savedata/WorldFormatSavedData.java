@@ -10,6 +10,7 @@ import net.minecraft.world.WorldSavedData;
 import com.cardinalstar.cubicchunks.CubicChunks;
 import com.cardinalstar.cubicchunks.CubicChunksConfig;
 import com.cardinalstar.cubicchunks.api.world.storage.StorageFormatFactory;
+import com.cardinalstar.cubicchunks.server.chunkio.LegacyWorldConversion;
 
 import cpw.mods.fml.common.registry.GameRegistry.UniqueIdentifier;
 
@@ -80,6 +81,20 @@ public class WorldFormatSavedData extends WorldSavedData {
         Path root = world.getSaveHandler()
             .getWorldDirectory()
             .toPath();
+
+        if (data != null && data.format == null && LegacyWorldConversion.handles(data.storedName)) {
+            // only in the first releases with bundle storage, see LegacyWorldConversion
+            LegacyWorldConversion.convert(root, data.storedName);
+            data.format = StorageFormatFactory.REGISTRY.get(StorageFormatFactory.DEFAULT);
+            data.markDirty();
+            world.mapStorage.saveAllData();
+        }
+
+        // only in the first releases with bundle storage: a world from before the marker existed, or one that lost it
+        if (data == null && LegacyWorldConversion.hasStorage(root)) {
+            LegacyWorldConversion.convert(root, "no format marker");
+            return createMarker(world, StorageFormatFactory.REGISTRY.get(StorageFormatFactory.DEFAULT));
+        }
 
         if (data != null && data.format == null) {
             throw new IllegalStateException(

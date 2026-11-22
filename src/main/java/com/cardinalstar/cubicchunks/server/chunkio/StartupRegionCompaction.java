@@ -60,6 +60,20 @@ public final class StartupRegionCompaction {
             this.started = started;
         }
 
+        Progress(String dimension, String phase, int completed, int total, int percent, long started) {
+            this.dimension = dimension;
+            this.phase = phase;
+            this.completed = completed;
+            this.total = total;
+            this.percent = percent;
+            this.started = started;
+        }
+
+        /** Whether this is the storage conversion rather than the compaction. */
+        public boolean converting() {
+            return CONVERTING.equals(phase);
+        }
+
         public long elapsedSeconds() {
             return (System.nanoTime() - started) / 1_000_000_000;
         }
@@ -80,6 +94,33 @@ public final class StartupRegionCompaction {
                 total,
                 snapshot.elapsedSeconds());
         }
+    }
+
+    private static final String CONVERTING = "converting";
+
+    static void updateConversionProgress(String dimension, int completed, int total, long started) {
+        Progress snapshot = new Progress(
+            dimension,
+            CONVERTING,
+            completed,
+            total,
+            total == 0 ? 100 : (int) (100L * completed / total),
+            started);
+        progress = snapshot;
+        long now = System.nanoTime();
+        if (now - lastProgressLog >= 5_000_000_000L) {
+            lastProgressLog = now;
+            CubicChunks.LOGGER.info(
+                "Storage conversion {}: {}/{} regions ({} s)",
+                dimension,
+                completed,
+                total,
+                snapshot.elapsedSeconds());
+        }
+    }
+
+    static void clearProgress() {
+        progress = null;
     }
 
     /**

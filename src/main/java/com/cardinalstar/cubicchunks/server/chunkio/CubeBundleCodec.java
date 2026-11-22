@@ -186,6 +186,7 @@ final class CubeBundleCodec {
     static Stored read(ByteBuffer record) throws IOException {
         if (!isBundle(record)) throw new IOException("Not a cube bundle record");
         int p = record.position();
+        if (record.get(p + 3) == 2) return readVersion2(record);
         if (record.get(p + 3) != VERSION) throw new IOException("Unsupported cube bundle version " + record.get(p + 3));
         int codec = record.get(p + 4) & 255, headerMask = record.get(p + 5) & 255;
         int rawLength = record.getInt(p + 6);
@@ -205,6 +206,59 @@ final class CubeBundleCodec {
             stored.states = new int[count];
             for (int i = 0; i < count; i++) stored.states[i] = in.readInt();
             readMembers(in, mask, stored.members);
+        }
+        return stored;
+    }
+
+    /**
+     * Reads a version 2 record of the 0.1 pre-releases, only so that {@link LegacyWorldConversion} can rewrite it. It
+     * has two frames: a client part with each member's {@code Sections} and {@code Biomes} and the palette, and a
+     * server part with the rest of each member's NBT.
+     */
+    private static Stored readVersion2(ByteBuffer record) throws IOException {
+        final int headerBytes = 18;
+        int p = record.position();
+        if (record.remaining() < headerBytes) throw new IOException("Truncated cube bundle");
+        int codec = record.get(p + 4) & 255, headerMask = record.get(p + 5) & 255;
+        int clientLength = record.getInt(p + 6), clientFrame = record.getInt(p + 10),
+            serverLength = record.getInt(p + 14);
+        if (clientLength < 1 || clientLength > MAX_RAW_BYTES || serverLength < 1 || serverLength > MAX_RAW_BYTES)
+            throw new IOException("Invalid cube bundle length " + clientLength + "/" + serverLength);
+        if (clientFrame < 1 || clientFrame >= record.remaining() - headerBytes)
+            throw new IOException("Invalid cube bundle client part length " + clientFrame);
+        ByteBuffer clientPart = record.duplicate(), serverPart = record.duplicate();
+        clientPart.position(p + headerBytes)
+            .limit(p + headerBytes + clientFrame);
+        serverPart.position(p + headerBytes + clientFrame);
+        Stored stored = new Stored();
+        byte[][] client = new byte[8][], server = new byte[8][];
+        try (DataInputStream in = stream(decompress(codec, serverPart, serverLength))) {
+            int mask = in.readUnsignedByte();
+            if (mask != headerMask || mask == 0) throw new IOException("Cube bundle member mask mismatch");
+            readMembers(in, mask, server);
+        }
+        try (DataInputStream in = stream(decompress(codec, clientPart, clientLength))) {
+            int mask = in.readUnsignedByte();
+            if ((mask & ~headerMask) != 0) throw new IOException("Cube bundle client mask mismatch");
+            stored.palettized = in.readUnsignedByte();
+            if ((stored.palettized & ~mask) != 0) throw new IOException("Cube bundle palette mask mismatch");
+            int count = in.readInt();
+            if (count < 0 || count > 8 * 4096) throw new IOException("Invalid cube bundle palette size " + count);
+            stored.count = count;
+            stored.states = new int[count];
+            for (int i = 0; i < count; i++) stored.states[i] = in.readInt();
+            readMembers(in, mask, client);
+        }
+        for (int s = 0; s < 8; s++) {
+            if (server[s] == null || client[s] == null) {
+                stored.members[s] = server[s];
+                continue;
+            }
+            NBTTagCompound root = parse(server[s]), part = parse(client[s]);
+            if (!root.hasKey("Level", 10)) throw new IOException("Cube bundle member without Level");
+            NBTTagCompound level = root.getCompoundTag("Level"), clientLevel = part.getCompoundTag("Level");
+            for (Object key : clientLevel.func_150296_c()) level.setTag((String) key, clientLevel.getTag((String) key));
+            stored.members[s] = serialize(root);
         }
         return stored;
     }

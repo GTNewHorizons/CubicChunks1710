@@ -85,10 +85,19 @@ read-ahead. Empty cubes are not kept, since their states are cheap to read.
 ## Worlds from other versions
 
 This version only reads its own format, `cubicchunks:bundles`. It refuses to open a
-world in any other format, such as the `cubicchunks:anvil3d` of 0.1 and 0.2.0 or the
-`cubicchunks:anvil3d-bundles` of the 0.1 pre-releases. The first releases with bundle
-storage convert such worlds when they are opened; later releases no longer do, so a
-world in an old format has to be opened once with one of those first releases.
+world in any other format.
+
+The first releases with bundle storage also convert worlds from older versions:
+`cubicchunks:anvil3d` (0.1 releases and 0.2.0), `cubicchunks:anvil3d-compact-empty`
+and the `cubicchunks:anvil3d-bundles` of the 0.1 pre-releases. The whole save is
+converted the first time it is opened, before it loads, every dimension at once;
+startup compaction then reclaims the freed space. An interrupted or failed
+conversion leaves the world in its old format and continues on the next start. Only
+a record that cannot be read is left as it is, which the log reports; the rest of
+its bundle or column group is converted. Startup compaction does not skip damaged
+region files, so such a world may need `compactRegionsOnWorldLoad=false` to open.
+**Later releases drop this conversion**, so a world in an old format has to be
+opened once with one of the first releases with bundle storage.
 
 Older CubicChunks versions cannot read bundle or column group records, so keep
 backups if you may need to go back. Do not edit the format marker in
