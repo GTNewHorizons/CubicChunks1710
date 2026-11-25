@@ -88,7 +88,6 @@ public class VanillaWorldGenerator implements IWorldGenerator, IPreloadFailureDe
     @Nonnull
     private final IWorldDecorator decorator;
 
-    private final int vanillaGenerationHeight;
     private final int vanillaGenerationHeightCubes;
 
     private FillerInfo fillerInfo;
@@ -107,7 +106,7 @@ public class VanillaWorldGenerator implements IWorldGenerator, IPreloadFailureDe
         this.world = world;
         this.decorator = decorator;
 
-        vanillaGenerationHeight = ((ICubicWorld) this.world).getMaxGenerationHeight();
+        int vanillaGenerationHeight = ((ICubicWorld) this.world).getMaxGenerationHeight();
         vanillaGenerationHeightCubes = Coords.blockCeilToCube(vanillaGenerationHeight);
     }
 
@@ -225,8 +224,8 @@ public class VanillaWorldGenerator implements IWorldGenerator, IPreloadFailureDe
 
         ExtendedBlockStorage[] ebses = base.getBlockStorageArray();
 
-        for (int ebsY = 0; ebsY < 16; ebsY++) {
-            var ebs = ebsY >= vanillaGenerationHeightCubes ? null : ebses[ebsY];
+        for (int ebsY = 0; ebsY < vanillaGenerationHeightCubes; ebsY++) {
+            var ebs = ebses[ebsY];
 
             Cube c = new Cube(base, ebsY, ebs);
 
@@ -264,7 +263,7 @@ public class VanillaWorldGenerator implements IWorldGenerator, IPreloadFailureDe
             List<Chunk> generatedColumns = new ArrayList<>();
             List<Cube> generatedCubes = new ArrayList<>();
 
-            if (cubeY >= 0 && cubeY < 16 || chunk == null) {
+            if (cubeY >= 0 && cubeY < vanillaGenerationHeightCubes || chunk == null) {
                 Chunk base = vanilla.provideChunk(cubeX, cubeZ);
 
                 boolean newChunk = true;
@@ -285,8 +284,8 @@ public class VanillaWorldGenerator implements IWorldGenerator, IPreloadFailureDe
 
                 ExtendedBlockStorage[] ebses = base.getBlockStorageArray();
 
-                for (int ebsY = 0; ebsY < 16; ebsY++) {
-                    var ebs = ebsY >= vanillaGenerationHeightCubes ? null : ebses[ebsY];
+                for (int ebsY = 0; ebsY < vanillaGenerationHeightCubes; ebsY++) {
+                    var ebs = ebses[ebsY];
 
                     Cube c = new Cube(base, ebsY, ebs);
 
@@ -306,7 +305,7 @@ public class VanillaWorldGenerator implements IWorldGenerator, IPreloadFailureDe
                 }
             }
 
-            if (cubeY < 0 || cubeY >= 16) {
+            if (cubeY < 0 || cubeY >= vanillaGenerationHeightCubes) {
                 ImmutableBlockMeta filler = cubeY < 0 ? getBottomFillerInfo() : getTopFillerInfo();
                 IBlockView cubeData = new UniformBlockView(filler);
 
