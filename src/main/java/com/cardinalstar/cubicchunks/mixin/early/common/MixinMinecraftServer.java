@@ -25,6 +25,7 @@ import net.minecraft.world.World;
 import net.minecraftforge.common.DimensionManager;
 
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -35,17 +36,25 @@ import com.cardinalstar.cubicchunks.server.ICubicChunksServer;
 import com.cardinalstar.cubicchunks.server.SpawnCubes;
 
 @Mixin(MinecraftServer.class)
-public class MixinMinecraftServer implements ICubicChunksServer {
+public abstract class MixinMinecraftServer implements ICubicChunksServer {
+
+    @Shadow
+    protected abstract void setUserMessage(String message);
+
+    @Shadow
+    protected abstract void clearCurrentTask();
 
     @Unique
     private int cubicChunks$buildMinimum;
 
     @Inject(method = "initialWorldChunkLoad", at = @At("HEAD"), cancellable = true)
     private void onInitialSpawnLoad(CallbackInfo ci) {
+        setUserMessage("menu.generatingTerrain");
         World world = DimensionManager.getWorld(0);
         ((ICubicWorldInternal.Server) world).setSpawnArea(new SpawnCubes());
         ((ICubicWorldInternal.Server) world).getSpawnArea()
             .update(world);
+        clearCurrentTask();
         ci.cancel();
     }
 

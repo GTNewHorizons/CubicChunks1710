@@ -304,6 +304,11 @@ public class CubicPlayerManager extends PlayerManager implements CubeLoaderCallb
             return;
         }
 
+        // This is already done by MC, but it's done after `addPlayer` is called, which prevents it from doing anything
+        // useful. Call it here manually to do it before we send all the world data.
+        player.playerNetServerHandler
+            .setPlayerLocation(player.posX, player.posY, player.posZ, player.rotationYaw, player.rotationPitch);
+
         WatchingPlayer watchingPlayer = new WatchingPlayer(player);
         watchingPlayer.updateManagedPos();
 
