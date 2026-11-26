@@ -9,9 +9,9 @@ import net.minecraftforge.common.MinecraftForge;
 
 import com.cardinalstar.cubicchunks.CubicChunks;
 import com.cardinalstar.cubicchunks.CubicChunksConfig;
+import com.cardinalstar.cubicchunks.api.DimensionNames;
 import com.cardinalstar.cubicchunks.api.ICube;
 import com.cardinalstar.cubicchunks.api.IntRange;
-import com.cardinalstar.cubicchunks.worldgen.HeightInfo;
 
 import cpw.mods.fml.common.eventhandler.SubscribeEvent;
 
@@ -22,15 +22,18 @@ public final class WGConfigItems {
 
     private WGConfigItems() {}
 
+    /** Kept from the removed global height overrides, whose default was "0:bottom:-64". */
+    private static final int OVERWORLD_MIN_HEIGHT = -64;
+
     /**
      * World height. Either end may be unbounded, and bounded ends are rounded out to whole cubes. Defaults come from
-     * the global config, like CubicChunksSavedData.
+     * the global config, except the overworld's bottom.
      */
-    public static final WGConfigItem<IntRange> HEIGHT = WGConfigItem.perDimension(id("height"), dimensionId -> {
-        HeightInfo info = CubicChunksConfig.configuredDimensionalHeightMap.get(dimensionId);
-        if (info != null) return new IntRange(info.minHeight, info.maxHeight);
-        return new IntRange(CubicChunksConfig.defaultMinHeight, CubicChunksConfig.defaultMaxHeight);
-    },
+    public static final WGConfigItem<IntRange> HEIGHT = WGConfigItem.perDimension(
+        id("height"),
+        dimensionName -> new IntRange(
+            DimensionNames.OVERWORLD.equals(dimensionName) ? OVERWORLD_MIN_HEIGHT : CubicChunksConfig.defaultMinHeight,
+            CubicChunksConfig.defaultMaxHeight),
         WGConfigItemTypes.intRange(
             new IntRange(CubicChunks.MIN_SUPPORTED_BLOCK_Y, CubicChunks.MAX_SUPPORTED_BLOCK_Y),
             true,

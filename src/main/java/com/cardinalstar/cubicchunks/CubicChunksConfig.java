@@ -28,7 +28,6 @@ import java.util.Map;
 import javax.annotation.ParametersAreNonnullByDefault;
 
 import com.cardinalstar.cubicchunks.server.chunkio.CCNBTUtils.TagCompression;
-import com.cardinalstar.cubicchunks.worldgen.HeightInfo;
 import com.gtnewhorizon.gtnhlib.config.Config;
 import com.gtnewhorizon.gtnhlib.config.ConfigException;
 import com.gtnewhorizon.gtnhlib.config.ConfigurationManager;
@@ -36,20 +35,6 @@ import com.gtnewhorizon.gtnhlib.config.ConfigurationManager;
 @ParametersAreNonnullByDefault
 @Config(modid = CubicChunks.MODID, category = "general")
 public class CubicChunksConfig {
-
-    @Config.Ignore
-    public static Map<Integer, HeightInfo> configuredDimensionalHeightMap = new HashMap<>();
-
-    @Config.LangKey("cubicchunks.config.dimensional_height_limits")
-    @Config.Comment("Set the height limits for dimensions specifically. Note that this will override the default max and min heights. \n"
-        + "Format is dimensionId:top/bottom:height.\n"
-        + "Note that these heights must be multiples of 16. If not multiples of 16 they will be rounded towards 0 on the nearest multiple of 16.\n"
-        + "Example:\n"
-        + "     S:dimensional_height_overrides <\n"
-        + "         0:bottom:-128, \n"
-        + "         0:top:1024 \n"
-        + "     >\n")
-    public static String[] dimensional_height_overrides = { "0:bottom:-64" };
 
     @Config.LangKey("cubicchunks.config.vert_view_distance")
     @Config.Comment("Client vertical render distance and integrated-server vertical loading radius, adjusted by the vertical view distance slider."
@@ -156,7 +141,6 @@ public class CubicChunksConfig {
 
     public static void init() throws ConfigException {
         validateConfigValues();
-        initDimensionalConfiguration();
     }
 
     private static void validateConfigValues() {
@@ -173,55 +157,6 @@ public class CubicChunksConfig {
                 defaultMaxHeight,
                 defaultMaxHeight & ~0xF);
             defaultMaxHeight &= ~0xF;
-        }
-    }
-
-    private static void initDimensionalConfiguration() throws ConfigException {
-        // Height Limit Configs
-        int i = 1;
-        for (String config : dimensional_height_overrides) {
-            String[] entries = config.split(":");
-            if (entries.length != 3) {
-                throw new ConfigException("Dimensional Height Overrides configuration is malformed for entry: " + i);
-            }
-
-            try {
-                int dimension = Integer.parseInt(entries[0]);
-                int height = Integer.parseInt(entries[2]);
-                if ((height & 0xF) != 0) {
-                    CubicChunks.LOGGER.error(
-                        "CubicChunksConfig: dimensional height configured to a non multiple of 16, got {}, setting to {}",
-                        height,
-                        height & ~0xF);
-                    height &= ~0xF;
-                }
-
-                HeightInfo info = configuredDimensionalHeightMap.getOrDefault(dimension, new HeightInfo());
-
-                String direction = entries[1];
-                if (direction.equals("bottom")) {
-                    info.minHeight = height;
-                    if (info.maxHeight == null) {
-                        info.maxHeight = defaultMaxHeight;
-                    }
-                } else if (direction.equals("top")) {
-                    info.maxHeight = height;
-                    if (info.minHeight == null) {
-                        info.minHeight = defaultMinHeight;
-                    }
-                } else {
-                    throw new ConfigException(
-                        "Directional argument for height limits is invalid for entry: " + i
-                            + ". Invalid:"
-                            + direction
-                            + " Valid directions bottom and top.");
-                }
-
-                configuredDimensionalHeightMap.put(dimension, info);
-            } catch (NumberFormatException e) {
-                throw new ConfigException("Dimensional Height Overrides configuration is malformed for entry: " + i);
-            }
-            i++;
         }
     }
 

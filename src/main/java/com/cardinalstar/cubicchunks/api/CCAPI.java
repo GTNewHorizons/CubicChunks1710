@@ -3,6 +3,8 @@ package com.cardinalstar.cubicchunks.api;
 import java.util.Collection;
 import java.util.Iterator;
 
+import net.minecraft.util.IChatComponent;
+import net.minecraft.util.ResourceLocation;
 import net.minecraft.world.World;
 import net.minecraft.world.chunk.Chunk;
 import net.minecraft.world.chunk.storage.ExtendedBlockStorage;
@@ -77,5 +79,14 @@ public final class CCAPI {
                 return null;
             }
         };
+    }
+
+    /// Gives a dimension a stable registry name, e.g. `mymod:moon`, that per-dimension data is saved under. Call this
+    /// during init for static dimensions, and when dynamic ones are created or loaded. Calling it again with the same
+    /// id and name replaces the display name. See [DimensionNames].
+    ///
+    /// @param displayName the dimension's display name, or null to show the registry name
+    public static void registerDimensionName(int dimensionId, String name, @Nullable IChatComponent displayName) {
+        DimensionNames.INSTANCE.register(dimensionId, new ResourceLocation(name), displayName);
     }
 }

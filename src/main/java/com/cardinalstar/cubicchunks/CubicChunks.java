@@ -38,6 +38,7 @@ import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import com.cardinalstar.cubicchunks.api.DimensionNames;
 import com.cardinalstar.cubicchunks.api.world.storage.ICubicStorage;
 import com.cardinalstar.cubicchunks.api.world.storage.StorageFormatFactory;
 import com.cardinalstar.cubicchunks.api.worldtype.VanillaCubicWorldType;
@@ -167,6 +168,7 @@ public class CubicChunks {
             throw new RuntimeException(ex);
         }
 
+        DimensionNames.INSTANCE.registerVanilla();
         WGConfigItems.register();
 
         CommonEventHandler eventHandler = new CommonEventHandler();

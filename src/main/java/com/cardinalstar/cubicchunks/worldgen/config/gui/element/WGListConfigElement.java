@@ -23,7 +23,7 @@ public class WGListConfigElement<T> extends DummyListElement<T> {
         super(
             item.getId()
                 .toString(),
-            item.getDefaultValue(sandbox.dimensionId),
+            item.getDefaultValue(sandbox.dimensionName),
             type,
             item.getLangKey());
         this.item = item;

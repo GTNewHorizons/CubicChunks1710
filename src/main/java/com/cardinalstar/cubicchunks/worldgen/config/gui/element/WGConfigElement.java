@@ -22,7 +22,7 @@ public class WGConfigElement<T> extends DummyConfigElement<T> {
         super(
             item.getId()
                 .toString(),
-            item.getDefaultValue(sandbox.dimensionId),
+            item.getDefaultValue(sandbox.dimensionName),
             type,
             item.getLangKey(),
             minValue,

@@ -143,6 +143,8 @@ public class VanillaWorldGenerator implements IWorldGenerator, IPreloadFailureDe
     /**
      * The configured filler, or one detected from the world's first chunk if it's set to auto. A detected filler is
      * stored in the settings so it can't change later, e.g. if that chunk's bottom layers turn out different.
+     * Dimensions
+     * without a name don't save it, so they detect it again on every server start.
      */
     private ImmutableBlockMeta resolveFiller(WGConfigItem<BlockRef> item,
         Function<IBlockView, ImmutableBlockMeta> analyzer) {
@@ -150,10 +152,8 @@ public class VanillaWorldGenerator implements IWorldGenerator, IPreloadFailureDe
         if (configured != null) {
             Block block = configured.resolve();
             if (block != null) return new BlockMeta(block, configured.meta);
-            CubicChunks.LOGGER.error(
-                "Filler block {} for dimension {} doesn't exist; detecting one instead",
-                configured,
-                settings.dimensionId);
+            CubicChunks.LOGGER
+                .error("Filler block {} for dimension {} doesn't exist; detecting one instead", configured, settings);
         }
 
         Chunk chunk = vanilla.provideChunk(0, 0);

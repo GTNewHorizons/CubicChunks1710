@@ -9,6 +9,8 @@ import java.util.Map;
 import net.minecraft.util.ResourceLocation;
 import net.minecraftforge.common.MinecraftForge;
 
+import org.jetbrains.annotations.Nullable;
+
 import cpw.mods.fml.common.eventhandler.Event;
 
 /**
@@ -19,15 +21,19 @@ import cpw.mods.fml.common.eventhandler.Event;
  * settings nobody adds are kept as they are.
  * <p>
  * There may be no world when this fires (e.g. on the Create World screen), so listeners must decide from the event's
- * fields alone.
+ * fields alone. Prefer {@link #dimensionName} over {@link #dimensionId}: ids can differ between modpacks and servers.
  */
 public class GatherWorldgenConfigEvent extends Event {
 
     public final int dimensionId;
+    /** Null if nobody named the dimension; see {@link com.cardinalstar.cubicchunks.api.DimensionNames}. */
+    @Nullable
+    public final ResourceLocation dimensionName;
     private final Map<ResourceLocation, WGConfigItem<?>> items = new LinkedHashMap<>();
 
-    public GatherWorldgenConfigEvent(int dimensionId) {
+    public GatherWorldgenConfigEvent(int dimensionId, @Nullable ResourceLocation dimensionName) {
         this.dimensionId = dimensionId;
+        this.dimensionName = dimensionName;
     }
 
     /** Adds a setting to this dimension. Settings are shown in the order they're added. */
@@ -43,8 +49,8 @@ public class GatherWorldgenConfigEvent extends Event {
     }
 
     /** Fires the event for a dimension and returns the settings that were added. */
-    public static List<WGConfigItem<?>> gather(int dimensionId) {
-        GatherWorldgenConfigEvent event = new GatherWorldgenConfigEvent(dimensionId);
+    public static List<WGConfigItem<?>> gather(int dimensionId, @Nullable ResourceLocation dimensionName) {
+        GatherWorldgenConfigEvent event = new GatherWorldgenConfigEvent(dimensionId, dimensionName);
         MinecraftForge.EVENT_BUS.post(event);
         return event.getItems();
     }
