@@ -19,7 +19,6 @@ import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 @Mixin(EntityArrow.class)
 public abstract class MixinEntityArrow extends Entity {
 
-
     /// xTile
     @Shadow
     private int field_145791_d;
@@ -51,7 +50,8 @@ public abstract class MixinEntityArrow extends Entity {
     }
 
     /**
-     * Vanilla saves the tile coords as shorts, which wrap for arrows stuck beyond +-32767. Overwrite them with an int tag;
+     * Vanilla saves the tile coords as shorts, which wrap for arrows stuck beyond +-32767. Overwrite them with an int
+     * tag;
      * vanilla's getShort still reads it, and getInteger still reads old short tags.
      */
     @Inject(method = "writeEntityToNBT", at = @At("TAIL"), require = 1)
