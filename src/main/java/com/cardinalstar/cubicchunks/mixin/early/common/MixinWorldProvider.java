@@ -34,7 +34,6 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
-import com.cardinalstar.cubicchunks.api.world.ICubicWorldType;
 import com.cardinalstar.cubicchunks.world.ICubicWorld;
 import com.cardinalstar.cubicchunks.world.SpawnPlaceFinder;
 import com.gtnewhorizon.gtnhlib.blockpos.BlockPos;
@@ -54,15 +53,6 @@ public abstract class MixinWorldProvider {
     @Overwrite(remap = false)
     public int getHeight() {
         return ((ICubicWorld) worldObj).getMaxHeight();
-    }
-
-    @Inject(method = "getActualHeight", at = @At("HEAD"), cancellable = true, remap = false)
-    private void getActualHeight(CallbackInfoReturnable<Integer> cir) {
-        if (worldObj == null || !(worldObj.getWorldInfo()
-            .getTerrainType() instanceof ICubicWorldType)) {
-            return;
-        }
-        cir.setReturnValue(((ICubicWorld) worldObj).getMaxGenerationHeight());
     }
 
     @Inject(method = "getRandomizedSpawnPoint", at = @At(value = "HEAD"), cancellable = true, remap = false)

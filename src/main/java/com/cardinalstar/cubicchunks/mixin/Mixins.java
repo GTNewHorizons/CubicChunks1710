@@ -165,10 +165,6 @@ public enum Mixins implements IMixins {
         .addCommonMixins("common.MixinWorldServer")
         .setPhase(Phase.EARLY)
         .setApplyIf(() -> true)),
-    MIXIN_WORLD_SETTINGS(
-        new MixinBuilder("Mixin for world settings allowing cubes.").addCommonMixins("common.MixinWorldSettings")
-            .setPhase(Phase.EARLY)
-            .setApplyIf(() -> true)),
     MIXIN_WORLD_PROVIDER(new MixinBuilder("Intercept WorldProvider getActualHeight + player spawning.")
         .addCommonMixins("common.MixinWorldProvider")
         .setPhase(Phase.EARLY)
@@ -348,11 +344,6 @@ public enum Mixins implements IMixins {
         .addServerMixins("server.MixinDedicatedServer_HeightLimits")
         .setPhase(Phase.EARLY)
         .setApplyIf(() -> true)),
-    MIXIN_DEDICATED_SERVER_DEFAULT_LEVEL(
-        new MixinBuilder("Changing default level in servers with this mod installed to be VanillaCubic.")
-            .addServerMixins("server.MixinDedicatedServer_DefaultLevelType")
-            .setPhase(Phase.EARLY)
-            .setApplyIf(() -> true)),
 
     // =============================================================
     // Mod Mixins

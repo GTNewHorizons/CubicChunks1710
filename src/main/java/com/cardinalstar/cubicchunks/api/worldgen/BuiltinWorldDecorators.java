@@ -25,5 +25,4 @@ import com.cardinalstar.cubicchunks.api.worldgen.impl.StandardWorldDecorator;
 public class BuiltinWorldDecorators {
 
     public static final StandardWorldDecorator VANILLA = new StandardWorldDecorator();
-    public static final StandardWorldDecorator CUBIC_VANILLA = new StandardWorldDecorator();
 }
