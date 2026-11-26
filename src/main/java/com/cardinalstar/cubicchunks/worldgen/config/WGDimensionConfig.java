@@ -14,8 +14,11 @@ import net.minecraft.util.ResourceLocation;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * One dimension's worldgen settings: the items gathered for it (see {@link GatherWorldgenConfigEvent}) and their
- * values. Only values that differ from the item's default are stored here, but {@link WorldgenConfig#save} writes
+ * One dimension's worldgen settings: its generator, the items gathered for it (see {@link GatherWorldgenConfigEvent})
+ * and their values. Which items apply depends on the generator, so changing it means gathering them again; see
+ * {@link WorldgenConfig#setGenerator}.
+ * <p>
+ * Only values that differ from the item's default are stored here, but {@link WorldgenConfig#save} writes
  * every item's value so the file pins them against future default changes.
  * <p>
  * Thread-safe: generators may store values they work out while generating (e.g. auto-detected filler).
@@ -26,13 +29,21 @@ public class WGDimensionConfig {
     /** Null if the dimension has no name. */
     @Nullable
     public final ResourceLocation dimensionName;
+    /**
+     * The selected {@link com.cardinalstar.cubicchunks.api.worldgen.IWorldGeneratorType generator}'s id. Null means
+     * Automatic, which is resolved when the dimension first loads.
+     */
+    @Nullable
+    public final ResourceLocation generator;
     private final List<WGConfigItem<?>> items;
     private final Set<ResourceLocation> itemIds = new HashSet<>();
     private final Map<ResourceLocation, Object> values = new ConcurrentHashMap<>();
 
-    public WGDimensionConfig(int dimensionId, @Nullable ResourceLocation dimensionName, List<WGConfigItem<?>> items) {
+    public WGDimensionConfig(int dimensionId, @Nullable ResourceLocation dimensionName,
+        @Nullable ResourceLocation generator, List<WGConfigItem<?>> items) {
         this.dimensionId = dimensionId;
         this.dimensionName = dimensionName;
+        this.generator = generator;
         this.items = Collections.unmodifiableList(new ArrayList<>(items));
         for (WGConfigItem<?> item : items) {
             itemIds.add(item.getId());
@@ -81,6 +92,13 @@ public class WGDimensionConfig {
 
     public void resetAll() {
         values.clear();
+    }
+
+    /** Copies the values of the settings both dimensions have, e.g. when settings are gathered for a new generator. */
+    void copyValuesFrom(WGDimensionConfig other) {
+        for (Map.Entry<ResourceLocation, Object> entry : other.values.entrySet()) {
+            if (itemIds.contains(entry.getKey())) values.put(entry.getKey(), entry.getValue());
+        }
     }
 
     /** The dimension's name and id, for messages. */

@@ -41,6 +41,7 @@ import org.apache.logging.log4j.Logger;
 import com.cardinalstar.cubicchunks.api.DimensionNames;
 import com.cardinalstar.cubicchunks.api.world.storage.ICubicStorage;
 import com.cardinalstar.cubicchunks.api.world.storage.StorageFormatFactory;
+import com.cardinalstar.cubicchunks.api.worldgen.WorldGeneratorTypes;
 import com.cardinalstar.cubicchunks.api.worldtype.VanillaCubicWorldType;
 import com.cardinalstar.cubicchunks.async.TaskPool;
 import com.cardinalstar.cubicchunks.event.handlers.ClientEventHandler;
@@ -51,6 +52,7 @@ import com.cardinalstar.cubicchunks.server.chunkio.RegionCubeStorage;
 import com.cardinalstar.cubicchunks.util.CompatHandler;
 import com.cardinalstar.cubicchunks.util.SideUtils;
 import com.cardinalstar.cubicchunks.world.worldgen.WorldGenerators;
+import com.cardinalstar.cubicchunks.worldgen.BuiltinGeneratorTypes;
 import com.cardinalstar.cubicchunks.worldgen.WorldgenHangWatchdog;
 import com.cardinalstar.cubicchunks.worldgen.config.ServerWorldgenConfig;
 import com.cardinalstar.cubicchunks.worldgen.config.WGConfigItems;
@@ -169,6 +171,7 @@ public class CubicChunks {
         }
 
         DimensionNames.INSTANCE.registerVanilla();
+        BuiltinGeneratorTypes.register(WorldGeneratorTypes.INSTANCE);
         WGConfigItems.register();
 
         CommonEventHandler eventHandler = new CommonEventHandler();

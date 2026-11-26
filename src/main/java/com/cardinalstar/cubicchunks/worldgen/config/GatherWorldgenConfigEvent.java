@@ -29,11 +29,27 @@ public class GatherWorldgenConfigEvent extends Event {
     /** Null if nobody named the dimension; see {@link com.cardinalstar.cubicchunks.api.DimensionNames}. */
     @Nullable
     public final ResourceLocation dimensionName;
+    /**
+     * The id of the dimension's {@link com.cardinalstar.cubicchunks.api.worldgen.IWorldGeneratorType generator}. Null
+     * if it's Automatic and hasn't been resolved yet, e.g. on the Create World screen; see {@link #mayUseGenerator}.
+     */
+    @Nullable
+    public final ResourceLocation generator;
     private final Map<ResourceLocation, WGConfigItem<?>> items = new LinkedHashMap<>();
 
-    public GatherWorldgenConfigEvent(int dimensionId, @Nullable ResourceLocation dimensionName) {
+    public GatherWorldgenConfigEvent(int dimensionId, @Nullable ResourceLocation dimensionName,
+        @Nullable ResourceLocation generator) {
         this.dimensionId = dimensionId;
         this.dimensionName = dimensionName;
+        this.generator = generator;
+    }
+
+    /**
+     * Whether the dimension may generate with this generator: it's selected, or Automatic hasn't picked one yet. For
+     * settings that only one generator uses.
+     */
+    public boolean mayUseGenerator(ResourceLocation id) {
+        return generator == null || generator.equals(id);
     }
 
     /** Adds a setting to this dimension. Settings are shown in the order they're added. */
@@ -49,8 +65,9 @@ public class GatherWorldgenConfigEvent extends Event {
     }
 
     /** Fires the event for a dimension and returns the settings that were added. */
-    public static List<WGConfigItem<?>> gather(int dimensionId, @Nullable ResourceLocation dimensionName) {
-        GatherWorldgenConfigEvent event = new GatherWorldgenConfigEvent(dimensionId, dimensionName);
+    public static List<WGConfigItem<?>> gather(int dimensionId, @Nullable ResourceLocation dimensionName,
+        @Nullable ResourceLocation generator) {
+        GatherWorldgenConfigEvent event = new GatherWorldgenConfigEvent(dimensionId, dimensionName, generator);
         MinecraftForge.EVENT_BUS.post(event);
         return event.getItems();
     }

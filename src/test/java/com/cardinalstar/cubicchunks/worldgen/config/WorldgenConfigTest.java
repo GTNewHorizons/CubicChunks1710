@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -17,7 +18,11 @@ import java.util.Collections;
 import java.util.List;
 
 import net.minecraft.util.ChatComponentText;
+import net.minecraft.util.IChatComponent;
 import net.minecraft.util.ResourceLocation;
+import net.minecraft.world.World;
+import net.minecraft.world.WorldServer;
+import net.minecraft.world.chunk.IChunkProvider;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -27,6 +32,9 @@ import org.spongepowered.configurate.hocon.HoconConfigurationLoader;
 
 import com.cardinalstar.cubicchunks.api.DimensionNames;
 import com.cardinalstar.cubicchunks.api.IntRange;
+import com.cardinalstar.cubicchunks.api.worldgen.IWorldGenerator;
+import com.cardinalstar.cubicchunks.api.worldgen.IWorldGeneratorType;
+import com.cardinalstar.cubicchunks.api.worldgen.WorldGeneratorTypes;
 
 class WorldgenConfigTest {
 
@@ -58,7 +66,7 @@ class WorldgenConfigTest {
         .of(new ResourceLocation("cctest", "list"), new String[] { "x" }, WGConfigItemTypes.stringList());
 
     private static final List<WGConfigItem<?>> ITEMS = Arrays.asList(RANGE, ALIGNED, BLOCK, FILLER, STRATA, LIST);
-    private static final WGConfigItemSource SOURCE = (dimensionId, dimensionName) -> ITEMS;
+    private static final WGConfigItemSource SOURCE = (dimensionId, dimensionName, generator) -> ITEMS;
 
     @TempDir
     File worldDir;
@@ -278,8 +286,8 @@ class WorldgenConfigTest {
     @Test
     void dimensionsOnlyHaveGatheredItems() throws IOException {
         // Dimension 1 doesn't use RANGE, e.g. because its generator ignores it
-        WGConfigItemSource source = (dimensionId, dimensionName) -> dimensionId == 1 ? Collections.singletonList(BLOCK)
-            : ITEMS;
+        WGConfigItemSource source = (dimensionId, dimensionName,
+            generator) -> dimensionId == 1 ? Collections.singletonList(BLOCK) : ITEMS;
         write("dimensions { \"minecraft:the_end\" { cctest { range { min = 1, max = 2 } } } }");
 
         WorldgenConfig config = WorldgenConfig.load(worldDir, source, names);
@@ -303,7 +311,7 @@ class WorldgenConfigTest {
 
     @Test
     void gatherRejectsDuplicates() {
-        GatherWorldgenConfigEvent event = new GatherWorldgenConfigEvent(0, null);
+        GatherWorldgenConfigEvent event = new GatherWorldgenConfigEvent(0, null, null);
         event.add(RANGE);
         event.add(BLOCK);
         assertThrows(IllegalArgumentException.class, () -> event.add(RANGE));
@@ -426,7 +434,7 @@ class WorldgenConfigTest {
     void sourceGetsDimensionName() {
         names.register(-1, DimensionNames.THE_NETHER, null);
         List<ResourceLocation> gathered = new ArrayList<>();
-        WGConfigItemSource source = (dimensionId, dimensionName) -> {
+        WGConfigItemSource source = (dimensionId, dimensionName, generator) -> {
             gathered.add(dimensionName);
             return ITEMS;
         };
@@ -475,6 +483,141 @@ class WorldgenConfigTest {
         write("version = " + (WorldgenConfig.VERSION + 1));
 
         assertThrows(ConfigurateException.class, () -> WorldgenConfig.load(worldDir, SOURCE, names));
+    }
+
+    private static final ResourceLocation GENERATOR = new ResourceLocation("cctest", "generator");
+    private static final ResourceLocation OTHER_GENERATOR = new ResourceLocation("cctest", "other");
+
+    /** Like the filler settings: FILLER only applies to {@link #GENERATOR}. */
+    private static final WGConfigItemSource GENERATOR_SOURCE = (dimensionId, dimensionName, generator) -> {
+        GatherWorldgenConfigEvent event = new GatherWorldgenConfigEvent(dimensionId, dimensionName, generator);
+        event.add(RANGE);
+        if (event.mayUseGenerator(GENERATOR)) event.add(FILLER);
+        return event.getItems();
+    };
+
+    @Test
+    void generatorSavedAndLoaded() throws ConfigurateException {
+        WorldgenConfig config = new WorldgenConfig(GENERATOR_SOURCE, names);
+        config.setGenerator(0, GENERATOR);
+        config.save(worldDir);
+
+        assertEquals(
+            "cctest:generator",
+            readRaw().node("dimensions", "minecraft:overworld", "cubicchunks", "generator")
+                .getString());
+        assertEquals(
+            GENERATOR,
+            WorldgenConfig.load(worldDir, GENERATOR_SOURCE, names)
+                .get(0).generator);
+    }
+
+    @Test
+    void automaticGeneratorIsNotSaved() throws ConfigurateException {
+        WorldgenConfig config = new WorldgenConfig(GENERATOR_SOURCE, names);
+        assertNull(config.getOrCreate(0).generator);
+        config.save(worldDir);
+
+        assertTrue(
+            readRaw().node("dimensions", "minecraft:overworld", "cubicchunks", "generator")
+                .virtual());
+        assertNull(
+            WorldgenConfig.load(worldDir, GENERATOR_SOURCE, names)
+                .get(0).generator);
+    }
+
+    @Test
+    void settingGeneratorGathersAgainAndKeepsValues() {
+        WorldgenConfig config = new WorldgenConfig(GENERATOR_SOURCE, names);
+        WGDimensionConfig automatic = config.getOrCreate(0);
+        // Automatic hasn't picked a generator yet, so it could be the one FILLER is for
+        assertTrue(automatic.hasItem(FILLER));
+        automatic.set(RANGE, new IntRange(-64, 320));
+        automatic.set(FILLER, new BlockRef("minecraft:bedrock", 0));
+
+        WGDimensionConfig dim = config.setGenerator(0, OTHER_GENERATOR);
+        assertSame(dim, config.get(0));
+        assertFalse(dim.hasItem(FILLER));
+        assertEquals(new IntRange(-64, 320), dim.get(RANGE));
+
+        assertTrue(
+            config.setGenerator(0, GENERATOR)
+                .hasItem(FILLER));
+    }
+
+    @Test
+    void generatorDecidesItemsOnLoad() throws IOException {
+        write(
+            "dimensions { \"minecraft:overworld\" { cubicchunks { generator = \"cctest:other\" }\n"
+                + "cctest { filler { block = \"minecraft:bedrock\" } } } }");
+
+        WorldgenConfig config = WorldgenConfig.load(worldDir, GENERATOR_SOURCE, names);
+        assertFalse(
+            config.get(0)
+                .hasItem(FILLER));
+
+        // The other generator's value is kept in the file
+        config.save(worldDir);
+        assertEquals(
+            "minecraft:bedrock",
+            readRaw().node("dimensions", "minecraft:overworld", "cctest", "filler", "block")
+                .getString());
+    }
+
+    @Test
+    void shortGeneratorNamesFail() throws IOException {
+        write("dimensions { \"minecraft:overworld\" { cubicchunks { generator = original } } }");
+
+        assertThrows(ConfigurateException.class, () -> WorldgenConfig.load(worldDir, GENERATOR_SOURCE, names));
+    }
+
+    @Test
+    void generatorRegistry() {
+        WorldGeneratorTypes registry = new WorldGeneratorTypes();
+        IWorldGeneratorType first = new TestGeneratorType(GENERATOR);
+        IWorldGeneratorType second = new TestGeneratorType(OTHER_GENERATOR);
+        registry.register(first);
+        registry.register(second);
+
+        assertSame(first, registry.get(GENERATOR));
+        assertNull(registry.get(new ResourceLocation("cctest", "missing")));
+        assertEquals(Arrays.asList(first, second), registry.getAll());
+        assertThrows(IllegalArgumentException.class, () -> registry.register(new TestGeneratorType(GENERATOR)));
+        assertSame(first, registry.get(GENERATOR));
+    }
+
+    private static final class TestGeneratorType implements IWorldGeneratorType {
+
+        private final ResourceLocation id;
+
+        TestGeneratorType(ResourceLocation id) {
+            this.id = id;
+        }
+
+        @Override
+        public ResourceLocation getId() {
+            return id;
+        }
+
+        @Override
+        public IChatComponent getDisplayName() {
+            return new ChatComponentText(id.toString());
+        }
+
+        @Override
+        public boolean appliesTo(World world) {
+            return true;
+        }
+
+        @Override
+        public IntRange getGenerationRange(World world) {
+            return new IntRange(0, 256);
+        }
+
+        @Override
+        public IWorldGenerator create(WorldServer world, IChunkProvider original) {
+            throw new UnsupportedOperationException();
+        }
     }
 
     private void write(String contents) throws IOException {
