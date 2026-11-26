@@ -27,41 +27,15 @@ import java.util.Map;
 
 import javax.annotation.ParametersAreNonnullByDefault;
 
-import net.minecraft.block.Block;
-
 import com.cardinalstar.cubicchunks.server.chunkio.CCNBTUtils.TagCompression;
-import com.cardinalstar.cubicchunks.worldgen.FillerInfo;
 import com.cardinalstar.cubicchunks.worldgen.HeightInfo;
 import com.gtnewhorizon.gtnhlib.config.Config;
 import com.gtnewhorizon.gtnhlib.config.ConfigException;
 import com.gtnewhorizon.gtnhlib.config.ConfigurationManager;
-import com.gtnewhorizon.gtnhlib.util.data.BlockMeta;
-
-import cpw.mods.fml.common.registry.GameRegistry;
 
 @ParametersAreNonnullByDefault
 @Config(modid = CubicChunks.MODID, category = "general")
 public class CubicChunksConfig {
-
-    @Config.Ignore
-    public static Map<Integer, FillerInfo> configuredDimensionalFillerMap = new HashMap<>();
-
-    @Config.LangKey("cubicchunks.config.filler_blocks")
-    @Config.Comment("Determines the filler block for dimensions. Default will attempt to be auto generated based on bottom layer blocks.\n"
-        + "Specifications are done as follows: 'dimensionId:direction:resourceLocation:meta'.\n"
-        + "Valid directions are 'top', 'bottom', and 'both' "
-        + "Meta is defaulted to 0.\n"
-        + "Example:\n"
-        + "     S:defaultFillerBlocks <\n"
-        + "         0:bottom:minecraft:stone:3,\n"
-        + "         0:top:minecraft:air,\n"
-        + "         -1:both:minecraft:netherrack\n"
-        + "     >\n"
-        + "Spaces and tabs are not necessary. NEI is a good tool for this if you don't know the meta and resource location of blocks. (f3 + H)\n"
-        + "It's highly recommend to define these, as block are chosen before population is done on chunks, meaning that if bottom layers are normally\n"
-        + "populated to some block it might be missed.")
-    public static String[] default_filler_blocks = { "0:bottom:minecraft:stone", "0:top:minecraft:air",
-        "-1:both:minecraft:netherrack", "1:both:minecraft:air" };
 
     @Config.Ignore
     public static Map<Integer, HeightInfo> configuredDimensionalHeightMap = new HashMap<>();
@@ -248,50 +222,6 @@ public class CubicChunksConfig {
                 throw new ConfigException("Dimensional Height Overrides configuration is malformed for entry: " + i);
             }
             i++;
-        }
-
-        i = 1;
-        // Filler Configs
-        for (String config : default_filler_blocks) {
-            String[] entries = config.split(":");
-            if (entries.length != 4 && entries.length != 5) {
-                throw new ConfigException("Dimensional Filler block configuration is malformed for entry: " + i);
-            }
-            try {
-                int dimension = Integer.parseInt(entries[0]);
-                Block fillerBlock = GameRegistry.findBlock(entries[2], entries[3]);
-                if (fillerBlock == null) {
-                    throw new ConfigException(
-                        "Dimensional Height Overrides configuration is malformed for entry: " + i
-                            + ". Block not found for resource location "
-                            + entries[2]
-                            + ":"
-                            + entries[3]);
-                }
-                int meta = entries.length == 4 ? 0 : Integer.parseInt(entries[4]);
-
-                FillerInfo info = configuredDimensionalFillerMap.getOrDefault(dimension, new FillerInfo());
-
-                String direction = entries[1];
-                if (direction.equals("bottom")) {
-                    info.bottomFiller = new BlockMeta(fillerBlock, meta);
-                } else if (direction.equals("top")) {
-                    info.topFiller = new BlockMeta(fillerBlock, meta);
-                } else if (direction.equals("both")) {
-                    info.bottomFiller = new BlockMeta(fillerBlock, meta);
-                    info.topFiller = new BlockMeta(fillerBlock, meta);
-                } else {
-                    throw new ConfigException(
-                        "Directional argument for filler blocks is invalid for entry: " + i
-                            + ". Invalid:"
-                            + direction
-                            + " Valid directions are both, bottom, and top.");
-                }
-
-                configuredDimensionalFillerMap.put(dimension, info);
-            } catch (NumberFormatException e) {
-                throw new ConfigException("Dimensional filler default configuration is malformed for entry: " + i);
-            }
         }
     }
 

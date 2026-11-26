@@ -48,6 +48,17 @@ public final class WGConfigItems {
     public static final WGConfigItem<BlockRef> EXAMPLE_BLOCK = WGConfigItem
         .of(id("example_block"), new BlockRef("minecraft:stone", 0), WGConfigItemTypes.block());
 
+    /**
+     * Fills cubes below the vanilla terrain, in dimensions using the vanilla-compatible generator. Null (auto) means
+     * the generator works it out from the bottom of the world's first chunk, then stores the result here.
+     */
+    public static final WGConfigItem<BlockRef> VANILLA_BOTTOM_FILLER = WGConfigItem
+        .of(id("vanilla_generator/bottom_filler"), null, WGConfigItemTypes.blockOrAuto());
+
+    /** Like {@link #VANILLA_BOTTOM_FILLER}, for cubes above the vanilla terrain. */
+    public static final WGConfigItem<BlockRef> VANILLA_TOP_FILLER = WGConfigItem
+        .of(id("vanilla_generator/top_filler"), null, WGConfigItemTypes.blockOrAuto());
+
     /** Adds Cubic Chunks' own settings to every dimension, through {@link GatherWorldgenConfigEvent}. */
     public static void register() {
         MinecraftForge.EVENT_BUS.register(new WGConfigItems());
@@ -56,6 +67,9 @@ public final class WGConfigItems {
     @SubscribeEvent
     public void onGather(GatherWorldgenConfigEvent event) {
         event.add(HEIGHT);
+        // Only VanillaWorldGenerator uses these; limit them to its dimensions once generators are chosen per dimension
+        event.add(VANILLA_BOTTOM_FILLER);
+        event.add(VANILLA_TOP_FILLER);
         event.add(STRATA);
         event.add(EXAMPLE_BLOCK);
     }

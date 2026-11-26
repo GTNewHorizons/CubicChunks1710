@@ -34,7 +34,7 @@ import com.cardinalstar.cubicchunks.server.CubicPlayerManager;
 import com.cardinalstar.cubicchunks.util.Array3D;
 import com.cardinalstar.cubicchunks.util.CubePos;
 import com.cardinalstar.cubicchunks.util.XZAddressable;
-import com.cardinalstar.cubicchunks.world.CubicChunksSavedData;
+import com.cardinalstar.cubicchunks.world.ICubicWorld;
 import com.cardinalstar.cubicchunks.world.api.ICubeProviderServer.Requirement;
 import com.cardinalstar.cubicchunks.world.column.EmptyColumn;
 import com.cardinalstar.cubicchunks.world.core.IColumnInternal;
@@ -86,10 +86,10 @@ public class CubeLoaderServer implements ICubeLoader {
         this.generator = generator;
         this.callback = callback;
 
-        CubicChunksSavedData data = CubicChunksSavedData.get(world);
+        ICubicWorld cubicWorld = (ICubicWorld) world;
 
-        this.minCube = data.minHeight >> 4;
-        this.maxCube = (data.maxHeight - 1) >> 4;
+        this.minCube = cubicWorld.getMinHeight() >> 4;
+        this.maxCube = (cubicWorld.getMaxHeight() - 1) >> 4;
 
         this.emptyColumn = new EmptyColumn(world, 0, 0);
         this.emptyCube = new BlankCube(emptyColumn);
