@@ -241,6 +241,10 @@ public enum Mixins implements IMixins {
         new MixinBuilder("Allowing bats to fly and hang below y = 0.").addCommonMixins("common.MixinEntityBat")
             .setPhase(Phase.EARLY)
             .setApplyIf(() -> true)),
+    MIXIN_PROJECTILES(new MixinBuilder("Fixing projectile stuck-block and existence checks for cubic heights")
+        .addCommonMixins("common.MixinEntityArrow", "common.MixinEntityFireball")
+        .setPhase(Phase.EARLY)
+        .setApplyIf(() -> true)),
 
     // SERVER
     MIXIN_INTEGRATED_SERVER_ACCESSOR(
