@@ -8,9 +8,20 @@ import org.spongepowered.configurate.serialize.TypeSerializer;
 import org.spongepowered.configurate.serialize.TypeSerializerCollection;
 
 import com.cardinalstar.cubicchunks.api.IntRange;
+import com.cardinalstar.cubicchunks.worldgen.config.gui.element.BlockConfigElement;
+import com.cardinalstar.cubicchunks.worldgen.config.gui.element.IntRangeConfigElement;
+import com.cardinalstar.cubicchunks.worldgen.config.gui.element.StrataConfigElement;
+import com.cardinalstar.cubicchunks.worldgen.config.gui.element.WGListConfigElement;
+
+import cpw.mods.fml.client.config.ConfigGuiType;
+import cpw.mods.fml.client.config.IConfigElement;
+import cpw.mods.fml.relauncher.Side;
+import cpw.mods.fml.relauncher.SideOnly;
 
 /**
  * Factories for the built-in {@link WGConfigItemType}s.
+ * <p>
+ * These are anonymous classes rather than lambdas so that {@link SideOnly} strips the GUI code on dedicated servers.
  */
 public final class WGConfigItemTypes {
 
@@ -41,6 +52,12 @@ public final class WGConfigItemTypes {
                 long max = -Math.floorDiv(-(long) value.getMax(), alignment) * alignment;
                 return new IntRange((int) Math.max(limits.getMin(), min), (int) Math.min(limits.getMax(), max));
             }
+
+            @Override
+            @SideOnly(Side.CLIENT)
+            public IConfigElement<?> createConfigElement(WGConfigItem<IntRange> item, WGDimensionConfig sandbox) {
+                return new IntRangeConfigElement(item, sandbox, limits, allowUnbounded);
+            }
         };
     }
 
@@ -67,6 +84,12 @@ public final class WGConfigItemTypes {
             public TypeSerializer<BlockRef> getSerializer() {
                 return serializer;
             }
+
+            @Override
+            @SideOnly(Side.CLIENT)
+            public IConfigElement<?> createConfigElement(WGConfigItem<BlockRef> item, WGDimensionConfig sandbox) {
+                return new BlockConfigElement(item, sandbox);
+            }
         };
     }
 
@@ -90,6 +113,12 @@ public final class WGConfigItemTypes {
             public List<Stratum> normalize(List<Stratum> value) {
                 return Collections.unmodifiableList(new ArrayList<>(value));
             }
+
+            @Override
+            @SideOnly(Side.CLIENT)
+            public IConfigElement<?> createConfigElement(WGConfigItem<List<Stratum>> item, WGDimensionConfig sandbox) {
+                return new StrataConfigElement(item, sandbox);
+            }
         };
     }
 
@@ -106,6 +135,12 @@ public final class WGConfigItemTypes {
             @Override
             public TypeSerializer<String[]> getSerializer() {
                 return serializer;
+            }
+
+            @Override
+            @SideOnly(Side.CLIENT)
+            public IConfigElement<?> createConfigElement(WGConfigItem<String[]> item, WGDimensionConfig sandbox) {
+                return new WGListConfigElement<>(item, sandbox, ConfigGuiType.STRING);
             }
         };
     }
