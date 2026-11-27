@@ -36,11 +36,13 @@ public class BooleanArray2D extends BitSet implements Iterable<Vector2ic> {
         this.or(BitSet.valueOf(data));
     }
 
-    public void set(int x, int y) {
+    // Not named set/clear: those would override BitSet.set(fromIndex, toIndex) and BitSet.clear(fromIndex, toIndex),
+    // which BitSet.set(fromIndex, toIndex, value) calls
+    public void set2d(int x, int y) {
         set(index(x, y));
     }
 
-    public void clear(int x, int y) {
+    public void clear2d(int x, int y) {
         clear(index(x, y));
     }
 

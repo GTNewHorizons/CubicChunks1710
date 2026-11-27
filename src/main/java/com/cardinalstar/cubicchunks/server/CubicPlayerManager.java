@@ -277,12 +277,6 @@ public class CubicPlayerManager extends PlayerManager implements CubeLoaderCallb
 
     // Note these arguments are in global block coordinates
 
-    public void onSurfaceTracked(Cube cube) {
-        for (var player : players.getPlayerArray()) {
-            player.sync.onSurfaceTracked(cube);
-        }
-    }
-
     public void heightUpdated(int x, int z) {
         Chunk column = provider.getLoadedColumn(x >> 4, z >> 4);
 
@@ -309,6 +303,11 @@ public class CubicPlayerManager extends PlayerManager implements CubeLoaderCallb
             pendingPlayerAddToCubeMap.add(player);
             return;
         }
+
+        // This is already done by MC, but it's done after `addPlayer` is called, which prevents it from doing anything
+        // useful. Call it here manually to do it before we send all the world data.
+        player.playerNetServerHandler
+            .setPlayerLocation(player.posX, player.posY, player.posZ, player.rotationYaw, player.rotationPitch);
 
         WatchingPlayer watchingPlayer = new WatchingPlayer(player);
         watchingPlayer.updateManagedPos();

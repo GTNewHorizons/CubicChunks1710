@@ -70,16 +70,16 @@ import com.cardinalstar.cubicchunks.api.IColumn;
 import com.cardinalstar.cubicchunks.api.ICube;
 import com.cardinalstar.cubicchunks.api.IHeightMap;
 import com.cardinalstar.cubicchunks.mixin.api.ICubicWorldInternal;
+import com.cardinalstar.cubicchunks.network.CCPacketBuffer;
 import com.cardinalstar.cubicchunks.util.Mods;
 import com.cardinalstar.cubicchunks.world.column.ColumnTileEntityMap;
 import com.cardinalstar.cubicchunks.world.column.CubeMap;
 import com.cardinalstar.cubicchunks.world.column.EmptyEBS;
-import com.cardinalstar.cubicchunks.world.core.ClientHeightMap;
 import com.cardinalstar.cubicchunks.world.core.IColumnInternal;
-import com.cardinalstar.cubicchunks.world.core.ServerHeightMap;
-import com.cardinalstar.cubicchunks.world.core.StagingHeightMap;
 import com.cardinalstar.cubicchunks.world.cube.BlankCube;
 import com.cardinalstar.cubicchunks.world.cube.Cube;
+import com.cardinalstar.cubicchunks.world.heightmap.HeightMap3D;
+import com.cardinalstar.cubicchunks.world.heightmap.PrecipitationHeightMap;
 import com.llamalad7.mixinextras.expression.Definition;
 import com.llamalad7.mixinextras.expression.Expression;
 import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
@@ -113,8 +113,6 @@ public abstract class MixinChunk implements IColumn, IColumnInternal {
     @Shadow
     public int[] heightMap;
     @Shadow
-    public int[] precipitationHeightMap;
-    @Shadow
     public World worldObj;
     @Shadow
     public boolean isChunkLoaded;
@@ -129,9 +127,9 @@ public abstract class MixinChunk implements IColumn, IColumnInternal {
     @Unique
     private IHeightMap opacityIndex;
     @Unique
-    private Cube cachedCube; // todo: make it always nonnull using BlankCube
+    private PrecipitationHeightMap precipitationIndex;
     @Unique
-    private StagingHeightMap stagingHeightMap;
+    private Cube cachedCube; // todo: make it always nonnull using BlankCube
     @Unique
     private boolean isColumn = false;
 
@@ -208,14 +206,10 @@ public abstract class MixinChunk implements IColumn, IColumnInternal {
             return;
         }
 
+        int actualHeight = world.provider.getActualHeight();
+
         this.cubeMap = new CubeMap();
-        // clientside we don't really need that much data. we actually only need top and bottom block Y positions
-        if (world.isRemote) {
-            this.opacityIndex = new ClientHeightMap((Chunk) (Object) this, heightMap);
-        } else {
-            this.opacityIndex = new ServerHeightMap(heightMap);
-        }
-        this.stagingHeightMap = new StagingHeightMap();
+        this.opacityIndex = new HeightMap3D(heightMap, actualHeight);
         // instead of redirecting access to this map, just make the map do the work
         this.chunkTileEntityMap = new ColumnTileEntityMap(this);
 
@@ -293,6 +287,19 @@ public abstract class MixinChunk implements IColumn, IColumnInternal {
         return false;
     }
 
+    /**
+     * Vanilla reads the old height from {@code heightMap}, which is capped at the world's actual height for mods. Use
+     * the real top instead, so placing or removing the top block above that height still relights the column below.
+     */
+    @ModifyVariable(method = "func_150807_a", at = @At(value = "STORE"), name = "j1")
+    private int setBlockState_CubicChunks_realOldHeight(int oldHeightValue, int localX, int y, int localZ, Block block,
+        int meta) {
+        if (!isColumn) {
+            return oldHeightValue;
+        }
+        return getTopYWithStaging(localX, localZ) + 1;
+    }
+
     @Inject(
         method = "func_150807_a",
         at = @At(value = "INVOKE", target = "Lnet/minecraft/world/chunk/Chunk;relightBlock(III)V"))
@@ -306,7 +313,7 @@ public abstract class MixinChunk implements IColumn, IColumnInternal {
                     .doOnBlockSetLightUpdates(
                         (Chunk) (Object) this,
                         localX,
-                        getHeightValue(localX, localZ),
+                        getTopYWithStaging(localX, localZ) + 1,
                         localY,
                         localZ);
             } else {
@@ -339,6 +346,22 @@ public abstract class MixinChunk implements IColumn, IColumnInternal {
     // ==============================================
     // getBlockLightOpacity
     // ==============================================
+
+    /**
+     * Updates the opacity index for a changed block. Returns true when the height map changed, so that clients only
+     * get height map updates for block columns whose height map changed.
+     */
+    @Unique
+    private boolean setOpacity(int localX, int blockY, int localZ, Block block) {
+        boolean occluded = block.getLightOpacity() > 0;
+
+        if (opacityIndex instanceof HeightMap3D heightMap) {
+            return heightMap.setOccluded(localX, blockY, localZ, occluded);
+        }
+
+        opacityIndex.onOpacityChange(localX, blockY, localZ, occluded);
+        return true;
+    }
 
     @Unique
     private void markDirty(Cube cube) {
@@ -468,12 +491,11 @@ public abstract class MixinChunk implements IColumn, IColumnInternal {
 
         markDirty(blockToCube(y));
 
-        if (getCube(blockToCube(y)).isSurfaceTracked()) {
-            opacityIndex.onOpacityChange(blockToLocal(x), y, blockToLocal(z), block.getLightOpacity());
+        boolean heightMapChanged = setOpacity(blockToLocal(x), y, blockToLocal(z), block);
+        getPrecipitationIndex().onBlockChange(blockToLocal(x), y, blockToLocal(z), block);
+        if (heightMapChanged) {
             getWorldObj().getLightingManager()
                 .onHeightUpdate(x + 16 * this.xPosition, y, z + 16 * this.zPosition);
-        } else {
-            stagingHeightMap.onOpacityChange(blockToLocal(x), y, blockToLocal(z), block.getLightOpacity());
         }
     }
 
@@ -526,12 +548,9 @@ public abstract class MixinChunk implements IColumn, IColumnInternal {
 
         Block block = cube.getBlock(x, y, z);
 
-        if (cube.isSurfaceTracked()) {
-            opacityIndex.onOpacityChange(blockToLocal(x), y, blockToLocal(z), block.getLightOpacity());
+        if (setOpacity(blockToLocal(x), y, blockToLocal(z), block)) {
             getWorldObj().getLightingManager()
                 .onHeightUpdate(x + 16 * this.xPosition, y, z + 16 * this.zPosition);
-        } else {
-            stagingHeightMap.onOpacityChange(blockToLocal(x), y, blockToLocal(z), block.getLightOpacity());
         }
     }
 
@@ -884,43 +903,27 @@ public abstract class MixinChunk implements IColumn, IColumnInternal {
     // public boolean needsSaving(boolean p_76601_1_) - TODO: needsSaving
 
     // ==============================================
+    // canBlockSeeTheSky
+    // ==============================================
+
+    @Inject(method = "canBlockSeeTheSky", at = @At(value = "HEAD"), cancellable = true)
+    private void canBlockSeeTheSky_CubicChunks_Replace(int localX, int y, int localZ,
+        CallbackInfoReturnable<Boolean> cbi) {
+        if (isColumn) {
+            // heightMap is capped at the world's actual height, so it cannot see a roof above it
+            cbi.setReturnValue(y > getTopYWithStaging(localX, localZ));
+        }
+    }
+
+    // ==============================================
     // getPrecipitationHeight
     // ==============================================
 
     @Inject(method = "getPrecipitationHeight", at = @At(value = "HEAD"), cancellable = true)
     private void getPrecipitationHeight_CubicChunks_Replace(int x, int z, CallbackInfoReturnable<Integer> cbi) {
         if (isColumn) {
-            int localX = blockToLocal(x);
-            int localZ = blockToLocal(z);
-            int index = localX | localZ << 4;
-
-            if (precipitationHeightMap[index] == -999) {
-                precipitationHeightMap[index] = -1;
-
-                for (Cube cube : cubeMap.cubes(
-                    blockToCube(CubicChunks.MAX_SUPPORTED_BLOCK_Y),
-                    blockToCube(CubicChunks.MIN_SUPPORTED_BLOCK_Y))) {
-                    if (cube.getStorage() == null) {
-                        continue;
-                    }
-
-                    for (int localY = Cube.SIZE - 1; localY >= 0; localY--) {
-                        Block block = cube.getBlock(localX, localY, localZ);
-                        if (block.getMaterial()
-                            .blocksMovement()
-                            || block.getMaterial()
-                                .isLiquid()) {
-                            precipitationHeightMap[index] = cube.getCoords()
-                                .getMinBlockY() + localY
-                                + 1;
-                            cbi.setReturnValue(precipitationHeightMap[index]);
-                            return;
-                        }
-                    }
-                }
-            }
-
-            cbi.setReturnValue(precipitationHeightMap[index]);
+            // Use the column's index rather than the loaded cubes, so a roof in an unloaded cube still counts
+            cbi.setReturnValue(getPrecipitationIndex().getPrecipitationHeight(blockToLocal(x), blockToLocal(z)));
         }
     }
 
@@ -1063,8 +1066,6 @@ public abstract class MixinChunk implements IColumn, IColumnInternal {
     public void addCube(Cube cube) {
         this.cubeMap.put(cube);
 
-        Arrays.fill(this.precipitationHeightMap, -999);
-
         cube.installIntoChunk();
     }
 
@@ -1084,26 +1085,27 @@ public abstract class MixinChunk implements IColumn, IColumnInternal {
     }
 
     @Override
-    public void removeFromStagingHeightmap(ICube cube) {
-        stagingHeightMap.removeStagedCube(cube);
-    }
-
-    @Override
-    public void addToStagingHeightmap(ICube cube) {
-        stagingHeightMap.addStagedCube(cube);
-    }
-
-    @Override
-    public void recalculateStagingHeightmap() {
-        stagingHeightMap.recalculate();
-    }
-
-    @Override
     public int getTopYWithStaging(int localX, int localZ) {
         if (!isColumn) {
             return heightMap[localZ << 4 | localX] - 1;
         }
-        return Math.max(opacityIndex.getTopBlockY(localX, localZ), stagingHeightMap.getTopBlockY(localX, localZ));
+        // The real top, which can be above the world's actual height. heightMap holds a capped copy for mods.
+        return opacityIndex.getTopBlockY(localX, localZ);
+    }
+
+    @Override
+    public void writeHeightmapDataForClient(CCPacketBuffer out) {
+        ((HeightMap3D) this.opacityIndex).writeData(out);
+    }
+
+    @Override
+    public void loadClientHeightmapData(CCPacketBuffer in) {
+        ((HeightMap3D) this.opacityIndex).readData(in);
+
+        // The server only sends the opacity index. Until the cubes arrive, assume their opaque blocks stop rain.
+        if (cubeMap.isEmpty()) {
+            getPrecipitationIndex().copyFrom((HeightMap3D) this.opacityIndex);
+        }
     }
 
     @Override
@@ -1132,6 +1134,16 @@ public abstract class MixinChunk implements IColumn, IColumnInternal {
     @Override
     public IHeightMap getOpacityIndex() {
         return this.opacityIndex;
+    }
+
+    @Override
+    public PrecipitationHeightMap getPrecipitationIndex() {
+        // Created on first use: only cubic columns need it, but every chunk runs the constructor above
+        if (this.precipitationIndex == null) {
+            this.precipitationIndex = new PrecipitationHeightMap();
+        }
+
+        return this.precipitationIndex;
     }
 
     @Override
@@ -1178,6 +1190,7 @@ public abstract class MixinChunk implements IColumn, IColumnInternal {
     @Override
     @Overwrite
     public int getHeightValue(int localX, int localZ) {
-        return getTopYWithStaging(localX, localZ) + 1;
+        // Mod-facing vanilla height: capped at the world's actual height, see HeightMap3D
+        return heightMap[localZ << 4 | localX];
     }
 }
