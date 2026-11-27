@@ -48,7 +48,7 @@ public enum Mixins implements IMixins {
             .setPhase(Phase.EARLY)
             .setApplyIf(() -> true)),
     MIXIN_BLOCK_FALLING(new MixinBuilder("Allowing blocks that are affected by gravity to fall normally.")
-        .addCommonMixins("common.MixinBlockFalling")
+        .addCommonMixins("common.MixinBlockFalling", "common.MixinEntityFallingBlock")
         .setPhase(Phase.EARLY)
         .setApplyIf(() -> true)),
     MIXIN_WORLD_NEIGHBOR_NOTIFY(new MixinBuilder(
