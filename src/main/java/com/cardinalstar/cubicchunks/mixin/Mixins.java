@@ -297,6 +297,15 @@ public enum Mixins implements IMixins {
     MIXIN_IGUI_SCREEN(new MixinBuilder("Allows access to the buttonList field.").addClientMixins("client.IGuiScreen")
         .setPhase(Phase.EARLY)
         .setApplyIf(() -> true)),
+    MIXIN_IGUI_SELECT_WORLD(new MixinBuilder("Allows access to the world list in GuiSelectWorld.")
+        .addClientMixins("client.IGuiSelectWorld", "client.AccessorGuiScreen", "client.AccessorGuiSelectWorld")
+        .setPhase(Phase.EARLY)
+        .setApplyIf(() -> true)),
+    MIXIN_GUI_SELECT_WORLD(new MixinBuilder(
+        "Injects format badge, Convert button, and vanilla-world load warning into the world select screen.")
+            .addClientMixins("client.MixinGuiSelectWorld", "client.MixinGuiSelectWorldList")
+            .setPhase(Phase.EARLY)
+            .setApplyIf(() -> true)),
     MIXIN_CHUNK_CUBES_CLIENT(
         new MixinBuilder("Client chunk fix to turn them to cubes.").addClientMixins("client.MixinChunk_Cubes")
             .setPhase(Phase.EARLY)
