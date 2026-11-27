@@ -110,6 +110,9 @@ class IONbtWriter {
         writeScheduledTicks(cube, level);
         writeLightingInfo(cube, level);
         writeBiomes(cube, level);
+        if (Mods.Postea.isModLoaded()) {
+            PosteaCubes.onCubeWrite(cube, level);
+        }
 
         EVENT_BUS.post(new DataSave(cube.getWorld(), cube, cubeNbt));
 

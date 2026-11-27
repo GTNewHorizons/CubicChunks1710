@@ -52,6 +52,7 @@ dependencies {
     compileOnly("com.falsepattern:chunkapi-mc1.7.10:0.8.1:dev")
     compileOnly("com.falsepattern:endlessids-mc1.7.10:1.7.1:dev")
     compileOnly("ganymedes01.etfuturum:Et-Futurum-Requiem:2.6.2.21-GTNH-daily:dev")
+    compileOnly("com.github.GTNewHorizons:Postea:1.2.7:dev") { transitive = false }
 
     // ========================= Test Deps ========================= //
     devOnlyNonPublishable("com.github.GTNewHorizons:NotEnoughItems:2.8.111-GTNH:dev")
