@@ -41,6 +41,7 @@ import net.minecraft.world.chunk.NibbleArray;
 import net.minecraft.world.chunk.storage.ExtendedBlockStorage;
 import net.minecraftforge.common.util.Constants;
 import net.minecraftforge.common.util.Constants.NBT;
+import net.minecraftforge.event.entity.EntityEvent;
 
 import com.cardinalstar.cubicchunks.CubicChunks;
 import com.cardinalstar.cubicchunks.api.IColumn;
@@ -269,7 +270,7 @@ public class IONbtReader {
                 cube.hasEntities = true;
 
                 if (rootEntity != null) {
-                    cube.addEntity(rootEntity);
+                    addLoadedEntity(cube, rootEntity);
 
                     int entityCubeX = Coords.getCubeXForEntity(rootEntity);
                     int entityCubeY = Coords.getCubeYForEntity(rootEntity);
@@ -288,14 +289,6 @@ public class IONbtReader {
                                 cube.getZ()));
                     }
 
-                    // The entity needs to know what Cube it is in, this is normally done in Cube.addEntity()
-                    // but Cube.addEntity() is not used when loading entities
-                    // (unlike vanilla which uses Chunk.addEntity() even when loading entities)
-                    rootEntity.addedToChunk = true;
-                    rootEntity.chunkCoordX = cube.getX();
-                    rootEntity.chunkCoordY = cube.getY();
-                    rootEntity.chunkCoordZ = cube.getZ();
-
                     // Riding stuff
                     Entity currentEntity = rootEntity;
 
@@ -305,7 +298,7 @@ public class IONbtReader {
                             .createEntityFromNBT(ridingNBT.getCompoundTag("Riding"), world);
 
                         if (entityThatIsRiding != null) {
-                            cube.addEntity(entityThatIsRiding);
+                            addLoadedEntity(cube, entityThatIsRiding);
                             currentEntity.mountEntity(entityThatIsRiding);
                         }
 
@@ -314,6 +307,19 @@ public class IONbtReader {
                 }
             }
         }
+    }
+
+    /// Adds an entity read from the cube's save to the cube like vanilla's Chunk.addEntity does for every entity it
+    /// loads, mounts included: it posts EnteringChunk and records the cube in the entity. An entity without that record
+    /// is added to its cube again on its first tick.
+    private static void addLoadedEntity(Cube cube, Entity entity) {
+        EVENT_BUS.post(
+            new EntityEvent.EnteringChunk(entity, cube.getX(), cube.getZ(), entity.chunkCoordX, entity.chunkCoordZ));
+        entity.addedToChunk = true;
+        entity.chunkCoordX = cube.getX();
+        entity.chunkCoordY = cube.getY();
+        entity.chunkCoordZ = cube.getZ();
+        cube.addEntity(entity);
     }
 
     private static void readTileEntities(NBTTagCompound nbt, World world, Cube cube) {// tile entities

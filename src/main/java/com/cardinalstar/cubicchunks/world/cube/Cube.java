@@ -622,6 +622,10 @@ public class Cube implements ICube {
 
         // tell the world about tile entities
         this.world.func_147448_a(this.cubeTileEntityMap.values());
+        // like vanilla Chunk.onChunkLoad
+        for (Entity entity : this.entities) {
+            entity.onChunkLoad();
+        }
         this.world.addLoadedEntities(this.entities);
 
         if (!this.isInHeightMap) {
