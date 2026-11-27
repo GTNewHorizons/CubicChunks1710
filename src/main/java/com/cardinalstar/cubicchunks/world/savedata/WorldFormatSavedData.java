@@ -1,5 +1,6 @@
 package com.cardinalstar.cubicchunks.world.savedata;
 
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
@@ -11,6 +12,7 @@ import com.cardinalstar.cubicchunks.CubicChunks;
 import com.cardinalstar.cubicchunks.CubicChunksConfig;
 import com.cardinalstar.cubicchunks.api.world.storage.StorageFormatFactory;
 import com.cardinalstar.cubicchunks.server.chunkio.LegacyWorldConversion;
+import com.cardinalstar.cubicchunks.world.convert.ConversionInstall;
 
 import cpw.mods.fml.common.registry.GameRegistry.UniqueIdentifier;
 
@@ -76,6 +78,15 @@ public class WorldFormatSavedData extends WorldSavedData {
     }
 
     public static WorldFormatSavedData get(World world) {
+        try {
+            // A world conversion that was interrupted while its result was being put in place is finished first.
+            ConversionInstall.recover(
+                world.getSaveHandler()
+                    .getWorldDirectory()
+                    .toPath());
+        } catch (IOException e) {
+            throw new IllegalStateException("Could not load world: its interrupted conversion cannot be finished", e);
+        }
         WorldFormatSavedData data = (WorldFormatSavedData) world.mapStorage
             .loadData(WorldFormatSavedData.class, "cubicchunks.world_format");
         Path root = world.getSaveHandler()

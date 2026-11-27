@@ -49,3 +49,56 @@ cubicchunks.compaction.title=Compacting world regions
 cubicchunks.compaction.discovering=%1$s: finding regions (%4$s s)
 cubicchunks.compaction.checking=%1$s: checking %2$s/%3$s regions (%4$s s)
 cubicchunks.compaction.compacting=%1$s: packing %2$s/%3$s regions (%4$s s)
+
+#################################
+###      world select gui      ###
+#################################
+
+cubicchunks.gui.worldselect.convert=Convert
+cubicchunks.gui.worldselect.badge.cc=[CC]
+cubicchunks.gui.worldselect.badge.vanilla=[Vanilla]
+cubicchunks.gui.worldselect.badge.mixed=[Mixed]
+
+#################################
+###    vanilla world warning   ###
+#################################
+
+cubicchunks.gui.warning.vanilla_world.title=Vanilla World Detected
+cubicchunks.gui.warning.vanilla_world.body=This world is in Vanilla format. CC data will not be loaded.
+cubicchunks.gui.warning.vanilla_world.load_anyway=Load Anyway
+cubicchunks.gui.warning.vanilla_world.convert=Convert First
+
+#################################
+###      convert world gui     ###
+#################################
+
+cubicchunks.gui.convert.title=Convert: %s
+cubicchunks.gui.convert.source=Current format: %s
+cubicchunks.gui.convert.impossible=This world cannot be converted: it has to hold either vanilla regions or cube storage, not both and not neither.
+cubicchunks.gui.convert.direction=This world is saved as %1$s and will be converted to %2$s.
+cubicchunks.gui.convert.kept=Blocks, tile entities, entities and mod data are carried over unchanged.
+cubicchunks.gui.convert.height=Vanilla cannot hold anything above Y 255 or below Y 0. That part of the world is left out.
+cubicchunks.gui.convert.backup=The world as it is now is kept in the folder .cubicchunks-backup inside the world folder, so the conversion needs about as much free disk space as the world takes. Delete that folder once the converted world works.
+cubicchunks.gui.convert.convert=Convert
+cubicchunks.gui.convert.back=Back
+
+cubicchunks.gui.progress.title=Converting World...
+cubicchunks.gui.progress.status=%d / %d chunks
+cubicchunks.gui.progress.done=Conversion complete
+cubicchunks.gui.progress.failed=Conversion failed
+cubicchunks.gui.progress.error=Error: %s
+cubicchunks.gui.progress.unchanged=The world is as it was before.
+cubicchunks.gui.progress.pending=Putting the converted world in place was interrupted and could not be taken back. Nothing is lost. The game tries to finish it when the world is next listed or opened; see the log if that keeps failing.
+cubicchunks.gui.progress.cancel=Cancel
+
+cubicchunks.gui.result.converted=Converted %1$d chunks in %2$d dimensions.
+cubicchunks.gui.result.unreadable=%d chunks were damaged and could not be read. They were left out and will be generated again.
+cubicchunks.gui.result.dropped=%d entities, tile entities or scheduled ticks were outside the height the target format can hold and were left out.
+cubicchunks.gui.result.left_to_game=%d chunks store their blocks in a layout the converter does not know. Their blocks were carried over unchanged; the game computes their height map and light when it loads them.
+cubicchunks.gui.result.incomplete=%d chunks had parts between Y 0 and 255 that were never generated. Those parts are empty in the vanilla world.
+cubicchunks.gui.result.backup=The previous world data is in %s inside the world folder. Delete it once the converted world works.
+
+cubicchunks.format.cc=Cubic Chunks (cube storage)
+cubicchunks.format.vanilla=Vanilla (Anvil)
+cubicchunks.format.mixed=Mixed
+cubicchunks.format.unknown=Unknown

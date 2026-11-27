@@ -223,6 +223,10 @@ public class IONbtReader {
             }
         }
 
+        if (Mods.Postea.isModLoaded()) {
+            PosteaCubes.onCubeRead(cube, level, world);
+        }
+
         readBiomes(cube, level);
         readEntities(level, world, cube);
         readTileEntities(level, world, cube);
