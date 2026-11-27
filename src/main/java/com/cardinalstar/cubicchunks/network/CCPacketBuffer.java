@@ -15,7 +15,6 @@ import net.minecraft.world.ChunkCoordIntPair;
 import com.cardinalstar.cubicchunks.util.CubePos;
 
 import io.netty.buffer.ByteBuf;
-import io.netty.buffer.Unpooled;
 
 public class CCPacketBuffer extends PacketBuffer {
 
@@ -154,17 +153,6 @@ public class CCPacketBuffer extends PacketBuffer {
         readBytes(out, 0, len);
 
         return out;
-    }
-
-    public void writeByteBuf(ByteBuf buffer) {
-        byte[] data = new byte[buffer.readableBytes()];
-        buffer.readBytes(data);
-
-        writeByteArray(data);
-    }
-
-    public ByteBuf readByteBuf() {
-        return Unpooled.wrappedBuffer(readByteArray());
     }
 
     public void writeByteBuffer(ByteBuffer buffer) {

@@ -48,6 +48,7 @@ import com.cardinalstar.cubicchunks.api.IHeightMap;
 import com.cardinalstar.cubicchunks.api.event.CubeEvent.DataLoad;
 import com.cardinalstar.cubicchunks.lighting.ILightingManager;
 import com.cardinalstar.cubicchunks.mixin.api.ICubicWorldInternal;
+import com.cardinalstar.cubicchunks.mixin.early.common.AccessorExtendedBlockStorage;
 import com.cardinalstar.cubicchunks.network.CCPacketBuffer;
 import com.cardinalstar.cubicchunks.util.Coords;
 import com.cardinalstar.cubicchunks.util.Mods;
@@ -235,6 +236,48 @@ public class IONbtReader {
         EVENT_BUS.post(new DataLoad(world, cube, nbt));
 
         return cube;
+    }
+
+    /** Sets a client cube's blocks and biomes from what the server sent; {@code null} makes it an empty cube. */
+    static void readClientPart(Cube cube, @Nullable NBTTagCompound root) {
+        NBTTagCompound level = root == null ? new NBTTagCompound() : root.getCompoundTag("Level");
+        NBTTagList sections = level.getTagList("Sections", NBT.TAG_COMPOUND);
+
+        if (sections.tagCount() > 0) {
+            NBTTagCompound section = sections.getCompoundTagAt(0);
+
+            if (Mods.ChunkAPI.isModLoaded()) {
+                section.setInteger("Y", cube.getY());
+
+                ExtendedBlockStorage ebs = new ExtendedBlockStorage(
+                    Coords.cubeToMinBlock(cube.getY()),
+                    !cube.getWorld().provider.hasNoSky);
+
+                DataRegistryImpl.readSubChunkFromNBT(cube.getColumn(), ebs, section);
+
+                // a palettized section comes with the counts of its palette (CubeBundleCodec.setBlockCounts)
+                if (section.hasKey(CubeBundleCodec.BLOCK_REFS, NBT.TAG_INT)
+                    && section.hasKey(CubeBundleCodec.TICK_REFS, NBT.TAG_INT)) {
+                    ((AccessorExtendedBlockStorage) ebs)
+                        .setBlockRefCount(section.getInteger(CubeBundleCodec.BLOCK_REFS));
+                    ((AccessorExtendedBlockStorage) ebs).setTickRefCount(section.getInteger(CubeBundleCodec.TICK_REFS));
+                } else {
+                    ebs.removeInvalidBlocks();
+                }
+                cube.setStorageFromSave(ebs);
+            } else {
+                readBlocks(section, cube.getWorld(), cube);
+            }
+        } else {
+            cube.setStorageFromSave(null);
+        }
+
+        if (level.hasKey("Biomes")) {
+            readBiomes(cube, level);
+        } else {
+            // the "no biomes" flag
+            cube.readBiomeArray(new CCPacketBuffer(Unpooled.wrappedBuffer(new byte[1])));
+        }
     }
 
     private static void readBlocks(NBTTagCompound section, World world, Cube cube) {

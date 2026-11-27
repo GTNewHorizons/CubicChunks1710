@@ -3,9 +3,11 @@ package com.cardinalstar.cubicchunks.network;
 import java.util.Arrays;
 import java.util.EnumMap;
 import java.util.List;
+import java.util.concurrent.Future;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.entity.player.EntityPlayerMP;
+import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.world.World;
 import net.minecraft.world.chunk.Chunk;
 
@@ -33,10 +35,13 @@ public class NetworkChannel extends MessageToMessageCodec<FMLProxyPacket, CCPack
     private final EnumMap<Side, FMLEmbeddedChannel> channel;
     private final CCPacketEncoder<CCPacket>[] encoders;
 
+    /** The name of the channel CubicChunks' packets are sent on. */
+    static final String NAME = CubicChunks.MODID + "1";
+
     public static final NetworkChannel CHANNEL = new NetworkChannel();
 
     public NetworkChannel() {
-        this.channel = NetworkRegistry.INSTANCE.newChannel(CubicChunks.MODID + "1", this, new HandlerShared());
+        this.channel = NetworkRegistry.INSTANCE.newChannel(NAME, this, new HandlerShared());
 
         CCPacketEncoder<?>[] packetTypes = Arrays.stream(CCPacketEntry.values())
             .map(e -> e.encoder)
@@ -97,6 +102,10 @@ public class NetworkChannel extends MessageToMessageCodec<FMLProxyPacket, CCPack
 
         CCPacketEncoder<CCPacket> encoder = this.encoders[buffer.readByte()];
         CCPacket packet = encoder.readPacket(new CCPacketBuffer(buffer));
+        if (packet instanceof PacketEncoderCube.PacketCube cube) {
+            Future<NBTTagCompound> decoding = CubePredecoder.take(proxyPacket);
+            if (decoding != null) packet = cube.withDecoded(decoding);
+        }
         encoder.setINetHandler(proxyPacket.handler(), packet);
         output.add(packet);
     }
