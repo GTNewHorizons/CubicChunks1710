@@ -385,6 +385,11 @@ public enum Mixins implements IMixins {
         new MixinBuilder("Route AE2 chunk section resends through the cubic synchronization protocol")
             .addCommonMixins("mod.MixinAE2Platform")
             .setPhase(Phase.EARLY)
+            .setApplyIf(() -> true)),
+    MIXIN_COFH_ENTITY_COLLISION(
+        new MixinBuilder("Make CoFH Core's copy of the entity collision check work at every height")
+            .addCommonMixins("mod.MixinCoFHHooksCore")
+            .setPhase(Phase.EARLY)
             .setApplyIf(() -> true))
     //
     ;
