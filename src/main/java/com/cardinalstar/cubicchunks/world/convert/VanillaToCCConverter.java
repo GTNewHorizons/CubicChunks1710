@@ -270,7 +270,9 @@ public final class VanillaToCCConverter extends WorldConverter {
         }
 
         // Height maps, as the game builds them when it loads each cube (Cube.updateHeightMap).
-        HeightMap3D opacity = new HeightMap3D(new int[Cube.SIZE * Cube.SIZE], 256);
+        // the height map keeps this array as vanilla's view of it (heights up to Y 255)
+        int[] vanillaHeights = new int[Cube.SIZE * Cube.SIZE];
+        HeightMap3D opacity = new HeightMap3D(vanillaHeights, 256);
         HeightMap3D rain = new PrecipitationHeightMap();
         boolean known = true;
         boolean[] partial = new boolean[ANVIL_SECTIONS];
@@ -302,7 +304,7 @@ public final class VanillaToCCConverter extends WorldConverter {
 
         columns.put(
             new ChunkCoordIntPair(chunkX, chunkZ),
-            column(chunk, level, chunkX, chunkZ, known ? opacity : null, known ? rain : null));
+            column(chunk, level, chunkX, chunkZ, known ? opacity : null, known ? rain : null, vanillaHeights));
 
         Map<Integer, NBTTagCompound> built = new HashMap<>();
         for (int y = 0; y < ANVIL_SECTIONS; y++) {
@@ -362,10 +364,11 @@ public final class VanillaToCCConverter extends WorldConverter {
      * {@code ChunkDataEvent}, which it looks for in Level again. The two cannot be told apart, so these tags go to
      * both places; the game writes both anew when it saves the column.
      *
-     * @param opacity null when the game has to build the height maps
+     * @param opacity        null when the game has to build the height maps
+     * @param vanillaHeights vanilla's height map as computed from the blocks, used when the chunk has none
      */
     private static NBTTagCompound column(NBTTagCompound chunk, NBTTagCompound chunkLevel, int chunkX, int chunkZ,
-        @Nullable HeightMap3D opacity, @Nullable HeightMap3D rain) {
+        @Nullable HeightMap3D opacity, @Nullable HeightMap3D rain, int[] vanillaHeights) {
         NBTTagCompound root = new NBTTagCompound();
         NBTTagCompound level = new NBTTagCompound();
 
@@ -386,9 +389,9 @@ public final class VanillaToCCConverter extends WorldConverter {
             if (!COLUMN_ROOT_ONLY.contains(key)) level.setTag(key, tag.copy());
         }
 
-        // ChunkAPI gives the column this array as it is, and the game fills it from the column's height map.
+        // ChunkAPI gives the column this array as it is, so it has to be one even when vanilla saved none.
         if (root.getIntArray("HeightMap").length != Cube.SIZE * Cube.SIZE) {
-            root.setIntArray("HeightMap", new int[Cube.SIZE * Cube.SIZE]);
+            root.setIntArray("HeightMap", vanillaHeights);
         }
 
         level.setByte("v", (byte) 1);
