@@ -48,7 +48,7 @@ public enum Mixins implements IMixins {
             .setPhase(Phase.EARLY)
             .setApplyIf(() -> true)),
     MIXIN_BLOCK_FALLING(new MixinBuilder("Allowing blocks that are affected by gravity to fall normally.")
-        .addCommonMixins("common.MixinBlockFalling")
+        .addCommonMixins("common.MixinBlockFalling", "common.MixinEntityFallingBlock")
         .setPhase(Phase.EARLY)
         .setApplyIf(() -> true)),
     MIXIN_WORLD_NEIGHBOR_NOTIFY(new MixinBuilder(
@@ -384,6 +384,11 @@ public enum Mixins implements IMixins {
     MIXIN_AE2_PLATFORM_SEND_CHUNK(
         new MixinBuilder("Route AE2 chunk section resends through the cubic synchronization protocol")
             .addCommonMixins("mod.MixinAE2Platform")
+            .setPhase(Phase.EARLY)
+            .setApplyIf(() -> true)),
+    MIXIN_COFH_ENTITY_COLLISION(
+        new MixinBuilder("Make CoFH Core's copy of the entity collision check work at every height")
+            .addCommonMixins("mod.MixinCoFHHooksCore")
             .setPhase(Phase.EARLY)
             .setApplyIf(() -> true))
     //

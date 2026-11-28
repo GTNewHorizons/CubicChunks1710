@@ -85,6 +85,7 @@ import com.cardinalstar.cubicchunks.util.Coords;
 import com.cardinalstar.cubicchunks.util.CubePos;
 import com.cardinalstar.cubicchunks.util.ReflectionUtil;
 import com.cardinalstar.cubicchunks.world.CubicChunksSavedData;
+import com.cardinalstar.cubicchunks.world.FallingBlockMove;
 import com.cardinalstar.cubicchunks.world.ICubicWorld;
 import com.cardinalstar.cubicchunks.world.cube.Cube;
 import com.cardinalstar.cubicchunks.world.cube.ICubeProvider;
@@ -545,6 +546,18 @@ public abstract class MixinWorld implements ICubicWorldInternal {
     @ModifyConstant(method = "getCollidingBoundingBoxes", constant = @Constant(intValue = 64), require = 1)
     private int collidingBoxFix1(int constant, @Local(argsOnly = true) AxisAlignedBB box) {
         return (int) ((box.maxY - box.minY) / 2 + box.minY);
+    }
+
+    /// Vanilla tests one height per block column before it reads the blocks a box touches, but the box, and the block
+    /// below it that is read for fences, can reach into a cube that is not loaded. Reading there would load the cube,
+    /// which a falling block must not do, see [FallingBlockMove].
+    @WrapOperation(
+        method = "getCollidingBoundingBoxes",
+        at = @At(value = "INVOKE", target = "Lnet/minecraft/world/World;getBlock(III)Lnet/minecraft/block/Block;"),
+        require = 1)
+    private Block fallingBlockCollidesOnlyWithLoadedCubes(World world, int x, int y, int z, Operation<Block> original) {
+        if (FallingBlockMove.isInProgress() && !world.isRemote && !world.blockExists(x, y, z)) return Blocks.air;
+        return original.call(world, x, y, z);
     }
 
     @ModifyConstant(method = "func_147461_a", constant = @Constant(intValue = 64), require = 1)

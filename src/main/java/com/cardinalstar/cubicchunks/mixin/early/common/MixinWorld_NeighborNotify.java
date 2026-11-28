@@ -30,7 +30,11 @@ import org.apache.logging.log4j.Logger;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
+import com.cardinalstar.cubicchunks.world.FallingBlockMove;
+import com.cardinalstar.cubicchunks.world.api.IMinMaxHeight;
 import com.gtnewhorizon.gtnhlib.util.CoordinatePacker;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
@@ -87,6 +91,15 @@ public class MixinWorld_NeighborNotify {
 
     @Unique
     private static final ThreadLocal<MutableBoolean> cc$draining = ThreadLocal.withInitial(MutableBoolean::new);
+
+    /// See [FallingBlockMove].
+    @Inject(method = "notifyBlockOfNeighborChange", at = @At("HEAD"), cancellable = true, require = 1)
+    private void cc$skipUnloadedNeighborOfFallingBlock(int x, int y, int z, Block neighbor, CallbackInfo ci) {
+        World world = (World) (Object) this;
+        if (world.isRemote || !FallingBlockMove.isInProgress()) return;
+        IMinMaxHeight heights = (IMinMaxHeight) world;
+        if (y >= heights.getMinHeight() && y < heights.getMaxHeight() && !world.blockExists(x, y, z)) ci.cancel();
+    }
 
     @WrapOperation(
         method = "notifyBlockOfNeighborChange",
